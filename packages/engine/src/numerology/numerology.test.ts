@@ -102,6 +102,20 @@ describe("числа по имени (таблица Пифагора)", () => {
     expect(() => soulNumber("")).toThrow("нет ни одной буквы");
   });
 
+  it("буквы в «разложенном» виде (NFD, бывает при вставке с Mac) считаются верно", () => {
+    // Й = И + кратка, Ё = Е + две точки
+    expect(expressionNumber("Андрей".normalize("NFD"))).toBe(expressionNumber("Андрей"));
+    expect(expressionNumber("Алёна".normalize("NFD"))).toBe(1);
+  });
+
+  it("имя без согласных или без гласных — число не определено (null), а не 0", () => {
+    // Ия: И1 Я6 — только гласные
+    expect(soulNumber("Ия")).toBe(7);
+    expect(personalityNumber("Ия")).toBeNull();
+    // Мрк — только согласные
+    expect(soulNumber("Мрк")).toBeNull();
+  });
+
   it("таблицу можно заменить", () => {
     const table = { А: 1, Н: 1 };
     expect(expressionNumber("Анна", { table })).toBe(4);

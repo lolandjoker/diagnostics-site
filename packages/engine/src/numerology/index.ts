@@ -27,17 +27,22 @@ export function birthdayNumber(d: BirthDate, opts: ReduceOptions = {}): number {
   return reduceToDigit(d.day, opts);
 }
 
+/** Сумма значений отобранных букв; null — если ни одна буква не подошла. */
 function sumLetters(
   name: string,
   opts: NameOptions,
   keep: (letter: string) => boolean,
-): number {
+): number | null {
   const table = opts.table ?? PYTHAGOREAN_RU;
   let sum = 0;
+  let count = 0;
   for (const letter of nameLetters(name, table)) {
-    if (keep(letter)) sum += table[letter] ?? 0;
+    if (keep(letter)) {
+      sum += table[letter] ?? 0;
+      count++;
+    }
   }
-  return sum;
+  return count > 0 ? sum : null;
 }
 
 function assertHasLetters(name: string, table: LetterTable): void {
@@ -49,21 +54,29 @@ function assertHasLetters(name: string, table: LetterTable): void {
 /** Число судьбы (выражения): сумма всех букв имени. «Анна» → 14 → 5. */
 export function expressionNumber(name: string, opts: NameOptions = {}): number {
   assertHasLetters(name, opts.table ?? PYTHAGOREAN_RU);
-  return reduceToDigit(sumLetters(name, opts, () => true), opts);
+  return reduceToDigit(sumLetters(name, opts, () => true) ?? 0, opts);
 }
 
-/** Число души: сумма гласных имени. «Анна» → 2. */
-export function soulNumber(name: string, opts: NameOptions = {}): number {
+/**
+ * Число души: сумма гласных имени. «Анна» → 2.
+ * null — в имени нет гласных: число не определено, трактовка не показывается.
+ */
+export function soulNumber(name: string, opts: NameOptions = {}): number | null {
   assertHasLetters(name, opts.table ?? PYTHAGOREAN_RU);
   const vowels = opts.vowels ?? VOWELS_RU;
-  return reduceToDigit(sumLetters(name, opts, (l) => vowels.has(l)), opts);
+  const sum = sumLetters(name, opts, (l) => vowels.has(l));
+  return sum === null ? null : reduceToDigit(sum, opts);
 }
 
-/** Число личности: сумма согласных имени (Ь, Ъ, Й считаются согласными). «Анна» → 12 → 3. */
-export function personalityNumber(name: string, opts: NameOptions = {}): number {
+/**
+ * Число личности: сумма согласных имени (Ь, Ъ, Й считаются согласными). «Анна» → 12 → 3.
+ * null — в имени нет согласных (например, «Ия»).
+ */
+export function personalityNumber(name: string, opts: NameOptions = {}): number | null {
   assertHasLetters(name, opts.table ?? PYTHAGOREAN_RU);
   const vowels = opts.vowels ?? VOWELS_RU;
-  return reduceToDigit(sumLetters(name, opts, (l) => !vowels.has(l)), opts);
+  const sum = sumLetters(name, opts, (l) => !vowels.has(l));
+  return sum === null ? null : reduceToDigit(sum, opts);
 }
 
 /**
@@ -84,8 +97,8 @@ export interface NumerologyProfile {
   lifePath: number;
   birthday: number;
   expression: number;
-  soul: number;
-  personality: number;
+  soul: number | null;
+  personality: number | null;
   personalYear: number;
 }
 
