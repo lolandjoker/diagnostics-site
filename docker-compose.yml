@@ -1,0 +1,71 @@
+# Боевой сервер. Запуск: docker compose up -d --build
+# Секреты — в файле .env рядом с этим файлом (образец — .env.example).
+# База и Redis наружу не открыты: доступны только сайту внутри сети docker.
+# Фоновые задачи (worker) и чат (realtime) добавятся отдельными сервисами по мере готовности.
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      SITE_DOMAIN: ${SITE_DOMAIN:?укажите SITE_DOMAIN в .env}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      web:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+    expose:
+      - "3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: diag
+      POSTGRES_DB: diag
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?укажите POSTGRES_PASSWORD в .env}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U diag -d diag"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  caddy_data:
+  caddy_config:
+  pg_data:
+  redis_data:

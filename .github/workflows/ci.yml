@@ -1,0 +1,71 @@
+name: Проверки
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Линт, типы, тесты, сборка
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Установка зависимостей
+        run: pnpm install --frozen-lockfile
+
+      - name: Линт
+        run: pnpm lint
+
+      - name: Проверка типов
+        run: pnpm typecheck
+
+      - name: Тесты
+        run: pnpm test
+
+      - name: Сборка
+        run: pnpm build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+
+  audit:
+    name: Уязвимости в зависимостях
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: pnpm audit (высокие и критические)
+        run: pnpm audit --audit-level high
+
+  docker:
+    name: Сборка Docker-образа
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: docker build
+        run: docker build -f apps/web/Dockerfile -t diag-web:ci .

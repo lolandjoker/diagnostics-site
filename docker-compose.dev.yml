@@ -1,0 +1,23 @@
+# Для разработки на своём компьютере: только база и Redis, доступны лишь с этого компьютера.
+# Запуск: docker compose -f docker-compose.dev.yml up -d
+# Сайт при этом запускается командой pnpm dev.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: diag
+      POSTGRES_DB: diag
+      POSTGRES_PASSWORD: diag
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pg_dev:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "127.0.0.1:6379:6379"
+
+volumes:
+  pg_dev:

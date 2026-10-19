@@ -8,6 +8,7 @@ out/
 dist/
 build/
 *.tsbuildinfo
+next-env.d.ts
 
 # секреты и локальные настройки
 .env

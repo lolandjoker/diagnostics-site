@@ -1,0 +1,24 @@
+{
+  "name": "diagnostics-site",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Сайт эзотерической диагностики: разбор по дате рождения, витрина консультантов, консультация по скрипту, курс",
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @diag/web dev",
+    "build": "pnpm -r --if-present build",
+    "lint": "eslint .",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "test": "pnpm -r --if-present test",
+    "check": "pnpm lint && pnpm typecheck && pnpm test"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.13.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.71.2"
+  }
+}

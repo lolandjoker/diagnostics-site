@@ -1,0 +1,16 @@
+# Caddy сам получает и продлевает HTTPS-сертификат для домена.
+# Домен берётся из переменной SITE_DOMAIN (файл .env на сервере).
+
+{$SITE_DOMAIN}, www.{$SITE_DOMAIN} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+	}
+
+	@www host www.{$SITE_DOMAIN}
+	redir @www https://{$SITE_DOMAIN}{uri} permanent
+
+	reverse_proxy web:3000
+}
