@@ -1,0 +1,35 @@
+# зависимости
+node_modules/
+.pnpm-store/
+
+# сборка
+.next/
+out/
+dist/
+build/
+*.tsbuildinfo
+
+# секреты и локальные настройки
+.env
+.env.*
+!.env.example
+
+# тесты и отчёты
+coverage/
+test-results/
+playwright-report/
+
+# данные и копии
+*.dump
+*.sql.gz
+uploads/
+backups/
+
+# система и редакторы
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log
+npm-debug.log*
+pnpm-debug.log*
