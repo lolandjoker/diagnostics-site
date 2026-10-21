@@ -29,6 +29,9 @@ services:
     env_file: .env
     environment:
       NODE_ENV: production
+      # Внутри сети docker база и Redis доступны по именам сервисов, а не localhost
+      DATABASE_URL: postgres://diag:${POSTGRES_PASSWORD:?укажите POSTGRES_PASSWORD в .env}@postgres:5432/diag
+      REDIS_URL: redis://redis:6379
     expose:
       - "3000"
     depends_on:

@@ -69,3 +69,28 @@ jobs:
 
       - name: docker build
         run: docker build -f apps/web/Dockerfile -t diag-web:ci .
+
+      - name: Запуск образа и проверка, что сайт отвечает
+        run: |
+          docker run -d --name web -p 3000:3000 diag-web:ci
+          for i in $(seq 1 30); do
+            status=$(docker inspect -f '{{.State.Health.Status}}' web)
+            echo "попытка $i: $status"
+            if [ "$status" = "healthy" ]; then break; fi
+            if [ "$status" = "unhealthy" ]; then docker logs web; exit 1; fi
+            sleep 3
+          done
+          test "$(docker inspect -f '{{.State.Health.Status}}' web)" = "healthy" || { docker logs web; exit 1; }
+          curl -fsS http://127.0.0.1:3000/api/health
+          curl -fsS -o /dev/null http://127.0.0.1:3000/
+          # статика (стили) отдаётся
+          css=$(curl -fsS http://127.0.0.1:3000/ | grep -oE '/_next/static/[^"]+\.css' | head -1)
+          test -n "$css" && curl -fsS -o /dev/null "http://127.0.0.1:3000$css"
+          # служебный заголовок Next скрыт, заголовки безопасности на месте
+          headers=$(curl -fsSI http://127.0.0.1:3000/)
+          ! echo "$headers" | grep -qi '^x-powered-by'
+          echo "$headers" | grep -qi '^x-frame-options: DENY'
+
+      - name: Логи при ошибке
+        if: failure()
+        run: docker logs web || true

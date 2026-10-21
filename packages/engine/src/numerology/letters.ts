@@ -18,9 +18,10 @@ export const VOWELS_RU: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Приводит имя к списку букв из таблицы: верхний регистр, всё лишнее
- * (пробелы, дефисы, цифры, латиница) отбрасывается.
+ * Приводит имя к списку букв из таблицы: составные символы склеиваются (NFC —
+ * иначе Й и Ё, вставленные «разложенными», читаются как И и Е), верхний регистр,
+ * всё лишнее (пробелы, дефисы, цифры, латиница) отбрасывается.
  */
 export function nameLetters(name: string, table: LetterTable = PYTHAGOREAN_RU): string[] {
-  return Array.from(name.toUpperCase()).filter((ch) => ch in table);
+  return Array.from(name.normalize("NFC").toUpperCase()).filter((ch) => ch in table);
 }
