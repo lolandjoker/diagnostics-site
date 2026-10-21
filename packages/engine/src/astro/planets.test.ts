@@ -52,7 +52,7 @@ describe("планеты", () => {
   });
 
   it("Плутон входит в Водолей 2024-11-19 ≈ 20:30", () => {
-    expect(separation(lon("pluto", "2024-11-19T20:30:00Z"), 300)).toBeLessThan(0.02);
+    expect(separation(lon("pluto", "2024-11-19T20:30:00Z"), 300)).toBeLessThan(0.005);
   });
 
   it.each([

@@ -1,5 +1,7 @@
 import { DEG, atan2D, cosD, norm360, separation, sinD, tanD } from "./angles";
 import { anglesFromRamc, computeHouses, houseOf, localSiderealDeg } from "./houses";
+import { trueObliquity } from "./planets";
+import { julianDayUT, julianEphemerisDay } from "./time";
 
 const EPS = 23.4393; // наклон эклиптики около 2000 года
 
@@ -31,9 +33,37 @@ describe("асцендент и MC", () => {
     expect(separation(a.asc, 116.6)).toBeLessThan(0.1);
   });
 
+  it("асцендент — восходящая точка: на горизонте и на востоке, в том числе за полярным кругом", () => {
+    for (let ramc = 0; ramc < 360; ramc += 7.5) {
+      for (const lat of [-85, -75, -60, 0, 55.75, 66, 68.97, 70, 80, 89]) {
+        const { asc } = anglesFromRamc(ramc, lat, EPS);
+        const ra = atan2D(sinD(asc) * cosD(EPS), cosD(asc));
+        const dec = Math.asin(sinD(EPS) * sinD(asc)) / DEG;
+        const hourAngle = norm360(ramc - ra);
+        const altitude = Math.asin(sinD(lat) * sinD(dec) + cosD(lat) * cosD(dec) * cosD(hourAngle)) / DEG;
+        expect(Math.abs(altitude)).toBeLessThan(1e-6); // на горизонте
+        expect(hourAngle).toBeGreaterThan(180); // восточная половина неба — точка восходит
+      }
+    }
+  });
+
+  it.each([
+    // Справочные значения Swiss Ephemeris 2.10 (Мошье), посчитаны отдельно
+    ["Москва 15.03.1990 11:30 UT", 55.7558, 37.6173, Date.UTC(1990, 2, 15, 11, 30), 135.6414, 24.7526],
+    ["Мурманск 15.03.1990 04:00 UT", 68.97, 33.08, Date.UTC(1990, 2, 15, 4), 32.685, 265.9466],
+    ["Норильск 01.06.2000 12:00 UT", 69.35, 88.2, Date.UTC(2000, 5, 1, 12), 213.7533, 156.7377],
+    ["80° с. ш. 01.06.2000 06:00 UT", 80, 0, Date.UTC(2000, 5, 1, 6), 154.1794, 338.392],
+    ["75° ю. ш. 01.06.2000 18:00 UT", -75, 0, Date.UTC(2000, 5, 1, 18), 321.3412, 158.9179],
+  ])("%s: ASC и MC совпадают со Swiss Ephemeris (до 0,001°)", (_n, lat, lon, ms, asc, mc) => {
+    const ramc = localSiderealDeg(julianDayUT(ms), lon);
+    const a = anglesFromRamc(ramc, lat, trueObliquity(julianEphemerisDay(ms)) / DEG);
+    expect(separation(a.asc, asc)).toBeLessThan(0.001);
+    expect(separation(a.mc, mc)).toBeLessThan(0.001);
+  });
+
   it("асцендент всегда в восточной половине: от MC до MC+180°", () => {
     for (let ramc = 0; ramc < 360; ramc += 15) {
-      for (const lat of [-60, -30, 0, 30, 55.75, 66]) {
+      for (const lat of [-80, -60, -30, 0, 30, 55.75, 66, 70, 80]) {
         const a = anglesFromRamc(ramc, lat, EPS);
         const d = norm360(a.asc - a.mc);
         expect(d).toBeGreaterThan(0);

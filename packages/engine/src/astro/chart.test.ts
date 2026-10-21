@@ -1,6 +1,6 @@
 import { findAspects } from "./aspects";
 import { natalChart } from "./chart";
-import { formatPosition, zodiacPosition } from "./signs";
+import { SIGN_NAMES_RU, formatPosition, zodiacPosition } from "./signs";
 
 const moscow = { timeZone: "Europe/Moscow", latitude: 55.7558, longitude: 37.6173 };
 
@@ -35,6 +35,22 @@ describe("natalChart", () => {
     const changes = flags.filter(Boolean).length;
     expect(changes).toBeGreaterThanOrEqual(9);
     expect(changes).toBeLessThanOrEqual(13);
+  });
+
+  it("Луна вошла в Скорпион 14.03.1990 в 16:25 UT (Swiss Ephemeris): 14-е — пометка, 15-е — нет", () => {
+    expect(natalChart({ year: 1990, month: 3, day: 14, ...moscow }).moonSignUncertain).toBe(true);
+    expect(natalChart({ year: 1990, month: 3, day: 15, ...moscow }).moonSignUncertain).toBe(false);
+  });
+
+  it("Мурманск, 15.03.1990 07:00: асцендент в Тельце, Солнце в 11-м доме (равнодомная система)", () => {
+    const c = natalChart({
+      year: 1990, month: 3, day: 15, time: { hour: 7, minute: 0 },
+      timeZone: "Europe/Moscow", latitude: 68.97, longitude: 33.08,
+    });
+    expect(c.houses?.system).toBe("equal");
+    expect(zodiacPosition(c.houses?.asc ?? NaN).sign).toBe("taurus");
+    // ASC 2°41′ Тельца, Солнце 24°19′ Рыб → 11-й дом от асцендента
+    expect(c.bodies.sun.house).toBe(11);
   });
 
   it("с известным временем пометка про Луну не ставится", () => {
@@ -90,10 +106,19 @@ describe("formatPosition", () => {
   it.each([
     [0, "0°00′ Овен"],
     [24.75, "24°45′ Овен"],
-    [359.999, "0°00′ Овен"],
-    [29.9999, "0°00′ Телец"],
-    [300.48, "0°29′ Водолей"],
-  ])("%f → %s", (lon, text) => {
+    [359.999, "29°59′ Рыбы"],
+    [29.9999, "29°59′ Овен"],
+    [300.48, "0°28′ Водолей"],
+  ])("%f → %s (минуты отбрасываются, а не округляются)", (lon, text) => {
     expect(formatPosition(lon)).toBe(text);
+  });
+
+  it("знак в тексте всегда совпадает со знаком в данных", () => {
+    for (let lon = 0; lon < 360; lon += 0.0137) {
+      for (const l of [lon, Math.floor(lon) + 0.99999, Math.ceil(lon) - 1e-9]) {
+        const sign = SIGN_NAMES_RU[zodiacPosition(l).sign];
+        expect(formatPosition(l).endsWith(sign)).toBe(true);
+      }
+    }
   });
 });

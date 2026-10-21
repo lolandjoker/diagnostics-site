@@ -29,10 +29,13 @@ export function localSiderealDeg(jdUT: number, longitudeEast: number): number {
 /** Асцендент и MC по звёздному времени, широте и наклону эклиптики (все в градусах). */
 export function anglesFromRamc(ramc: number, latitude: number, obliquity: number): Angles {
   const mc = atan2D(sinD(ramc), cosD(ramc) * cosD(obliquity));
-  const asc = atan2D(
+  let asc = atan2D(
     cosD(ramc),
     -(sinD(ramc) * cosD(obliquity) + tanD(latitude) * sinD(obliquity)),
   );
+  // За полярным кругом формула иногда даёт заходящую точку (десцендент).
+  // Асцендент — восходящая точка, она всегда лежит в пределах 180° после MC.
+  if (norm360(asc - mc) > 180) asc = norm360(asc + 180);
   return { ramc, asc, mc };
 }
 

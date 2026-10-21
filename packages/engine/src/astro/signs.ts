@@ -36,12 +36,13 @@ export function zodiacPosition(lon: number): ZodiacPosition {
 
 /**
  * «15°24′ Овен» — для текстов и проверки глазами.
- * Округление до минуты делается до определения знака: 29°59,9′ Рыб → 0°00′ Овна.
+ * Минуты отбрасываются, а не округляются (как принято в астрологии): так знак в тексте
+ * всегда совпадает со знаком в данных — 29°59,9′ Рыб остаётся «29°59′ Рыбы».
  */
 export function formatPosition(lon: number): string {
-  const totalMinutes = Math.round(norm360(lon) * 60) % (360 * 60);
-  const sign = SIGNS[Math.floor(totalMinutes / 1800)] as Sign;
-  const d = Math.floor((totalMinutes % 1800) / 60);
+  const { sign, degree } = zodiacPosition(lon);
+  const totalMinutes = Math.min(30 * 60 - 1, Math.floor(degree * 60 + 1e-9));
+  const d = Math.floor(totalMinutes / 60);
   const m = totalMinutes % 60;
   return `${d}°${String(m).padStart(2, "0")}′ ${SIGN_NAMES_RU[sign]}`;
 }

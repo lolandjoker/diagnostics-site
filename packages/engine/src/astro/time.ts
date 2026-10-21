@@ -9,28 +9,40 @@ export interface LocalDateTime {
   minute: number;
 }
 
+/** Кэш форматтеров по каноническому имени пояса (например, «Europe/Moscow»). */
 const formatters = new Map<string, Intl.DateTimeFormat>();
+/** Соответствие «как написали» → каноническое имя; ограничено по размеру. */
+const aliases = new Map<string, string>();
+const MAX_ALIASES = 1000;
+
+function makeFormatter(timeZone: string): Intl.DateTimeFormat {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
 
 function formatterFor(timeZone: string): Intl.DateTimeFormat {
-  let f = formatters.get(timeZone);
-  if (!f) {
-    try {
-      f = new Intl.DateTimeFormat("en-US", {
-        timeZone,
-        hourCycle: "h23",
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-      });
-    } catch {
-      throw new Error(`Неизвестный часовой пояс: ${timeZone}`);
-    }
-    formatters.set(timeZone, f);
+  const known = aliases.get(timeZone);
+  if (known) return formatters.get(known) as Intl.DateTimeFormat;
+
+  // Нужен именованный пояс IANA с историей переводов часов, а не голое смещение «+05:30»
+  if (!/^[A-Za-z]/.test(timeZone)) throw new Error(`Неизвестный часовой пояс: ${timeZone}`);
+  let canonical: string;
+  try {
+    canonical = makeFormatter(timeZone).resolvedOptions().timeZone;
+  } catch {
+    throw new Error(`Неизвестный часовой пояс: ${timeZone}`);
   }
-  return f;
+  if (!formatters.has(canonical)) formatters.set(canonical, makeFormatter(canonical));
+  if (aliases.size < MAX_ALIASES) aliases.set(timeZone, canonical);
+  return formatters.get(canonical) as Intl.DateTimeFormat;
 }
 
 /**

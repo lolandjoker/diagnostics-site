@@ -35,6 +35,20 @@ describe("localToUtcMs — местное время в UTC с историей 
   it("неизвестный часовой пояс — понятная ошибка", () => {
     expect(() => localToUtcMs(local(2000, 1, 1, 12), "Mars/Olympus")).toThrow("Неизвестный часовой пояс");
   });
+
+  it("смещение вместо названия пояса («+05:30») не принимается — нужен пояс с историей", () => {
+    expect(() => localToUtcMs(local(2000, 1, 1, 12), "+05:30")).toThrow("Неизвестный часовой пояс");
+    expect(() => localToUtcMs(local(2000, 1, 1, 12), "-03:00")).toThrow("Неизвестный часовой пояс");
+  });
+
+  it("регистр в названии пояса не важен, результат тот же", () => {
+    expect(localToUtcMs(local(2020, 7, 1, 12), "europe/moscow")).toBe(localToUtcMs(local(2020, 7, 1, 12), "Europe/Moscow"));
+  });
+
+  it("пояса с дробным смещением: Индия +5:30, Непал +5:45", () => {
+    expect(iso(localToUtcMs(local(2024, 1, 1, 12), "Asia/Kolkata"))).toBe("2024-01-01T06:30");
+    expect(iso(localToUtcMs(local(2024, 1, 1, 12), "Asia/Kathmandu"))).toBe("2024-01-01T06:15");
+  });
 });
 
 describe("zoneOffsetMs", () => {
