@@ -1,0 +1,71 @@
+:root {
+  --bg: #0e0b16;
+  --surface: #17122a;
+  --text: #ece6f5;
+  --muted: #a99fbd;
+  --gold: #d4af6a;
+  --radius: 14px;
+  color-scheme: dark;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  min-height: 100dvh;
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(212, 175, 106, 0.14), transparent 70%),
+    var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+.stub {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 72px 16px 48px;
+  text-align: center;
+}
+
+.stub__mark {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 28px;
+  color: var(--gold);
+}
+
+.stub h1 {
+  margin: 0 0 16px;
+  font-size: clamp(1.75rem, 6vw, 2.5rem);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+.stub p {
+  margin: 0 auto;
+  max-width: 34ch;
+  color: var(--muted);
+  font-size: 1.0625rem;
+}
+
+.stub__badge {
+  display: inline-block;
+  margin-top: 32px;
+  padding: 8px 16px;
+  border: 1px solid rgba(212, 175, 106, 0.4);
+  border-radius: 999px;
+  color: var(--gold);
+  font-size: 0.875rem;
+}
