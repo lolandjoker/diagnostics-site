@@ -24,6 +24,17 @@ WARNINGS=()
 log() { echo "[подготовка] $*"; }
 warn() { echo "[ПРЕДУПРЕЖДЕНИЕ] $*"; WARNINGS+=("$*"); }
 
+# apt с ожиданием: если в этот момент идут автообновления, ждём, а не падаем
+apt_() {
+  local i
+  for i in $(seq 1 20); do
+    apt-get -o DPkg::Lock::Timeout=600 "$@" && return 0
+    log "apt занят или недоступен — повтор через 30 с (попытка $i из 20)"
+    sleep 30
+  done
+  return 1
+}
+
 if [ "$(id -u)" -ne 0 ]; then echo "Нужно запускать от root"; exit 1; fi
 if ! grep -qi ubuntu /etc/os-release; then echo "Скрипт рассчитан на Ubuntu"; exit 1; fi
 
@@ -43,15 +54,15 @@ done
 command -v docker >/dev/null 2>&1 || need+=(docker.io)
 if [ "${#need[@]}" -gt 0 ]; then
   log "Устанавливаю: ${need[*]}"
-  apt-get update -q
-  apt-get install -y -q "${need[@]}"
+  apt_ update -q
+  apt_ install -y -q "${need[@]}"
 fi
 
 if ! docker compose version >/dev/null 2>&1; then
   if apt-cache show docker-compose-v2 >/dev/null 2>&1; then
-    apt-get install -y -q docker-compose-v2
+    apt_ install -y -q docker-compose-v2
   elif apt-cache show docker-compose-plugin >/dev/null 2>&1; then
-    apt-get install -y -q docker-compose-plugin
+    apt_ install -y -q docker-compose-plugin
   else
     echo "Не найден пакет docker compose для этой версии Ubuntu"; exit 1
   fi
@@ -94,7 +105,9 @@ else
 fi
 
 # --- 4. Файрвол ---
-ssh_port=$(sshd -T 2>/dev/null | awk '/^port /{print $2; exit}')
+# awk читает вывод до конца (без раннего exit), а сбой sshd -T не останавливает скрипт —
+# тогда остаётся порт 22 по умолчанию
+ssh_port=$({ sshd -T 2>/dev/null || true; } | awk '/^port /{p=$2} END{print p}')
 ssh_port="${ssh_port:-22}"
 ufw default deny incoming >/dev/null
 ufw default allow outgoing >/dev/null
