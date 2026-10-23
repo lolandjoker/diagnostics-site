@@ -15,6 +15,13 @@
       "when": 1792754101066,
       "tag": "0001_experts_chat",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792759520583,
+      "tag": "0002_expert_online_until",
+      "breakpoints": true
     }
   ]
 }

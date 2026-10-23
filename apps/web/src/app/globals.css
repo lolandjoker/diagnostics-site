@@ -690,3 +690,10 @@ td.actions {
   border-radius: var(--radius);
   background: var(--surface);
 }
+
+.online-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  align-items: baseline;
+}

@@ -1,18 +1,19 @@
 import Link from "next/link";
 import { getDb } from "@/db";
-import { MIN_EXPERT_PASSWORD, isOnline, listExperts } from "@/lib/experts";
+import { MIN_EXPERT_PASSWORD, listExperts } from "@/lib/experts";
 import { ActionForm } from "../../ActionForm";
+import { OnlineToggle } from "../../OnlineToggle";
 import { createExpertAction } from "../../actions";
 
 export default async function ExpertsAdminPage() {
   const list = await listExperts(await getDb());
-  const now = new Date();
   return (
     <>
       <h1>Эксперты</h1>
       <p className="muted">
         Эксперт входит в свою панель по адресу <b>/expert</b> с логином и паролем, которые вы задали здесь. Клиент может
-        выбрать только того, кто «в сети».
+        выбрать только того, кто «в сети». Сам эксперт в сети, пока у него открыта панель; вы можете включить его на
+        час и без панели — например, чтобы проверить сайт.
       </p>
 
       {list.length > 0 && (
@@ -34,7 +35,9 @@ export default async function ExpertsAdminPage() {
                     <Link href={`/admin/experts/${e.id}`}>{e.name}</Link>
                   </td>
                   <td>{e.login}</td>
-                  <td>{!e.active ? "выключен" : isOnline(e, now) ? "в сети" : "не в сети"}</td>
+                  <td>
+                    <OnlineToggle expert={e} />
+                  </td>
                 </tr>
               ))}
             </tbody>

@@ -66,6 +66,8 @@ export const experts = pgTable("experts", {
   passwordHash: text("password_hash").notNull(),
   online: boolean("online").notNull().default(false),
   lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
+  /** Админ включил «в сети» до этого времени — независимо от того, открыта ли панель эксперта. */
+  onlineUntil: timestamp("online_until", { withTimezone: true }),
   active: boolean("active").notNull().default(true),
   sort: integer("sort").notNull().default(0),
   createdAt: createdAt(),

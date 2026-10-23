@@ -11,7 +11,7 @@ import { getDb } from "@/db";
 import { diagnosticBlocks, experts, priceVariants, products, variations } from "@/db/schema";
 import { requireAdmin } from "@/lib/admin-auth";
 import { getBlock, getMethod, saveBlockTexts } from "@/lib/diagnostic";
-import { createExpert, getExpert, saveExpertPhoto, setExpertPassword } from "@/lib/experts";
+import { createExpert, getExpert, saveExpertPhoto, setExpertPassword, setOnlineByAdmin } from "@/lib/experts";
 import { VARIATION_MODES, getVariation, saveVariationTexts, setVariationMode } from "@/lib/variations";
 import type { VariationMode } from "@/lib/variations";
 import { smtpMailer } from "@/lib/mail";
@@ -239,6 +239,14 @@ export async function createExpertAction(_prev: ActionResult, form: FormData): P
   redirect(`/admin/experts/${res.id}`);
 }
 
+/** «В сети» на час или выключить — за эксперта (для проверки и подмены). */
+export async function setExpertOnlineAction(form: FormData): Promise<void> {
+  await requireAdmin();
+  const id = int(form, "id");
+  if (id !== null) await setOnlineByAdmin(await getDb(), id, form.get("online") === "true", new Date());
+  refresh();
+}
+
 export async function updateExpertAction(_prev: ActionResult, form: FormData): Promise<ActionResult> {
   await requireAdmin();
   const db = await getDb();
@@ -267,7 +275,7 @@ export async function updateExpertAction(_prev: ActionResult, form: FormData): P
       sort: int(form, "sort") ?? expert.sort,
       active,
       // Выключенный эксперт сразу пропадает из выбора
-      ...(!active && { online: false }),
+      ...(!active && { online: false, onlineUntil: null }),
     })
     .where(eq(experts.id, expert.id));
   refresh();

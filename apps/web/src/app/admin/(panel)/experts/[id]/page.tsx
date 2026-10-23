@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDb } from "@/db";
-import { MIN_EXPERT_PASSWORD, expertPhotoUrls, getExpert, isOnline } from "@/lib/experts";
+import { MIN_EXPERT_PASSWORD, expertPhotoUrls, getExpert } from "@/lib/experts";
 import { ActionForm } from "../../../ActionForm";
+import { OnlineToggle } from "../../../OnlineToggle";
 import { updateExpertAction } from "../../../actions";
 
 export default async function ExpertAdminPage(props: PageProps<"/admin/experts/[id]">) {
@@ -19,8 +20,9 @@ export default async function ExpertAdminPage(props: PageProps<"/admin/experts/[
       </p>
       <h1>{expert.name}</h1>
       <p className="muted">
-        Логин: <b>{expert.login}</b>. Сейчас: {isOnline(expert, new Date()) ? "в сети" : "не в сети"}.
+        Логин: <b>{expert.login}</b>.
       </p>
+      <OnlineToggle expert={expert} />
 
       <ActionForm action={updateExpertAction}>
         <input type="hidden" name="id" value={expert.id} />
