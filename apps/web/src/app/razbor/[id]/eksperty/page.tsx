@@ -4,6 +4,7 @@ import { conversationForLead, selectableExperts } from "@/lib/chat";
 import { expertPhotoUrls } from "@/lib/experts";
 import { getLead } from "@/lib/leads";
 import { getTexts } from "@/lib/texts";
+import { Avatar } from "../../../Avatar";
 import { Footer } from "../../../Footer";
 import { chooseExpert } from "./actions";
 
@@ -42,13 +43,7 @@ export default async function ExpertsPage(props: PageProps<"/razbor/[id]/ekspert
             return (
               <article key={e.id} className={`card expert ${e.isOnline ? "" : "expert--offline"}`}>
                 <div className="expert__head">
-                  {photo ? (
-                    <img className="expert__photo" src={photo} alt="" width={72} height={72} />
-                  ) : (
-                    <div className="expert__photo expert__photo--empty" aria-hidden="true">
-                      {e.name.slice(0, 1)}
-                    </div>
-                  )}
+                  <Avatar name={e.name} photo={photo} size={72} online={e.isOnline} />
                   <div>
                     <h2>{e.name}</h2>
                     <span className={e.isOnline ? "status status--online" : "status"}>

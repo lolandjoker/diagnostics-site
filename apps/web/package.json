@@ -14,6 +14,8 @@
   "dependencies": {
     "@diag/engine": "workspace:*",
     "@electric-sql/pglite": "^0.5.11",
+    "@fontsource-variable/manrope": "^5.3.0",
+    "@fontsource/cormorant-garamond": "^5.3.0",
     "drizzle-orm": "^0.45.4",
     "next": "^16.4.2",
     "nodemailer": "^10.2.1",

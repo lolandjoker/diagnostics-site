@@ -5,7 +5,9 @@ import { experts, priceVariants, products, variations } from "@/db/schema";
 import {
   CLIENT_MESSAGES_PER_MINUTE,
   FULL_TEXT_DELAY_MS,
+  MAX_CHAT_PHOTO_BYTES,
   deliverDueFullTexts,
+  getMessagePhoto,
   inbox,
   markExpertRead,
   messageViews,
@@ -21,6 +23,7 @@ import {
   getExpert,
   getExpertWithSecret,
   isOnline,
+  saveExpertPhoto,
   setExpertOnline,
   setExpertPassword,
   setOnlineByAdmin,
@@ -300,6 +303,49 @@ describe("чат", () => {
     const stats = await variationStats(db);
     expect(stats.find((s) => s.variationId === a.id)).toMatchObject({ leads: 2, chats: 1, replied: 1, paid: 1, revenueKopecks: 100000 });
     expect(stats.find((s) => s.variationId === b.id)).toMatchObject({ leads: 1, chats: 0, replied: 0, paid: 0 });
+  });
+
+  it("фото в чате: хранится с сообщением и открывается только из чата этой заявки", async () => {
+    const expertId = await onlineExpert();
+    const l = await lead(null);
+    const other = await lead(null);
+    const res = await startConversation(db, l, expertId, new Date());
+    if (!res.ok) throw new Error(res.error);
+    const c = res.conversation;
+    const jpeg = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(100, 7)]);
+
+    const sent = await postMessage(db, c.id, { author: "client", photo: jpeg });
+    if (!sent.ok) throw new Error(sent.error);
+    const [m] = await messageViews(db, c, 0, "client");
+    expect(m).toMatchObject({ body: "", photo: `/api/chat/${l.id}/photo/${sent.id}` });
+    expect((await inbox(db))[0]?.lastMessage).toBe("[фото]");
+
+    const photo = await getMessagePhoto(db, l.id, sent.id);
+    expect(photo?.mime).toBe("image/jpeg");
+    expect(Buffer.from(photo!.data).equals(jpeg)).toBe(true);
+    expect(await getMessagePhoto(db, other.id, sent.id)).toBeNull();
+
+    // Подпись к фото — обычный текст сообщения
+    await postMessage(db, c.id, { author: "client", body: "вот", photo: jpeg });
+    expect((await inbox(db))[0]?.lastMessage).toBe("вот");
+
+    expect(await postMessage(db, c.id, { author: "client", photo: Buffer.from("не картинка") })).toMatchObject({ ok: false });
+    const huge = Buffer.concat([jpeg, Buffer.alloc(MAX_CHAT_PHOTO_BYTES)]);
+    expect(await postMessage(db, c.id, { author: "client", photo: huge })).toMatchObject({ ok: false });
+  });
+
+  it("у сообщений эксперта — его фото, у остальных аватарки нет", async () => {
+    const expertId = await onlineExpert();
+    const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(16)]);
+    expect(await saveExpertPhoto(db, expertId, png)).toBeNull();
+    const l = await lead(null);
+    const res = await startConversation(db, l, expertId, new Date());
+    if (!res.ok) throw new Error(res.error);
+    await postMessage(db, res.conversation.id, { author: "expert", expertId, body: "Здравствуйте" });
+    await postMessage(db, res.conversation.id, { author: "client", body: "Добрый день" });
+    const [fromExpert, fromClient] = await messageViews(db, res.conversation, 0, "client");
+    expect(fromExpert?.avatar).toMatch(new RegExp(`^/experts/${expertId}/photo\\?v=\\d+$`));
+    expect(fromClient?.avatar).toBeNull();
   });
 
   it("выключенный эксперт не может начать чат", async () => {

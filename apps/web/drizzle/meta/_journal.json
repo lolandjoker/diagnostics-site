@@ -29,6 +29,13 @@
       "when": 1792760817678,
       "tag": "0003_full_text_delay",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792762047164,
+      "tag": "0004_message_photos",
+      "breakpoints": true
     }
   ]
 }

@@ -1,0 +1,30 @@
+import type { CSSProperties } from "react";
+
+/** Круглая аватарка: фото или первая буква имени; online — точка статуса в углу. */
+export function Avatar({
+  name,
+  photo,
+  size = 40,
+  online,
+  tone,
+}: {
+  name: string;
+  photo?: string | null | undefined;
+  size?: number;
+  online?: boolean;
+  /** Цвет буквы, когда фото нет: gold — эксперты и разбор, plain — клиент. */
+  tone?: "gold" | "plain";
+}) {
+  return (
+    <span className={`avatar avatar--${tone ?? "gold"}`} style={{ "--avatar-size": `${size}px` } as CSSProperties}>
+      {photo ? (
+        <img src={photo} alt="" width={size} height={size} loading="lazy" />
+      ) : (
+        <span aria-hidden="true">{name.trim().slice(0, 1).toUpperCase() || "?"}</span>
+      )}
+      {online !== undefined && (
+        <span className={online ? "avatar__dot avatar__dot--on" : "avatar__dot"} aria-hidden="true" />
+      )}
+    </span>
+  );
+}

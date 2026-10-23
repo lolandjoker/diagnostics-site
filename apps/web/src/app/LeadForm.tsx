@@ -10,7 +10,7 @@ const initial: FormState = { error: null };
 export function LeadForm({ button, consent, maxDate }: { button: string; consent: string; maxDate: string }) {
   const { state, onSubmit, pending } = useKeptForm(submitLead, initial);
   return (
-    <form onSubmit={onSubmit} className="form">
+    <form onSubmit={onSubmit} className="form form--card">
       <label className="field">
         <span>Имя</span>
         <input name="name" required maxLength={60} autoComplete="given-name" />
