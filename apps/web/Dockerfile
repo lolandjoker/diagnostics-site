@@ -28,6 +28,8 @@ ENV NODE_ENV=production \
 RUN addgroup -S app && adduser -S app -G app
 COPY --from=build --chown=app:app /repo/apps/web/.next/standalone ./
 COPY --from=build --chown=app:app /repo/apps/web/.next/static ./apps/web/.next/static
+# Миграции базы: применяются сайтом при первом обращении к базе
+COPY --from=build --chown=app:app /repo/apps/web/drizzle ./apps/web/drizzle
 USER app
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \

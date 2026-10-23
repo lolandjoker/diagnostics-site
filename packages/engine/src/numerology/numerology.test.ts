@@ -1,4 +1,5 @@
 import {
+  archetypeNumber,
   birthdayNumber,
   expressionNumber,
   lifePathNumber,
@@ -133,6 +134,21 @@ describe("personalYearNumber — число личного года", () => {
 
   it("отклоняет год вне диапазона", () => {
     expect(() => personalYearNumber({ day: 1, month: 1, year: 1990 }, 1800)).toThrow();
+  });
+});
+
+describe("archetypeNumber — архетип 1–12", () => {
+  it.each([
+    [{ day: 15, month: 3, year: 1990 }, 4], // 28 % 12 = 4
+    [{ day: 1, month: 2, year: 1990 }, 10], // 22 % 12 = 10
+    [{ day: 28, month: 12, year: 1982 }, 9], // 33 % 12 = 9
+    [{ day: 3, month: 3, year: 2004 }, 12], // 12 % 12 = 0 → 12
+  ])("%o → %i", (date, expected) => {
+    expect(archetypeNumber(date)).toBe(expected);
+  });
+
+  it("не считает несуществующую дату", () => {
+    expect(() => archetypeNumber({ day: 31, month: 4, year: 1990 })).toThrow();
   });
 });
 

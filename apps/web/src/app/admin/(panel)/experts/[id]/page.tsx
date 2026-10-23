@@ -1,0 +1,66 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { getDb } from "@/db";
+import { MIN_EXPERT_PASSWORD, expertPhotoUrls, getExpert, isOnline } from "@/lib/experts";
+import { ActionForm } from "../../../ActionForm";
+import { updateExpertAction } from "../../../actions";
+
+export default async function ExpertAdminPage(props: PageProps<"/admin/experts/[id]">) {
+  const { id } = await props.params;
+  const db = await getDb();
+  const expert = /^\d+$/.test(id) ? await getExpert(db, Number(id)) : null;
+  if (!expert) notFound();
+  const photo = (await expertPhotoUrls(db)).get(expert.id);
+
+  return (
+    <>
+      <p>
+        <Link href="/admin/experts">← Все эксперты</Link>
+      </p>
+      <h1>{expert.name}</h1>
+      <p className="muted">
+        Логин: <b>{expert.login}</b>. Сейчас: {isOnline(expert, new Date()) ? "в сети" : "не в сети"}.
+      </p>
+
+      <ActionForm action={updateExpertAction}>
+        <input type="hidden" name="id" value={expert.id} />
+        <div className="expert__head">
+          {photo ? (
+            <img className="expert__photo" src={photo} alt="" width={72} height={72} />
+          ) : (
+            <div className="expert__photo expert__photo--empty" aria-hidden="true">
+              {expert.name.slice(0, 1)}
+            </div>
+          )}
+          <label className="field">
+            <span>Фото: JPEG, PNG или WebP до 2 МБ, лучше квадратное</span>
+            <input name="photo" type="file" accept="image/jpeg,image/png,image/webp" />
+          </label>
+        </div>
+        <label className="field">
+          <span>Имя (видят клиенты)</span>
+          <input name="name" defaultValue={expert.name} required />
+        </label>
+        <label className="field">
+          <span>Описание (на карточке выбора эксперта)</span>
+          <textarea name="description" defaultValue={expert.description} rows={5} />
+        </label>
+        <div className="row">
+          <label className="field field--short">
+            <span>Порядок</span>
+            <input name="sort" type="number" defaultValue={expert.sort} />
+          </label>
+          <label className="check">
+            <input name="active" type="checkbox" defaultChecked={expert.active} />
+            <span>Работает (выключенный не может войти и не виден клиентам)</span>
+          </label>
+        </div>
+        <label className="field">
+          <span>Новый пароль — оставьте пустым, чтобы не менять (от {MIN_EXPERT_PASSWORD} символов)</span>
+          <input name="password" autoComplete="new-password" />
+        </label>
+        <button className="button">Сохранить</button>
+      </ActionForm>
+    </>
+  );
+}

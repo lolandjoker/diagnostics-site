@@ -1,9 +1,12 @@
 :root {
   --bg: #0e0b16;
   --surface: #17122a;
+  --line: rgba(236, 230, 245, 0.12);
   --text: #ece6f5;
   --muted: #a99fbd;
   --gold: #d4af6a;
+  --error: #f08a8a;
+  --ok: #8fd4a4;
   --radius: 14px;
   color-scheme: dark;
 }
@@ -31,21 +34,11 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-.stub {
-  max-width: 640px;
-  margin: 0 auto;
-  padding: 72px 16px 48px;
-  text-align: center;
-}
-
-.stub__mark {
-  width: 56px;
-  height: 56px;
-  margin: 0 auto 28px;
+a {
   color: var(--gold);
 }
 
-.stub h1 {
+h1 {
   margin: 0 0 16px;
   font-size: clamp(1.75rem, 6vw, 2.5rem);
   font-weight: 600;
@@ -53,19 +46,651 @@ body {
   line-height: 1.2;
 }
 
-.stub p {
+h2 {
+  margin: 0 0 12px;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+h3 {
+  margin: 0 0 8px;
+  font-size: 1.125rem;
+}
+
+/* Текст, который ввёл админ: переносы строк сохраняются, HTML не интерпретируется */
+.text {
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+/* --- Публичные страницы --- */
+
+.page {
+  max-width: 720px;
   margin: 0 auto;
-  max-width: 34ch;
+  padding: 56px 16px 32px;
+}
+
+.page--narrow {
+  max-width: 520px;
+  text-align: center;
+}
+
+.mark {
+  display: block;
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 28px;
+  color: var(--gold);
+}
+
+.lead {
+  margin: 0 auto 28px;
   color: var(--muted);
   font-size: 1.0625rem;
 }
 
-.stub__badge {
-  display: inline-block;
-  margin-top: 32px;
-  padding: 8px 16px;
-  border: 1px solid rgba(212, 175, 106, 0.4);
-  border-radius: 999px;
+.accent {
   color: var(--gold);
+}
+
+.card {
+  margin: 0 0 16px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  text-align: left;
+}
+
+.card p {
+  margin: 0;
+}
+
+.offers {
+  margin-top: 40px;
+}
+
+.offer__buy {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 16px;
+}
+
+.price {
+  color: var(--gold);
+  font-size: 1.375rem;
+  font-weight: 600;
+}
+
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.form {
+  display: grid;
+  gap: 16px;
+  text-align: left;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+}
+
+.field > span {
+  color: var(--muted);
   font-size: 0.875rem;
+}
+
+.field small {
+  color: var(--muted);
+}
+
+input:not([type="checkbox"]),
+select,
+textarea {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  color: inherit;
+  font: inherit;
+}
+
+textarea {
+  resize: vertical;
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+.button:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.check {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+.check input {
+  margin-top: 3px;
+  accent-color: var(--gold);
+}
+
+.button {
+  display: inline-block;
+  padding: 14px 22px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--gold);
+  color: #1a1408;
+  font: inherit;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.button--ghost {
+  border: 1px solid var(--gold);
+  background: transparent;
+  color: var(--gold);
+}
+
+.form__error {
+  margin: 0;
+  color: var(--error);
+}
+
+.footer {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 24px 16px 40px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.8125rem;
+  text-align: center;
+}
+
+.footer nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  justify-content: center;
+}
+
+.footer a {
+  color: var(--muted);
+}
+
+/* --- Админка: светлая и простая --- */
+
+.admin {
+  --text: #1c1a22;
+  --muted: #6b6578;
+  --line: #ddd8e6;
+  --surface: #ffffff;
+  --gold: #8a6a1f;
+  --error: #b42318;
+  --ok: #1d7a3a;
+  color-scheme: light;
+  min-height: 100dvh;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 16px 16px 96px;
+  background: #f6f4f9;
+  color: var(--text);
+}
+
+body:has(.admin) {
+  background: #f6f4f9;
+}
+
+.admin--login {
+  max-width: 420px;
+  padding-top: 72px;
+}
+
+.admin h1 {
+  font-size: 1.75rem;
+}
+
+.admin__header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.admin__header nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
+
+.admin input:not([type="checkbox"]),
+.admin select,
+.admin textarea {
+  background: #fff;
+}
+
+.admin .button {
+  color: #fff;
+}
+
+.admin-form fieldset {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.admin-section {
+  margin: 32px 0;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  align-items: end;
+}
+
+.row > .field {
+  flex: 1 1 240px;
+}
+
+.row > .field--short,
+.field--short {
+  flex: 0 1 160px;
+  max-width: 160px;
+}
+
+.sticky-save {
+  position: sticky;
+  bottom: 16px;
+  justify-self: start;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.notice {
+  margin: 12px 0;
+  padding: 10px 14px;
+  border-radius: 10px;
+}
+
+.notice--ok {
+  background: #e6f4ea;
+  color: var(--ok);
+}
+
+.notice--error {
+  background: #fdecea;
+  color: var(--error);
+}
+
+.error-text {
+  color: var(--error);
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 32px;
+}
+
+.stats > div {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.stats b {
+  display: block;
+  font-size: 1.5rem;
+}
+
+.table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+th,
+td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+th {
+  color: var(--muted);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+tr:last-child td {
+  border-bottom: 0;
+}
+
+td.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.list {
+  padding-left: 20px;
+}
+
+.list li {
+  margin: 6px 0;
+}
+
+.link-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--gold);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.link-button--danger {
+  color: var(--error);
+}
+
+.danger-zone {
+  margin-top: 48px;
+}
+
+/* --- Эксперты --- */
+
+.card--accent {
+  border-color: rgba(212, 175, 106, 0.45);
+}
+
+.card__action {
+  margin: 16px 0 0;
+}
+
+.experts {
+  display: grid;
+  gap: 12px;
+}
+
+.expert--offline {
+  opacity: 0.55;
+}
+
+.expert__head {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.expert__head h2 {
+  margin: 0 0 4px;
+}
+
+.expert__photo {
+  flex: none;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.expert__photo--empty {
+  display: grid;
+  place-items: center;
+  background: rgba(212, 175, 106, 0.18);
+  color: var(--gold);
+  font-size: 1.75rem;
+  font-weight: 600;
+}
+
+.status {
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.status--online {
+  color: var(--ok);
+}
+
+.status--online::before {
+  content: "● ";
+}
+
+.status-toggle {
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.status-toggle--on {
+  border-color: var(--ok);
+  color: var(--ok);
+}
+
+/* --- Чат --- */
+
+.page--chat {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  padding-top: 24px;
+  padding-bottom: 16px;
+}
+
+.chat__title {
+  font-size: 1.5rem;
+}
+
+.chat {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.chat__messages {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 240px;
+  max-height: 65dvh;
+  overflow-y: auto;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.admin .chat__messages {
+  max-height: 60dvh;
+}
+
+.msg {
+  max-width: 85%;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: rgba(127, 127, 127, 0.12);
+  align-self: flex-start;
+}
+
+.msg--own {
+  align-self: flex-end;
+  background: rgba(212, 175, 106, 0.2);
+}
+
+.msg--system {
+  max-width: 100%;
+  align-self: stretch;
+  border: 1px dashed var(--line);
+  background: transparent;
+}
+
+.msg--admin .msg__author {
+  color: var(--gold);
+}
+
+.msg__author {
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.msg__author time {
+  font-weight: 400;
+}
+
+.msg__offer {
+  margin-top: 6px;
+  padding: 12px;
+  border: 1px solid rgba(212, 175, 106, 0.45);
+  border-radius: 10px;
+}
+
+.msg__offer p {
+  margin: 6px 0 0;
+}
+
+.chat__form {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.chat__form textarea {
+  flex: 1;
+}
+
+.chat__offer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  font-size: 0.875rem;
+}
+
+.chat__note {
+  margin: 0;
+}
+
+/* --- Список чатов --- */
+
+.inbox {
+  margin: 0 0 32px;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.inbox__item + .inbox__item {
+  border-top: 1px solid var(--line);
+}
+
+.inbox__item a {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 12px;
+  padding: 12px 14px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.inbox__item a:hover {
+  background: rgba(127, 127, 127, 0.06);
+}
+
+.inbox__item--unread .inbox__who {
+  font-weight: 700;
+}
+
+.inbox__last {
+  grid-column: 1;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.875rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.inbox__item time {
+  grid-column: 2;
+  grid-row: 1;
+  font-size: 0.8125rem;
+}
+
+.badge {
+  display: inline-block;
+  min-width: 20px;
+  margin-left: 8px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--error);
+  color: #fff;
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+.value-texts {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
 }

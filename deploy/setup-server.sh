@@ -52,6 +52,8 @@ for p in ca-certificates curl git tmux openssl ufw fail2ban python3-systemd unat
   dpkg -s "$p" >/dev/null 2>&1 || need+=("$p")
 done
 command -v docker >/dev/null 2>&1 || need+=(docker.io)
+# Без buildx новый docker compose не собирает образы
+docker buildx version >/dev/null 2>&1 || need+=(docker-buildx)
 if [ "${#need[@]}" -gt 0 ]; then
   log "Устанавливаю: ${need[*]}"
   apt_ update -q
@@ -159,6 +161,12 @@ if [ ! -f "$BASE/app/.env" ]; then
   } > "$BASE/app/.env"
   log "Создан .env (пароль базы сгенерирован на сервере)"
 fi
+# Ключи, которых не было в первых версиях .env, — дописываем, ничего не перезаписывая
+add_env_if_missing() {
+  grep -q "^$1=" "$BASE/app/.env" || { echo "$1=$2" >> "$BASE/app/.env"; log "В .env добавлен $1"; }
+}
+add_env_if_missing ADMIN_PASSWORD "$(openssl rand -hex 12)"
+add_env_if_missing SESSION_SECRET "$(openssl rand -hex 32)"
 chmod 600 "$BASE/app/.env"
 
 touch "$BASE/state/setup.done"

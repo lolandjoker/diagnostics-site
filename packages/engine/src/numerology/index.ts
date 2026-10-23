@@ -93,6 +93,13 @@ export function personalYearNumber(d: BirthDate, year: number): number {
   });
 }
 
+/** Число архетипа 1–12: сумма всех цифр даты по модулю 12, остаток 0 — это 12. 15.03.1990 → 28 → 4. */
+export function archetypeNumber(d: BirthDate): number {
+  assertValidBirthDate(d);
+  const k = dateDigitSum(d) % 12;
+  return k === 0 ? 12 : k;
+}
+
 export interface NumerologyProfile {
   lifePath: number;
   birthday: number;
