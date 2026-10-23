@@ -70,7 +70,7 @@ export function InboxList({ url, linkBase, meId }: { url: string; linkBase: stri
       <h2>Мои чаты</h2>
       <Rows items={items.filter((c) => c.expertId === meId)} linkBase={linkBase} showExpert={false} />
       <h2>Чаты коллег</h2>
-      <p className="muted">Видны всем экспертам; отвечать в них может только их эксперт и администратор.</p>
+      <p className="muted">Ответить можно в любом — клиент увидит ваше имя.</p>
       <Rows items={items.filter((c) => c.expertId !== meId)} linkBase={linkBase} showExpert />
     </>
   );

@@ -30,13 +30,17 @@ export default async function ExpertChatPage(props: PageProps<"/expert/chat/[id]
         Дата рождения: {birth}. Эксперт чата: {header?.expertName}
         {mine ? " (вы)" : ""}.
       </p>
+      {!mine && (
+        <p className="notice notice--error">
+          Это чат эксперта {header?.expertName}. Если ответите, клиент увидит ваше имя — {expert.name}.
+        </p>
+      )}
       <ChatThread
         url={`/expert/api/chat/${conversation.id}`}
-        canReply={mine}
-        ownAuthors={mine ? ["expert"] : []}
+        ownAuthors={[]}
+        ownExpertId={expert.id}
         labels={{ placeholder: t["chat.placeholder"], send: t["chat.send"], buy: t["result.buy_button"] }}
-        products={mine ? products : []}
-        note={`Это чат эксперта ${header?.expertName ?? ""}. Вы видите переписку, но отвечать в нём может только он и администратор.`}
+        products={products}
       />
     </>
   );
