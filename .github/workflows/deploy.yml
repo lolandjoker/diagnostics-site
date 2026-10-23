@@ -1,0 +1,150 @@
+name: Выкат на сервер
+
+# Автоматически: после зелёных «Проверок» на main (то есть после каждого слияния PR).
+# Вручную: Actions → «Выкат на сервер» → Run workflow (выкат текущего main или откат).
+on:
+  workflow_run:
+    workflows: ["Проверки"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "deploy — выкатить текущий main, rollback — вернуть предыдущую версию"
+        type: choice
+        options: [deploy, rollback]
+        default: deploy
+
+permissions:
+  contents: read
+
+# Выкаты строго по одному и не прерываются на середине
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  HOST: 195.133.81.137
+  DOMAIN: diagnostics-free.com
+  # Отпечаток ключа сервера: защищает от подмены сервера (проверен владельцем 19.10.2026)
+  HOST_FINGERPRINT: SHA256:PR3DMvNa51VVboCsO6tRFKEFDrxjxylXQ+BxW5Bjfbk
+
+jobs:
+  deploy:
+    name: Выкат
+    # Только после успешных проверок на push в main этого же репозитория (не из форков)
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    outputs:
+      sha: ${{ steps.target.outputs.sha }}
+    steps:
+      - name: Какую версию выкатываем
+        id: target
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            echo "sha=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.target.outputs.sha }}
+          fetch-depth: 50
+
+      - name: Ключ и проверка подлинности сервера
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -T 20 -t ed25519 "$HOST" 2>/dev/null > ~/.ssh/known_hosts
+          fp=$(ssh-keygen -lf ~/.ssh/known_hosts -E sha256 | awk '{print $2}')
+          if [ "$fp" != "$HOST_FINGERPRINT" ]; then
+            echo "::error::Отпечаток сервера не совпадает ($fp) — возможна подмена сервера. Выкат остановлен."
+            exit 1
+          fi
+          echo "Сервер подлинный: $fp"
+
+      - name: Подготовка сервера (повторный запуск безопасен)
+        run: |
+          set -euo pipefail
+          ssh_() { ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o ServerAliveInterval=15 "root@$HOST" "$@"; }
+          ssh_ 'command -v tmux >/dev/null || (apt-get update -q && DEBIAN_FRONTEND=noninteractive apt-get install -y -q tmux)'
+          ssh_ 'mkdir -p /opt/diagnostics/state /opt/diagnostics/logs'
+          ssh_ 'cat > /opt/diagnostics/state/setup-server.sh && chmod 700 /opt/diagnostics/state/setup-server.sh' < deploy/setup-server.sh
+          bash deploy/remote-run.sh setup "/opt/diagnostics/state/setup-server.sh $DOMAIN" 25
+
+      - name: Список изменений
+        id: changes
+        run: |
+          set -euo pipefail
+          prev=$(ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes "root@$HOST" 'cat /opt/diagnostics/state/current_sha 2>/dev/null || true')
+          echo "prev=$prev" >> "$GITHUB_OUTPUT"
+          {
+            echo "## Выкат ${{ steps.target.outputs.sha }}"
+            echo
+            if [ -n "$prev" ] && git cat-file -e "$prev" 2>/dev/null; then
+              echo "Было: \`${prev:0:7}\`. Что изменилось:"
+              echo
+              git log --no-merges --format='- %s' "$prev..${{ steps.target.outputs.sha }}"
+            else
+              echo "Первый выкат или предыдущая версия не найдена в последних 50 коммитах."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Выкат или откат
+        run: |
+          set -euo pipefail
+          sha="${{ steps.target.outputs.sha }}"
+          action="${{ github.event.inputs.action || 'deploy' }}"
+          ssh_() { ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o ServerAliveInterval=15 "root@$HOST" "$@"; }
+          # Скрипт выката берём из выкатываемой версии, а не из старой на сервере
+          ssh_ "cd /opt/diagnostics/app && git fetch --quiet origin $sha && git show $sha:deploy/deploy.sh > /opt/diagnostics/state/deploy.sh && chmod 700 /opt/diagnostics/state/deploy.sh"
+          if [ "$action" = "rollback" ]; then
+            bash deploy/remote-run.sh rollback "/opt/diagnostics/state/deploy.sh rollback" 30
+          else
+            bash deploy/remote-run.sh "deploy-${sha:0:7}" "/opt/diagnostics/state/deploy.sh deploy $sha" 30
+          fi
+
+      - name: Проверка снаружи
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 12); do
+            if curl -fsS --max-time 10 "https://$DOMAIN/api/health"; then break; fi
+            sleep 5
+          done
+          curl -fsS --max-time 10 "https://$DOMAIN/api/health" | grep -q '"ok"'
+          curl -fsS --max-time 10 -o /dev/null "https://$DOMAIN/"
+          headers=$(curl -fsSI --max-time 10 "https://$DOMAIN/")
+          echo "$headers" | grep -qi '^strict-transport-security'
+          echo "$headers" | grep -qi '^x-frame-options: DENY'
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "http://$DOMAIN/")
+          [ "$code" = "308" ] || [ "$code" = "301" ] || { echo "HTTP не перенаправляет на HTTPS (код $code)"; exit 1; }
+          echo "Сайт работает: https://$DOMAIN" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Убрать ключ с машины GitHub
+        if: always()
+        run: rm -f ~/.ssh/deploy_key
+
+  check-after-15-min:
+    name: Проверка через 15 минут
+    needs: deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Ждём 15 минут
+        run: sleep 900
+      - name: Сайт всё ещё работает
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 15 "https://$DOMAIN/api/health" | grep -q '"ok"'
+          curl -fsS --max-time 15 -o /dev/null "https://$DOMAIN/"
+          echo "Через 15 минут после выката сайт работает" >> "$GITHUB_STEP_SUMMARY"

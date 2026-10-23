@@ -33,6 +33,9 @@ jobs:
       - name: Линт
         run: pnpm lint
 
+      - name: Проверка скриптов выката (shellcheck)
+        run: shellcheck -S warning deploy/*.sh
+
       - name: Проверка типов
         run: pnpm typecheck
 
