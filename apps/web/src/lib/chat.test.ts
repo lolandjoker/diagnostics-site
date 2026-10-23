@@ -234,12 +234,16 @@ describe("чат", () => {
     await postMessage(db, c.id, { author: "expert", expertId, productId: p!.id });
 
     const client = await messageViews(db, c, 0, "client");
-    expect(client.map((m) => m.authorName)).toEqual(["Вы", "Мария", "Администратор", "Мария"]);
+    // Сообщение админа клиент видит от эксперта чата
+    expect(client.map((m) => m.authorName)).toEqual(["Вы", "Мария", "Мария", "Мария"]);
+    expect(client[2]).toMatchObject({ author: "expert", expertId });
+    expect(JSON.stringify(client)).not.toContain("Администратор");
     expect(client[3]?.offer).toMatchObject({ title: "Курс", url: `/razbor/${l.id}/zakaz/${p!.id}` });
     expect(client[3]?.offer?.price).toMatch("2");
 
     const staff = await messageViews(db, c, 0, "staff");
     expect(staff[0]?.authorName).toBe("Анна");
+    expect(staff[2]).toMatchObject({ author: "admin", authorName: "Администратор", expertId: null });
     expect(await messageViews(db, c, client[1]!.id, "client")).toHaveLength(2);
 
     // Продукт, предложенный в чате, можно купить, даже если под разбором его нет

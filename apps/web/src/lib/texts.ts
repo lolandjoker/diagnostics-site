@@ -61,7 +61,7 @@ export const TEXT_DEFS = [
   { key: "chat.placeholder", group: "Эксперты и чат", label: "Подсказка в поле сообщения", default: "Сообщение" },
   { key: "chat.send", group: "Эксперты и чат", label: "Кнопка отправки", default: "Отправить" },
   { key: "chat.client_name", group: "Эксперты и чат", label: "Подпись сообщений клиента (видит клиент)", default: "Вы" },
-  { key: "chat.admin_name", group: "Эксперты и чат", label: "Подпись сообщений админа", default: "Администратор" },
+  { key: "chat.admin_name", group: "Эксперты и чат", label: "Подпись сообщений админа (видят эксперты и админ; клиент видит имя эксперта чата)", default: "Администратор" },
   {
     key: "chat.system_name",
     group: "Эксперты и чат",

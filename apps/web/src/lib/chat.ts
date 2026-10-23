@@ -1,7 +1,8 @@
 /**
  * Чат человека с экспертом. Человек входит без регистрации: доступ к чату — по случайному id
- * его заявки в адресе. Пишут: клиент, любой эксперт, админ (подписан «Администратор»).
- * Подписи у сообщений — настоящие: ответил другой эксперт — клиент видит его имя.
+ * его заявки в адресе. Пишут: клиент, любой эксперт, админ.
+ * Ответил другой эксперт — клиент видит его имя. Сообщения админа клиент видит от имени эксперта
+ * чата (имя и фото); подпись «Администратор» видят только эксперты и админ.
  * К сообщению можно приложить фото (JPEG, PNG или WebP до MAX_CHAT_PHOTO_BYTES).
  */
 import { and, asc, desc, eq, gt, isNull, lte, sql } from "drizzle-orm";
@@ -176,8 +177,8 @@ export interface MessageView {
 }
 
 /**
- * Сообщения чата после afterId. viewer: client — человек («Вы» вместо его имени);
- * staff — эксперты и админ (видят имя человека).
+ * Сообщения чата после afterId. viewer: client — человек («Вы» вместо его имени, сообщения админа —
+ * от эксперта чата); staff — эксперты и админ (видят имя человека и подпись админа).
  */
 export async function messageViews(
   db: Db,
@@ -199,23 +200,28 @@ export async function messageViews(
   const avatars = await expertPhotoUrls(db);
   const [lead] = await db.select({ name: leads.name }).from(leads).where(eq(leads.id, conversation.leadId));
   const clientName = viewer === "client" ? t["chat.client_name"] : (lead?.name ?? "Клиент");
+  const chatExpert = viewer === "client" ? await getExpert(db, conversation.expertId) : null;
 
   const out: MessageView[] = [];
   for (const { m, expertName, photoId } of rows) {
+    // Для клиента сообщение админа неотличимо от сообщения эксперта чата
+    const asExpert = viewer === "client" && m.author === "admin";
+    const author = asExpert ? "expert" : m.author;
+    const expertId = asExpert ? conversation.expertId : m.expertId;
     const authorName =
-      m.author === "client"
+      author === "client"
         ? clientName
-        : m.author === "expert"
-          ? (expertName ?? "Эксперт")
-          : m.author === "admin"
+        : author === "expert"
+          ? ((asExpert ? chatExpert?.name : expertName) ?? "Эксперт")
+          : author === "admin"
             ? t["chat.admin_name"]
             : t["chat.system_name"];
     const view: MessageView = {
       id: m.id,
-      author: m.author,
+      author,
       authorName,
-      expertId: m.expertId,
-      avatar: m.author === "expert" && m.expertId !== null ? (avatars.get(m.expertId) ?? null) : null,
+      expertId,
+      avatar: author === "expert" && expertId !== null ? (avatars.get(expertId) ?? null) : null,
       body: m.body,
       createdAt: m.createdAt.toISOString(),
     };
