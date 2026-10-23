@@ -1,11 +1,11 @@
 /**
  * Чат для человека. Доступ — по id заявки в адресе (случайный, его знает только сам человек).
- * GET ?after=<id> — новые сообщения; POST {body} — отправить сообщение.
+ * GET ?after=<id> — новые сообщения; POST {body} или form-data (body, photo) — отправить сообщение.
  */
 import { getDb } from "@/db";
-import { conversationForLead, deliverDueFullTexts, messageViews, postMessage } from "@/lib/chat";
+import { MAX_CHAT_PHOTO_BYTES, conversationForLead, deliverDueFullTexts, messageViews, postMessage } from "@/lib/chat";
 import { getExpert, isOnline } from "@/lib/experts";
-import { afterParam, jsonBody, jsonError, noStore, sameOrigin } from "@/lib/http";
+import { afterParam, jsonError, messagePayload, noStore, sameOrigin } from "@/lib/http";
 import { getLead } from "@/lib/leads";
 
 export const dynamic = "force-dynamic";
@@ -37,9 +37,14 @@ export async function POST(req: Request, ctx: RouteContext<"/api/chat/[leadId]">
   const { leadId } = await ctx.params;
   const { db, conversation } = await load(leadId);
   if (!conversation) return jsonError("Чат не найден", 404);
-  const data = await jsonBody(req);
-  const body = typeof data?.body === "string" ? data.body : "";
-  const res = await postMessage(db, conversation.id, { author: "client", body });
+  const data = await messagePayload(req, MAX_CHAT_PHOTO_BYTES);
+  if (typeof data === "string") return jsonError(data, 400);
+  // Предлагать продукты клиент не может — productId от него не берём
+  const res = await postMessage(db, conversation.id, {
+    author: "client",
+    body: data.body,
+    ...(data.photo && { photo: data.photo }),
+  });
   if (!res.ok) return jsonError(res.error, 400);
   return Response.json({ id: res.id }, { headers: noStore });
 }

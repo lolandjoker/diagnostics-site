@@ -231,3 +231,13 @@ export const messages = pgTable(
   },
   (t) => [index("messages_conversation_idx").on(t.conversationId, t.id)],
 );
+
+/** Фото в сообщении чата: JPEG, PNG или WebP, одно на сообщение. */
+export const messagePhotos = pgTable("message_photos", {
+  messageId: integer("message_id")
+    .primaryKey()
+    .references(() => messages.id, { onDelete: "cascade" }),
+  mime: text("mime").notNull(),
+  data: bytea("data").notNull(),
+  createdAt: createdAt(),
+});
