@@ -16,6 +16,8 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
   transpilePackages: ["@diag/engine"],
+  // Драйверы базы грузятся из node_modules как есть, без упаковки сборщиком
+  serverExternalPackages: ["pg", "@electric-sql/pglite"],
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

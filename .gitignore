@@ -21,6 +21,7 @@ test-results/
 playwright-report/
 
 # данные и копии
+.data/
 *.dump
 *.sql.gz
 uploads/

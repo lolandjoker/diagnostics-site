@@ -35,6 +35,18 @@
 | «Отпечаток сервера не совпадает» | **Ничего не делать, сразу написать Claude.** Выкат остановлен: возможна подмена сервера или сервер переустановлен |
 | Нужно посмотреть руками | На Mac: `ssh -i ~/.ssh/deploy_key root@195.133.81.137` → `/opt/diagnostics/state/deploy.sh status` |
 
+## Админка
+
+https://diagnostics-free.com/admin. Пароль создан на сервере при подготовке и лежит только там:
+
+```bash
+grep ^ADMIN_PASSWORD= /opt/diagnostics/app/.env
+```
+
+Сменить пароль: поправить строку в `/opt/diagnostics/app/.env` и перезапустить сайт —
+`cd /opt/diagnostics/app && docker compose --project-name diagnostics up -d web`.
+Чтобы письма с заказами уходили, туда же добавить `SMTP_URL` и `MAIL_FROM` (см. `.env.example`).
+
 ## Команды на сервере
 
 Все долгие команды — внутри `tmux`, чтобы обрыв связи их не прерывал.

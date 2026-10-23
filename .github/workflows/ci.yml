@@ -73,9 +73,15 @@ jobs:
       - name: docker build
         run: docker build -f apps/web/Dockerfile -t diag-web:ci .
 
-      - name: Запуск образа и проверка, что сайт отвечает
+      - name: Запуск образа с базой и проверка, что сайт отвечает
         run: |
-          docker run -d --name web -p 3000:3000 diag-web:ci
+          docker network create ci
+          docker run -d --name pg --network ci -e POSTGRES_USER=diag -e POSTGRES_PASSWORD=ci -e POSTGRES_DB=diag postgres:16-alpine
+          for i in $(seq 1 30); do docker exec pg pg_isready -U diag -d diag && break; sleep 2; done
+          docker run -d --name web --network ci -p 3000:3000 \
+            -e DATABASE_URL=postgres://diag:ci@pg:5432/diag \
+            -e ADMIN_PASSWORD=ci-admin-password -e SESSION_SECRET=ci-session-secret-ci-session-secret \
+            diag-web:ci
           for i in $(seq 1 30); do
             status=$(docker inspect -f '{{.State.Health.Status}}' web)
             echo "попытка $i: $status"
@@ -93,7 +99,11 @@ jobs:
           headers=$(curl -fsSI http://127.0.0.1:3000/)
           ! echo "$headers" | grep -qi '^x-powered-by'
           echo "$headers" | grep -qi '^x-frame-options: DENY'
+          # главная читает тексты из базы — значит, миграции применились к PostgreSQL
+          curl -fsS http://127.0.0.1:3000/ | grep -q 'Получить разбор'
+          # админка без входа отправляет на страницу входа
+          test "$(curl -s -o /dev/null -w '%{redirect_url}' http://127.0.0.1:3000/admin)" = "http://127.0.0.1:3000/admin/login"
 
       - name: Логи при ошибке
         if: failure()
-        run: docker logs web || true
+        run: docker logs web || true; docker logs pg || true
