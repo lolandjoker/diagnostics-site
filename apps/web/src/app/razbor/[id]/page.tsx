@@ -83,6 +83,10 @@ export default async function ResultPage(props: PageProps<"/razbor/[id]">) {
             ))}
           </section>
         )}
+
+        <p className="again">
+          <Link href="/?new=1">Сделать разбор для другого человека</Link>
+        </p>
       </main>
       <Footer />
     </>

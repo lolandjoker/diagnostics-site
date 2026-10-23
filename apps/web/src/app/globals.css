@@ -354,6 +354,16 @@ textarea:focus-visible {
   color: var(--error);
 }
 
+.again {
+  margin: 32px 0 0;
+  font-size: 0.875rem;
+  text-align: center;
+}
+
+.again a {
+  color: var(--muted);
+}
+
 .footer {
   max-width: 720px;
   margin: 0 auto;

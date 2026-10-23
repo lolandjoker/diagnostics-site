@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { getDb } from "@/db";
 import { startConversation } from "@/lib/chat";
-import { getLead } from "@/lib/leads";
+import { getLead, rememberLead } from "@/lib/leads";
 
 /** Человек выбрал эксперта → чат (в него сразу приходит подробный разбор). */
 export async function chooseExpert(form: FormData): Promise<void> {
@@ -14,5 +14,7 @@ export async function chooseExpert(form: FormData): Promise<void> {
   if (!lead || !Number.isInteger(expertId)) redirect("/");
   const res = await startConversation(db, lead, expertId, new Date());
   if (!res.ok) redirect(`/razbor/${lead.id}/eksperty?error=${encodeURIComponent(res.error)}`);
+  // Пришёл по ссылке с другого устройства — запомним заявку и здесь
+  await rememberLead(lead.id);
   redirect(`/razbor/${lead.id}/chat`);
 }

@@ -23,7 +23,8 @@ export default async function AdminChatPage(props: PageProps<"/admin/chats/[id]"
       <h1>{header?.leadName}</h1>
       <p className="muted">
         Дата рождения: {header?.birthDate.split("-").reverse().join(".")}. Эксперт: {header?.expertName}. Ваши сообщения
-        клиент видит с подписью «{t["chat.admin_name"]}».
+        клиент видит от имени эксперта — {header?.expertName}, с его фото. Подпись «{t["chat.admin_name"]}» видите
+        только вы и эксперты.
       </p>
       <ChatThread
         url={`/admin/api/chat/${conversation.id}`}

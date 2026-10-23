@@ -1,5 +1,6 @@
 /** Заявки: человек ввёл имя и дату рождения и дал согласие на обработку данных. */
 import { eq } from "drizzle-orm";
+import { cookies } from "next/headers";
 import { assertValidBirthDate } from "@diag/engine";
 import type { Db } from "@/db";
 import { leads } from "@/db/schema";
@@ -49,6 +50,29 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function isUuid(s: string): boolean {
   return UUID.test(s);
+}
+
+/**
+ * Браузер запоминает заявку на год: человек зашёл на сайт снова — попадает в свой чат или разбор,
+ * а не на пустую форму. В cookie — тот же id, что и в адресе разбора; JavaScript страницы его не видит.
+ */
+export const LEAD_COOKIE = "lead";
+const LEAD_COOKIE_DAYS = 365;
+
+/** Только в серверном действии или обработчике маршрута — там Next разрешает ставить cookie. */
+export async function rememberLead(id: string): Promise<void> {
+  (await cookies()).set(LEAD_COOKIE, id, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: LEAD_COOKIE_DAYS * 86_400,
+  });
+}
+
+export async function rememberedLeadId(): Promise<string | null> {
+  const id = (await cookies()).get(LEAD_COOKIE)?.value;
+  return id && isUuid(id) ? id : null;
 }
 
 export async function getLead(db: Db, id: string): Promise<Lead | null> {

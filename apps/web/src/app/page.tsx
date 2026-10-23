@@ -1,12 +1,24 @@
+import { redirect } from "next/navigation";
 import { getDb } from "@/db";
+import { conversationForLead } from "@/lib/chat";
+import { getLead, rememberedLeadId } from "@/lib/leads";
 import { getTexts } from "@/lib/texts";
 import { Footer } from "./Footer";
 import { LeadForm } from "./LeadForm";
 
 export const dynamic = "force-dynamic";
 
-export default async function HomePage() {
-  const t = await getTexts(await getDb(), ["home.title", "home.subtitle", "home.button", "home.consent"]);
+export default async function HomePage(props: PageProps<"/">) {
+  const db = await getDb();
+  // Уже заполнял форму в этом браузере — сразу в свой чат или разбор. ?new=1 — новый разбор
+  const { new: fresh } = await props.searchParams;
+  const rememberedId = fresh === "1" ? null : await rememberedLeadId();
+  const remembered = rememberedId ? await getLead(db, rememberedId) : null;
+  if (remembered) {
+    redirect((await conversationForLead(db, remembered.id)) ? `/razbor/${remembered.id}/chat` : `/razbor/${remembered.id}`);
+  }
+
+  const t = await getTexts(db, ["home.title", "home.subtitle", "home.button", "home.consent"]);
   const maxDate = new Date().toISOString().slice(0, 10);
   return (
     <>

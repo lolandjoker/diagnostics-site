@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { getDb } from "@/db";
-import { createLead, validateLead } from "@/lib/leads";
+import { createLead, rememberLead, validateLead } from "@/lib/leads";
 import { createOrder } from "@/lib/orders";
 import { pickVariation } from "@/lib/variations";
 
@@ -24,6 +24,7 @@ export async function submitLead(_prev: FormState, form: FormData): Promise<Form
   if (error) return { error };
   const db = await getDb();
   const lead = await createLead(db, input, now, await pickVariation(db));
+  await rememberLead(lead.id);
   redirect(`/razbor/${lead.id}`);
 }
 
