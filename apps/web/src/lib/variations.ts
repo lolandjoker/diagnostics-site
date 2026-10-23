@@ -1,16 +1,23 @@
 /**
- * Варианты диагностики. В варианте — способ расчёта и для каждого значения короткий текст
- * (страница разбора) и полный (приходит в чат, когда человек выбрал эксперта).
- * Новому человеку вариант достаётся случайно или по кругу (settings: variation_mode).
+ * Варианты диагностики. В варианте два текста, одинаковые для всех — от имени и даты рождения
+ * не зависят: текст 1 (страница разбора) и текст 2 (приходит в чат через 3 минуты после того,
+ * как человек выбрал эксперта). Новому человеку вариант достаётся случайно или по кругу
+ * (settings: variation_mode).
  */
 import { randomInt } from "node:crypto";
 import { and, asc, count, countDistinct, eq, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { conversations, leads, messages, orders, settings, variationTexts, variations } from "@/db/schema";
-import { getMethod } from "./diagnostic";
-import type { MethodInput } from "./diagnostic";
 
 export type Variation = typeof variations.$inferSelect;
+
+/**
+ * Способ расчёта больше не используется. Столбец variations.method обязательный, поэтому новым
+ * вариантам пишем это значение; тексты лежат в variation_texts под значением TEXTS_VALUE.
+ * Тексты старых вариантов под другими значениями остаются в базе, но не показываются.
+ */
+export const NO_METHOD = "none";
+const TEXTS_VALUE = 0;
 
 export const VARIATION_MODES = {
   random: "Случайно",
@@ -49,31 +56,19 @@ export async function pickVariation(db: Db): Promise<number | null> {
   return (active[randomInt(active.length)] as { id: number }).id;
 }
 
-export interface VariationResult {
-  value: number;
-  valueLabel: string;
+export interface VariationTexts {
   shortText: string;
   fullText: string;
 }
 
-/** Тексты варианта для человека: значение по способу расчёта варианта и тексты для него. */
-export async function variationFor(db: Db, variationId: number | null, input: MethodInput): Promise<VariationResult | null> {
+/** Тексты варианта: текст 1 — на страницу разбора, текст 2 — в чат. null — варианта нет. */
+export async function variationFor(db: Db, variationId: number | null): Promise<VariationTexts | null> {
   if (variationId === null) return null;
-  const [variation] = await db.select().from(variations).where(eq(variations.id, variationId));
-  const method = variation && getMethod(variation.method);
-  if (!method) return null;
-  const value = method.compute(input);
-  if (value === null) return null;
   const [texts] = await db
     .select()
     .from(variationTexts)
-    .where(and(eq(variationTexts.variationId, variationId), eq(variationTexts.value, value)));
-  return {
-    value,
-    valueLabel: method.valueLabel(value),
-    shortText: texts?.shortText ?? "",
-    fullText: texts?.fullText ?? "",
-  };
+    .where(and(eq(variationTexts.variationId, variationId), eq(variationTexts.value, TEXTS_VALUE)));
+  return { shortText: texts?.shortText ?? "", fullText: texts?.fullText ?? "" };
 }
 
 // --- Для админки ---
@@ -87,34 +82,26 @@ export async function getVariation(db: Db, id: number) {
   return v ?? null;
 }
 
-export async function getVariationTexts(db: Db, variationId: number) {
-  const rows = await db.select().from(variationTexts).where(eq(variationTexts.variationId, variationId));
-  return new Map(rows.map((r) => [r.value, { shortText: r.shortText, fullText: r.fullText }]));
+export async function getVariationTexts(db: Db, variationId: number): Promise<VariationTexts> {
+  return (await variationFor(db, variationId)) ?? { shortText: "", fullText: "" };
 }
 
-/** Сохраняет тексты варианта. Оба текста пустые — запись по значению удаляется. */
-export async function saveVariationTexts(
-  db: Db,
-  variationId: number,
-  texts: Map<number, { shortText: string; fullText: string }>,
-): Promise<void> {
-  for (const [value, t] of texts) {
-    const shortText = t.shortText.trim();
-    const fullText = t.fullText.trim();
-    if (shortText === "" && fullText === "") {
-      await db
-        .delete(variationTexts)
-        .where(and(eq(variationTexts.variationId, variationId), eq(variationTexts.value, value)));
-    } else {
-      await db
-        .insert(variationTexts)
-        .values({ variationId, value, shortText, fullText })
-        .onConflictDoUpdate({
-          target: [variationTexts.variationId, variationTexts.value],
-          set: { shortText, fullText, updatedAt: new Date() },
-        });
-    }
+/** Сохраняет тексты варианта. Оба текста пустые — запись удаляется. */
+export async function saveVariationTexts(db: Db, variationId: number, texts: VariationTexts): Promise<void> {
+  const shortText = texts.shortText.trim();
+  const fullText = texts.fullText.trim();
+  const where = and(eq(variationTexts.variationId, variationId), eq(variationTexts.value, TEXTS_VALUE));
+  if (shortText === "" && fullText === "") {
+    await db.delete(variationTexts).where(where);
+    return;
   }
+  await db
+    .insert(variationTexts)
+    .values({ variationId, value: TEXTS_VALUE, shortText, fullText })
+    .onConflictDoUpdate({
+      target: [variationTexts.variationId, variationTexts.value],
+      set: { shortText, fullText, updatedAt: new Date() },
+    });
 }
 
 export interface VariationStats {

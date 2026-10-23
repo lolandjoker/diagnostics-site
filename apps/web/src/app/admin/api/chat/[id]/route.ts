@@ -1,7 +1,7 @@
 /** Чат для админа: читать и отвечать в любом чате. Сообщения подписаны «Администратор». */
 import { getDb } from "@/db";
 import { isAdmin } from "@/lib/admin-auth";
-import { getConversation, messageViews, postMessage } from "@/lib/chat";
+import { deliverDueFullTexts, getConversation, messageViews, postMessage } from "@/lib/chat";
 import { afterParam, jsonBody, jsonError, noStore, sameOrigin } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
@@ -11,6 +11,7 @@ export async function GET(req: Request, ctx: RouteContext<"/admin/api/chat/[id]"
   const db = await getDb();
   const conversation = await getConversation(db, (await ctx.params).id);
   if (!conversation) return jsonError("Чат не найден", 404);
+  await deliverDueFullTexts(db, new Date(), conversation.id);
   return Response.json({ messages: await messageViews(db, conversation, afterParam(req), "staff") }, { headers: noStore });
 }
 

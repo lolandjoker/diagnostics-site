@@ -697,3 +697,19 @@ td.actions {
   gap: 4px 12px;
   align-items: baseline;
 }
+
+.online-toggle__for {
+  display: inline-flex;
+  gap: 6px;
+  align-items: baseline;
+}
+
+.online-toggle__for input,
+.online-toggle__for select {
+  width: auto;
+  padding: 4px 8px;
+}
+
+.online-toggle__for input {
+  width: 6em;
+}

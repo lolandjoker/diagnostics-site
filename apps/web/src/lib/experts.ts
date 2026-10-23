@@ -19,8 +19,22 @@ export const ONLINE_TIMEOUT_MS = 5 * 60_000;
 export const MIN_EXPERT_PASSWORD = 10;
 export const EXPERT_SESSION_DAYS = 14;
 
-/** Сколько держится «в сети», включённое админом. */
-export const ADMIN_ONLINE_MS = 60 * 60_000;
+/** На сколько админ может включить «в сети»: единицы срока и пределы. */
+export const ADMIN_ONLINE_UNITS = {
+  minutes: { label: "минут", ms: 60_000 },
+  hours: { label: "часов", ms: 60 * 60_000 },
+  days: { label: "дней", ms: 24 * 60 * 60_000 },
+} as const;
+export type AdminOnlineUnit = keyof typeof ADMIN_ONLINE_UNITS;
+export const ADMIN_ONLINE_MIN_MS = 60_000;
+export const ADMIN_ONLINE_MAX_MS = 365 * 24 * 60 * 60_000;
+
+/** Срок из формы админа («3» + «hours») в мс или null, если срок вне пределов. */
+export function adminOnlineMs(amount: string, unit: string): number | null {
+  if (!/^\d{1,6}$/.test(amount.trim()) || !(unit in ADMIN_ONLINE_UNITS)) return null;
+  const ms = Number(amount) * ADMIN_ONLINE_UNITS[unit as AdminOnlineUnit].ms;
+  return ms >= ADMIN_ONLINE_MIN_MS && ms <= ADMIN_ONLINE_MAX_MS ? ms : null;
+}
 
 export function isOnline(e: Pick<Expert, "online" | "lastSeenAt" | "onlineUntil">, now: Date): boolean {
   if (e.onlineUntil !== null && e.onlineUntil.getTime() > now.getTime()) return true;
@@ -140,11 +154,11 @@ export async function setExpertOnline(db: Db, id: number, online: boolean, now: 
     .where(eq(experts.id, id));
 }
 
-/** Админ: «в сети» на ADMIN_ONLINE_MS или выключить совсем. */
-export async function setOnlineByAdmin(db: Db, id: number, on: boolean, now: Date): Promise<void> {
+/** Админ: «в сети» на forMs или выключить совсем (forMs = null). */
+export async function setOnlineByAdmin(db: Db, id: number, forMs: number | null, now: Date): Promise<void> {
   await db
     .update(experts)
-    .set(on ? { onlineUntil: new Date(now.getTime() + ADMIN_ONLINE_MS) } : { online: false, onlineUntil: null })
+    .set(forMs !== null ? { onlineUntil: new Date(now.getTime() + forMs) } : { online: false, onlineUntil: null })
     .where(eq(experts.id, id));
 }
 

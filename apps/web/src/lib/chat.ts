@@ -3,11 +3,10 @@
  * его заявки в адресе. Пишут: клиент, любой эксперт, админ (подписан «Администратор»).
  * Подписи у сообщений — настоящие: ответил другой эксперт — клиент видит его имя.
  */
-import { and, asc, desc, eq, gt, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, isNull, lte, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { conversations, experts, leads, messages, products } from "@/db/schema";
 import type { MessageAuthor } from "@/db/schema";
-import { parseIsoDate } from "./diagnostic";
 import { getExpert, isOnline, listExperts } from "./experts";
 import type { Lead } from "./leads";
 import { formatRub, offerForLead } from "./offers";
@@ -18,6 +17,8 @@ export type Conversation = typeof conversations.$inferSelect;
 
 export const MAX_MESSAGE_LENGTH = 4000;
 export const CLIENT_MESSAGES_PER_MINUTE = 20;
+/** Через сколько после начала чата в него приходит текст 2 варианта. */
+export const FULL_TEXT_DELAY_MS = 3 * 60 * 1000;
 
 export async function conversationForLead(db: Db, leadId: string): Promise<Conversation | null> {
   const [c] = await db.select().from(conversations).where(eq(conversations.leadId, leadId));
@@ -39,8 +40,8 @@ export async function selectableExperts(db: Db, now: Date) {
 export type StartResult = { ok: true; conversation: Conversation } | { ok: false; error: string };
 
 /**
- * Человек выбрал эксперта: создаётся чат, и в него сразу приходит подробный разбор по его варианту
- * — сообщением с подписью «Подробный разбор», а не от имени эксперта. Повторный выбор — в тот же чат.
+ * Человек выбрал эксперта: создаётся чат. Текст 2 варианта приходит в него через FULL_TEXT_DELAY_MS
+ * (см. deliverDueFullTexts). Повторный выбор — в тот же чат.
  */
 export async function startConversation(db: Db, lead: Lead, expertId: number, now: Date): Promise<StartResult> {
   const existing = await conversationForLead(db, lead.id);
@@ -60,16 +61,38 @@ export async function startConversation(db: Db, lead: Lead, expertId: number, no
     const again = await conversationForLead(db, lead.id);
     return again ? { ok: true, conversation: again } : { ok: false, error: "Не удалось открыть чат" };
   }
-
-  const result = await variationFor(db, lead.variationId, {
-    birth: parseIsoDate(lead.birthDate),
-    name: lead.name,
-    year: now.getUTCFullYear(),
-  });
-  if (result?.fullText) {
-    await postMessage(db, created.id, { author: "system", body: fillTemplate(result.fullText, { name: lead.name }) });
-  }
   return { ok: true, conversation: created };
+}
+
+/**
+ * Отправляет текст 2 варианта в чаты, которым уже FULL_TEXT_DELAY_MS, — сообщением с подписью
+ * «Подробный разбор», а не от имени эксперта. Вызывается при каждом опросе чата и списка чатов,
+ * поэтому сообщение появляется вовремя без фоновых задач. Каждый чат отмечается одним UPDATE —
+ * два одновременных опроса не отправят текст дважды. conversationId — проверить только этот чат.
+ */
+export async function deliverDueFullTexts(db: Db, now: Date, conversationId?: string): Promise<void> {
+  const due = await db
+    .update(conversations)
+    .set({ fullTextSentAt: now })
+    .where(
+      and(
+        isNull(conversations.fullTextSentAt),
+        lte(conversations.createdAt, new Date(now.getTime() - FULL_TEXT_DELAY_MS)),
+        conversationId === undefined ? undefined : eq(conversations.id, conversationId),
+      ),
+    )
+    .returning({ id: conversations.id, leadId: conversations.leadId });
+
+  for (const c of due) {
+    const [lead] = await db
+      .select({ name: leads.name, variationId: leads.variationId })
+      .from(leads)
+      .where(eq(leads.id, c.leadId));
+    const texts = lead ? await variationFor(db, lead.variationId) : null;
+    if (lead && texts?.fullText) {
+      await postMessage(db, c.id, { author: "system", body: fillTemplate(texts.fullText, { name: lead.name }) });
+    }
+  }
 }
 
 export type PostInput = { author: MessageAuthor; body?: string; expertId?: number; productId?: number };

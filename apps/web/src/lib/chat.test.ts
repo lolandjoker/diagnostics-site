@@ -4,6 +4,8 @@ import type { Db } from "@/db";
 import { experts, priceVariants, products, variations } from "@/db/schema";
 import {
   CLIENT_MESSAGES_PER_MINUTE,
+  FULL_TEXT_DELAY_MS,
+  deliverDueFullTexts,
   inbox,
   markExpertRead,
   messageViews,
@@ -12,6 +14,7 @@ import {
 } from "./chat";
 import {
   ONLINE_TIMEOUT_MS,
+  adminOnlineMs,
   createExpert,
   createExpertToken,
   detectImageMime,
@@ -27,6 +30,7 @@ import {
 import { createLead } from "./leads";
 import { createOrder, markPaid } from "./orders";
 import {
+  NO_METHOD,
   pickVariation,
   saveVariationTexts,
   setVariationMode,
@@ -42,7 +46,7 @@ beforeEach(async () => {
   db = await createTestDb();
 });
 
-async function newVariation(title: string, method = "archetype", active = true) {
+async function newVariation(title: string, method = NO_METHOD, active = true) {
   const [v] = await db.insert(variations).values({ title, method, active }).returning();
   return v!;
 }
@@ -60,7 +64,7 @@ const lead = (variationId: number | null) =>
 describe("варианты диагностики", () => {
   it("нет активных вариантов — null", async () => {
     expect(await pickVariation(db)).toBeNull();
-    await newVariation("Выключен", "archetype", false);
+    await newVariation("Выключен", NO_METHOD, false);
     expect(await pickVariation(db)).toBeNull();
   });
 
@@ -85,21 +89,18 @@ describe("варианты диагностики", () => {
     expect(seen.size).toBe(2);
   });
 
-  it("тексты — по значению расчёта для даты человека", async () => {
-    const v = await newVariation("А", "archetype");
-    await saveVariationTexts(
-      db,
-      v.id,
-      new Map([
-        [4, { shortText: "Коротко про 4", fullText: "Подробно про 4" }],
-        [5, { shortText: "про 5", fullText: "" }],
-      ]),
-    );
-    const input = { birth: { day: 15, month: 3, year: 1990 }, name: "Анна", year: 2026 }; // архетип 4
-    expect(await variationFor(db, v.id, input)).toMatchObject({ value: 4, shortText: "Коротко про 4", fullText: "Подробно про 4" });
-    const other = { ...input, birth: { day: 16, month: 3, year: 1990 } }; // архетип 5
-    expect(await variationFor(db, v.id, other)).toMatchObject({ value: 5, shortText: "про 5", fullText: "" });
-    expect(await variationFor(db, null, input)).toBeNull();
+  it("тексты одни для всех — не зависят от имени и даты", async () => {
+    const v = await newVariation("А");
+    await saveVariationTexts(db, v.id, { shortText: " Текст 1 ", fullText: "Текст 2" });
+    expect(await variationFor(db, v.id)).toEqual({ shortText: "Текст 1", fullText: "Текст 2" });
+    // Старый вариант со способом расчёта — тексты те же, способ не учитывается
+    const old = await newVariation("Старый", "archetype");
+    await saveVariationTexts(db, old.id, { shortText: "к", fullText: "п" });
+    expect(await variationFor(db, old.id)).toEqual({ shortText: "к", fullText: "п" });
+    // Оба пустые — запись удаляется
+    await saveVariationTexts(db, v.id, { shortText: "", fullText: "  " });
+    expect(await variationFor(db, v.id)).toEqual({ shortText: "", fullText: "" });
+    expect(await variationFor(db, null)).toBeNull();
   });
 });
 
@@ -142,25 +143,37 @@ describe("эксперты", () => {
     expect(isOnline({ ...base, online: false, lastSeenAt: now }, now)).toBe(false);
   });
 
-  it("админ включает «в сети» на час без панели эксперта и выключает", async () => {
+  it("срок «в сети» от админа: минуты, часы, дни в пределах от минуты до года", () => {
+    expect(adminOnlineMs("1", "hours")).toBe(60 * 60_000);
+    expect(adminOnlineMs("90", "minutes")).toBe(90 * 60_000);
+    expect(adminOnlineMs("3", "days")).toBe(3 * 24 * 60 * 60_000);
+    expect(adminOnlineMs("365", "days")).not.toBeNull();
+    expect(adminOnlineMs("366", "days")).toBeNull();
+    expect(adminOnlineMs("0", "hours")).toBeNull();
+    expect(adminOnlineMs("-1", "hours")).toBeNull();
+    expect(adminOnlineMs("1.5", "hours")).toBeNull();
+    expect(adminOnlineMs("1", "weeks")).toBeNull();
+  });
+
+  it("админ включает «в сети» на свой срок без панели эксперта и выключает", async () => {
     const res = await createExpert(db, { name: "Ольга", login: "olga", password: "пароль-эксперта" });
     if (!res.ok) throw new Error(res.error);
     const now = new Date();
-    await setOnlineByAdmin(db, res.id, true, now);
+    await setOnlineByAdmin(db, res.id, adminOnlineMs("5", "hours"), now);
     const e = (await getExpert(db, res.id))!;
-    expect(isOnline(e, new Date(now.getTime() + 59 * 60_000))).toBe(true);
-    expect(isOnline(e, new Date(now.getTime() + 61 * 60_000))).toBe(false);
+    expect(isOnline(e, new Date(now.getTime() + 299 * 60_000))).toBe(true);
+    expect(isOnline(e, new Date(now.getTime() + 301 * 60_000))).toBe(false);
 
     const l = await lead(null);
     expect(await startConversation(db, l, res.id, new Date())).toMatchObject({ ok: true });
 
-    await setOnlineByAdmin(db, res.id, false, new Date());
+    await setOnlineByAdmin(db, res.id, null, new Date());
     expect(isOnline((await getExpert(db, res.id))!, new Date())).toBe(false);
   });
 
   it("эксперт сам ушёл из сети — включение админом тоже снимается", async () => {
     const id = await onlineExpert();
-    await setOnlineByAdmin(db, id, true, new Date());
+    await setOnlineByAdmin(db, id, 60 * 60_000, new Date());
     await setExpertOnline(db, id, false, new Date());
     expect(isOnline((await getExpert(db, id))!, new Date())).toBe(false);
   });
@@ -180,17 +193,24 @@ describe("чат", () => {
     expect(await startConversation(db, l, res.id, new Date())).toMatchObject({ ok: false });
   });
 
-  it("подробный разбор приходит сразу, подписан как разбор, а не от эксперта", async () => {
+  it("текст 2 приходит через 3 минуты, один раз, подписан как разбор, а не от эксперта", async () => {
     const v = await newVariation("А");
-    await saveVariationTexts(db, v.id, new Map([[4, { shortText: "к", fullText: "{name}, подробно" }]]));
+    await saveVariationTexts(db, v.id, { shortText: "к", fullText: "{name}, подробно" });
     const expertId = await onlineExpert();
-    const l = await lead(v.id);
+    const l = await createLead(db, { name: "Qwerty", birthDate: "2001-01-01", consent: true }, NOW, v.id);
     const res = await startConversation(db, l, expertId, new Date());
     if (!res.ok) throw new Error(res.error);
+    const start = res.conversation.createdAt.getTime();
 
+    await deliverDueFullTexts(db, new Date(start + FULL_TEXT_DELAY_MS - 5000), res.conversation.id);
+    expect(await messageViews(db, res.conversation, 0, "client")).toHaveLength(0);
+
+    const due = new Date(start + FULL_TEXT_DELAY_MS + 1000);
+    await Promise.all([deliverDueFullTexts(db, due, res.conversation.id), deliverDueFullTexts(db, due)]);
+    await deliverDueFullTexts(db, new Date(due.getTime() + 60_000));
     const client = await messageViews(db, res.conversation, 0, "client");
     expect(client).toHaveLength(1);
-    expect(client[0]).toMatchObject({ author: "system", authorName: "Подробный разбор", body: "Анна, подробно" });
+    expect(client[0]).toMatchObject({ author: "system", authorName: "Подробный разбор", body: "Qwerty, подробно" });
 
     const again = await startConversation(db, l, expertId, new Date());
     expect(again.ok && again.conversation.id).toBe(res.conversation.id);

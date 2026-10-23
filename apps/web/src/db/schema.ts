@@ -205,6 +205,8 @@ export const conversations = pgTable("conversations", {
   lastMessageAt: timestamp("last_message_at", { withTimezone: true }).notNull().defaultNow(),
   /** Когда эксперт чата последний раз открывал переписку — для счётчика непрочитанных. */
   expertReadAt: timestamp("expert_read_at", { withTimezone: true }),
+  /** Когда в чат ушёл текст 2 варианта (через 3 минуты после начала чата); null — ещё не ушёл. */
+  fullTextSentAt: timestamp("full_text_sent_at", { withTimezone: true }),
 });
 
 export const MESSAGE_AUTHORS = ["client", "expert", "admin", "system"] as const;
