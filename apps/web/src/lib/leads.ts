@@ -37,10 +37,10 @@ export function validateLead(input: LeadInput, today: Date): string | null {
   return null;
 }
 
-export async function createLead(db: Db, input: LeadInput, now: Date): Promise<Lead> {
+export async function createLead(db: Db, input: LeadInput, now: Date, variationId: number | null = null): Promise<Lead> {
   const [lead] = await db
     .insert(leads)
-    .values({ name: input.name.trim(), birthDate: input.birthDate, consentAt: now })
+    .values({ name: input.name.trim(), birthDate: input.birthDate, consentAt: now, variationId })
     .returning();
   return lead as Lead;
 }

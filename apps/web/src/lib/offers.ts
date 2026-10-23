@@ -60,12 +60,12 @@ async function variantFor(db: Db, leadId: string, product: Product): Promise<Pri
   return variantFor(db, leadId, product);
 }
 
-/** Предложения для человека: активные продукты по порядку, у каждого — его вариант цены. */
+/** Предложения под разбором: включённые продукты с «показывать под разбором», у каждого — цена этого человека. */
 export async function offersForLead(db: Db, leadId: string): Promise<Offer[]> {
   const list = await db
     .select()
     .from(products)
-    .where(eq(products.active, true))
+    .where(and(eq(products.active, true), eq(products.showOnResult, true)))
     .orderBy(asc(products.sort), asc(products.id));
   const out: Offer[] = [];
   for (const product of list) {

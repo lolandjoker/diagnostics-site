@@ -39,6 +39,35 @@ export const TEXT_DEFS = [
   { key: "result.intro", group: "Разбор", label: "Текст перед блоками", default: "", hint: "{name}" },
   { key: "result.offers_title", group: "Разбор", label: "Заголовок раздела с продуктами", default: "Что дальше" },
   { key: "result.buy_button", group: "Разбор", label: "Кнопка покупки", default: "Купить" },
+  { key: "result.expert_title", group: "Разбор", label: "Заголовок блока «написать эксперту»", default: "Хотите подробнее?" },
+  {
+    key: "result.expert_text",
+    group: "Разбор",
+    label: "Текст блока «написать эксперту»",
+    default: "Напишите эксперту — он ответит на ваши вопросы в чате.",
+    hint: "{name}",
+  },
+  { key: "result.expert_button", group: "Разбор", label: "Кнопка «написать эксперту»", default: "Написать эксперту" },
+  // Выбор эксперта и чат
+  { key: "experts.title", group: "Эксперты и чат", label: "Заголовок выбора эксперта", default: "Выберите эксперта" },
+  {
+    key: "experts.none_online",
+    group: "Эксперты и чат",
+    label: "Если никого нет в сети",
+    default: "Сейчас никого нет в сети. Загляните чуть позже.",
+  },
+  { key: "experts.choose", group: "Эксперты и чат", label: "Кнопка выбора эксперта", default: "Написать" },
+  { key: "chat.title", group: "Эксперты и чат", label: "Заголовок чата", default: "Чат с экспертом {expert}", hint: "{expert}" },
+  { key: "chat.placeholder", group: "Эксперты и чат", label: "Подсказка в поле сообщения", default: "Сообщение" },
+  { key: "chat.send", group: "Эксперты и чат", label: "Кнопка отправки", default: "Отправить" },
+  { key: "chat.client_name", group: "Эксперты и чат", label: "Подпись сообщений клиента (видит клиент)", default: "Вы" },
+  { key: "chat.admin_name", group: "Эксперты и чат", label: "Подпись сообщений админа", default: "Администратор" },
+  {
+    key: "chat.system_name",
+    group: "Эксперты и чат",
+    label: "Подпись подробного разбора в чате",
+    default: "Подробный разбор",
+  },
   // Заказ и оплата
   { key: "order.title", group: "Заказ", label: "Заголовок страницы заказа", default: "Оформление заказа" },
   {

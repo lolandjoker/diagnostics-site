@@ -10,10 +10,13 @@ export const metadata: Metadata = { title: "Админка" };
 
 const NAV = [
   ["/admin", "Сводка"],
-  ["/admin/texts", "Тексты сайта"],
-  ["/admin/diagnostic", "Разбор"],
+  ["/admin/chats", "Чаты"],
+  ["/admin/variations", "Варианты диагностики"],
+  ["/admin/experts", "Эксперты"],
   ["/admin/products", "Продукты и цены"],
   ["/admin/orders", "Заказы"],
+  ["/admin/texts", "Тексты сайта"],
+  ["/admin/diagnostic", "Доп. блоки разбора"],
 ] as const;
 
 export default async function PanelLayout({ children }: { children: ReactNode }) {

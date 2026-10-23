@@ -5,7 +5,9 @@
  */
 import {
   boolean,
+  customType,
   date,
+  index,
   integer,
   pgTable,
   primaryKey,
@@ -16,6 +18,67 @@ import {
 } from "drizzle-orm/pg-core";
 
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
+
+/** Двоичные данные (фото). pg отдаёт Buffer, PGlite — Uint8Array; приводим к Buffer. */
+const bytea = customType<{ data: Buffer; driverData: Buffer | Uint8Array }>({
+  dataType: () => "bytea",
+  fromDriver: (v) => Buffer.from(v),
+});
+
+/** Настройки сайта «ключ → значение» (например, как выбирать вариант диагностики). */
+export const settings = pgTable("settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+});
+
+/**
+ * Вариант диагностики: способ расчёта + для каждого значения короткий и полный текст.
+ * Человеку при заявке достаётся один вариант; по вариантам считается конверсия.
+ */
+export const variations = pgTable("variations", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  method: text("method").notNull(),
+  active: boolean("active").notNull().default(true),
+  createdAt: createdAt(),
+});
+
+export const variationTexts = pgTable(
+  "variation_texts",
+  {
+    variationId: integer("variation_id")
+      .notNull()
+      .references(() => variations.id, { onDelete: "cascade" }),
+    value: integer("value").notNull(),
+    shortText: text("short_text").notNull().default(""),
+    fullText: text("full_text").notNull().default(""),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.variationId, t.value] })],
+);
+
+/** Эксперт: профиль на сайте + вход в панель. Онлайн — если включил статус и заходил в панель недавно. */
+export const experts = pgTable("experts", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description").notNull().default(""),
+  login: text("login").notNull().unique(),
+  passwordHash: text("password_hash").notNull(),
+  online: boolean("online").notNull().default(false),
+  lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
+  active: boolean("active").notNull().default(true),
+  sort: integer("sort").notNull().default(0),
+  createdAt: createdAt(),
+});
+
+export const expertPhotos = pgTable("expert_photos", {
+  expertId: integer("expert_id")
+    .primaryKey()
+    .references(() => experts.id, { onDelete: "cascade" }),
+  mime: text("mime").notNull(),
+  data: bytea("data").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 /** Тексты сайта, которые правит админ. Ключи и тексты по умолчанию — в lib/texts.ts. */
 export const texts = pgTable("texts", {
@@ -55,6 +118,8 @@ export const leads = pgTable("leads", {
   birthDate: date("birth_date", { mode: "string" }).notNull(),
   consentAt: timestamp("consent_at", { withTimezone: true }).notNull(),
   createdAt: createdAt(),
+  /** Доставшийся вариант диагностики; null — вариантов не было. */
+  variationId: integer("variation_id").references(() => variations.id, { onDelete: "set null" }),
 });
 
 /** Продукт (курс, отчёт). delivery — что человек получает письмом после оплаты. */
@@ -66,6 +131,8 @@ export const products = pgTable("products", {
   active: boolean("active").notNull().default(false),
   sort: integer("sort").notNull().default(0),
   createdAt: createdAt(),
+  /** Показывать под разбором. Выключено — продукт предлагает только эксперт в чате. */
+  showOnResult: boolean("show_on_result").notNull().default(true),
 });
 
 /** Вариант цены продукта. Каждому человеку случайно показывается один из активных вариантов. */
@@ -121,3 +188,42 @@ export const orders = pgTable("orders", {
   emailSentAt: timestamp("email_sent_at", { withTimezone: true }),
   emailError: text("email_error"),
 });
+
+/** Чат человека с выбранным экспертом. Один чат на заявку. */
+export const conversations = pgTable("conversations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  leadId: uuid("lead_id")
+    .notNull()
+    .unique()
+    .references(() => leads.id, { onDelete: "cascade" }),
+  expertId: integer("expert_id")
+    .notNull()
+    .references(() => experts.id),
+  createdAt: createdAt(),
+  lastMessageAt: timestamp("last_message_at", { withTimezone: true }).notNull().defaultNow(),
+  /** Когда эксперт чата последний раз открывал переписку — для счётчика непрочитанных. */
+  expertReadAt: timestamp("expert_read_at", { withTimezone: true }),
+});
+
+export const MESSAGE_AUTHORS = ["client", "expert", "admin", "system"] as const;
+export type MessageAuthor = (typeof MESSAGE_AUTHORS)[number];
+
+/**
+ * Сообщение чата. author: client — человек, expert — эксперт (expertId — кто именно),
+ * admin — админ, system — автоматическое (подробный разбор). productId — предложение продукта.
+ */
+export const messages = pgTable(
+  "messages",
+  {
+    id: serial("id").primaryKey(),
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    author: text("author", { enum: MESSAGE_AUTHORS }).notNull(),
+    expertId: integer("expert_id").references(() => experts.id),
+    body: text("body").notNull().default(""),
+    productId: integer("product_id").references(() => products.id),
+    createdAt: createdAt(),
+  },
+  (t) => [index("messages_conversation_idx").on(t.conversationId, t.id)],
+);

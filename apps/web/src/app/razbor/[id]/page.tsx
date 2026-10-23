@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDb } from "@/db";
+import { conversationForLead } from "@/lib/chat";
 import { buildDiagnostic, parseIsoDate } from "@/lib/diagnostic";
 import { getLead } from "@/lib/leads";
 import { formatRub, offersForLead } from "@/lib/offers";
 import { fillTemplate, getTexts } from "@/lib/texts";
+import { variationFor } from "@/lib/variations";
 import { Footer } from "../../Footer";
 
 export const dynamic = "force-dynamic";
@@ -15,20 +17,35 @@ export default async function ResultPage(props: PageProps<"/razbor/[id]">) {
   const lead = await getLead(db, id);
   if (!lead) notFound();
 
-  const t = await getTexts(db, ["result.title", "result.intro", "result.offers_title", "result.buy_button"]);
+  const t = await getTexts(db, [
+    "result.title",
+    "result.intro",
+    "result.offers_title",
+    "result.buy_button",
+    "result.expert_title",
+    "result.expert_text",
+    "result.expert_button",
+  ]);
   const vars = { name: lead.name };
-  const sections = await buildDiagnostic(db, {
-    birth: parseIsoDate(lead.birthDate),
-    name: lead.name,
-    year: new Date().getUTCFullYear(),
-  });
-  const offers = await offersForLead(db, lead.id);
+  const input = { birth: parseIsoDate(lead.birthDate), name: lead.name, year: new Date().getUTCFullYear() };
+  const [variation, sections, offers, chat] = await Promise.all([
+    variationFor(db, lead.variationId, input),
+    buildDiagnostic(db, input),
+    offersForLead(db, lead.id),
+    conversationForLead(db, lead.id),
+  ]);
 
   return (
     <>
       <main className="page">
         <h1>{fillTemplate(t["result.title"], vars)}</h1>
         {t["result.intro"] && <p className="lead text">{fillTemplate(t["result.intro"], vars)}</p>}
+
+        {variation?.shortText && (
+          <section className="card">
+            <p className="text">{fillTemplate(variation.shortText, vars)}</p>
+          </section>
+        )}
 
         {sections.map((s) => (
           <section key={s.blockId} className="card">
@@ -38,6 +55,16 @@ export default async function ResultPage(props: PageProps<"/razbor/[id]">) {
             <p className="text">{fillTemplate(s.body, vars)}</p>
           </section>
         ))}
+
+        <section className="card card--accent">
+          <h2>{t["result.expert_title"]}</h2>
+          {t["result.expert_text"] && <p className="text">{fillTemplate(t["result.expert_text"], vars)}</p>}
+          <p className="card__action">
+            <Link className="button" href={chat ? `/razbor/${lead.id}/chat` : `/razbor/${lead.id}/eksperty`}>
+              {t["result.expert_button"]}
+            </Link>
+          </p>
+        </section>
 
         {offers.length > 0 && (
           <section className="offers">

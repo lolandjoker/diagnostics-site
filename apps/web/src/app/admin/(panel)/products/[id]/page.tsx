@@ -44,7 +44,11 @@ export default async function ProductPage(props: PageProps<"/admin/products/[id]
           </label>
           <label className="check">
             <input name="active" type="checkbox" defaultChecked={product.active} />
-            <span>Показывать на сайте</span>
+            <span>Включён (можно купить)</span>
+          </label>
+          <label className="check">
+            <input name="showOnResult" type="checkbox" defaultChecked={product.showOnResult} />
+            <span>Показывать под разбором (без галочки — только предложением эксперта в чате)</span>
           </label>
         </div>
         <button className="button">Сохранить</button>

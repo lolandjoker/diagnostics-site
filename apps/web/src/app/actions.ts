@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { getDb } from "@/db";
 import { createLead, validateLead } from "@/lib/leads";
 import { createOrder } from "@/lib/orders";
+import { pickVariation } from "@/lib/variations";
 
 export interface FormState {
   error: string | null;
@@ -21,7 +22,8 @@ export async function submitLead(_prev: FormState, form: FormData): Promise<Form
   const now = new Date();
   const error = validateLead(input, now);
   if (error) return { error };
-  const lead = await createLead(await getDb(), input, now);
+  const db = await getDb();
+  const lead = await createLead(db, input, now, await pickVariation(db));
   redirect(`/razbor/${lead.id}`);
 }
 
