@@ -53,12 +53,14 @@ jobs:
           EVENT: ${{ github.event_name }}
           RUN_SHA: ${{ github.event.workflow_run.head_sha }}
           DISPATCH_SHA: ${{ github.sha }}
+          ACTION: ${{ github.event.inputs.action || 'deploy' }}
         run: |
           set -euo pipefail
           if [ "$EVENT" = "workflow_run" ]; then sha="$RUN_SHA"; else sha="$DISPATCH_SHA"; fi
-          # Перезапуск старых «Проверок» не должен выкатить старый коммит
+          # Перезапуск старых «Проверок» не должен выкатить старый коммит.
+          # Откат так не пропускаем: он возвращает версию из истории сервера, а не этот коммит.
           main=$(git ls-remote "https://github.com/${GITHUB_REPOSITORY}.git" refs/heads/main | cut -f1)
-          if [ "$sha" != "$main" ]; then
+          if [ "$ACTION" != "rollback" ] && [ "$sha" != "$main" ]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
             echo "Коммит ${sha:0:7} уже не последний в main (${main:0:7}) — выкат пропущен" | tee -a "$GITHUB_STEP_SUMMARY"
           else
@@ -96,7 +98,8 @@ jobs:
           ssh_() { ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o ServerAliveInterval=15 "root@$HOST" "$@"; }
           ssh_ 'command -v tmux >/dev/null || (apt-get -o DPkg::Lock::Timeout=600 update -q && DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=600 install -y -q tmux)'
           ssh_ 'mkdir -p /opt/diagnostics/state /opt/diagnostics/logs'
-          ssh_ 'cat > /opt/diagnostics/state/setup-server.sh && chmod 700 /opt/diagnostics/state/setup-server.sh' < deploy/setup-server.sh
+          # Через временный файл и mv: если прошлая подготовка ещё идёт, она дочитает свою копию скрипта
+          ssh_ 'cat > /opt/diagnostics/state/setup-server.sh.new && chmod 700 /opt/diagnostics/state/setup-server.sh.new && mv -f /opt/diagnostics/state/setup-server.sh.new /opt/diagnostics/state/setup-server.sh' < deploy/setup-server.sh
           bash deploy/remote-run.sh setup "setup-$(date -u +%Y%m%d-%H%M%S)" "/opt/diagnostics/state/setup-server.sh $DOMAIN" 25
 
       - name: Список изменений
@@ -128,7 +131,8 @@ jobs:
           ssh_() { ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o ServerAliveInterval=15 "root@$HOST" "$@"; }
           [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "Неверный SHA"; exit 1; }
           # Скрипт выката берём из выкатываемой версии, а не из старой на сервере
-          ssh_ "cd /opt/diagnostics/app && git fetch --quiet origin $SHA && git show $SHA:deploy/deploy.sh > /opt/diagnostics/state/deploy.sh && chmod 700 /opt/diagnostics/state/deploy.sh"
+          # Через временный файл и mv: идущий выкат дочитает свою копию скрипта, а не новую
+          ssh_ "cd /opt/diagnostics/app && git fetch --quiet origin $SHA && git show $SHA:deploy/deploy.sh > /opt/diagnostics/state/deploy.sh.new && chmod 700 /opt/diagnostics/state/deploy.sh.new && mv -f /opt/diagnostics/state/deploy.sh.new /opt/diagnostics/state/deploy.sh"
           stamp=$(date -u +%Y%m%d-%H%M%S)
           if [ "$ACTION" = "rollback" ]; then
             bash deploy/remote-run.sh deploy "rollback-$stamp" "/opt/diagnostics/state/deploy.sh rollback" 30

@@ -22,7 +22,8 @@ ssh_() {
 
 deadline=$(( $(date +%s) + timeout_min * 60 ))
 
-while ssh_ "tmux has-session -t '$session' 2>/dev/null"; do
+# «=» — точное совпадение имени: иначе tmux найдёт и чужую сессию вроде «deploy-manual»
+while ssh_ "tmux has-session -t '=$session' 2>/dev/null"; do
   echo "На сервере ещё идёт предыдущая задача «$session» — жду её окончания"
   if [ "$(date +%s)" -gt "$deadline" ]; then
     echo "::error::Предыдущая задача «$session» не закончилась за $timeout_min мин"
