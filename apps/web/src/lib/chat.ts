@@ -1,7 +1,7 @@
 /**
  * Чат человека с экспертом. Человек входит без регистрации: доступ к чату — по случайному id
- * его заявки в адресе. Пишут: клиент, эксперт этого чата, админ (подписан «Администратор»).
- * Остальные эксперты переписку видят, но ответить не могут. Подписи у сообщений — настоящие.
+ * его заявки в адресе. Пишут: клиент, любой эксперт, админ (подписан «Администратор»).
+ * Подписи у сообщений — настоящие: ответил другой эксперт — клиент видит его имя.
  */
 import { and, asc, desc, eq, gt, sql } from "drizzle-orm";
 import type { Db } from "@/db";
@@ -112,6 +112,8 @@ export interface MessageView {
   id: number;
   author: MessageAuthor;
   authorName: string;
+  /** Какой эксперт написал (для author = expert), иначе null. */
+  expertId: number | null;
   body: string;
   createdAt: string;
   /** Предложение продукта: что показать и куда ведёт «Купить». null — продукт уже недоступен. */
@@ -151,7 +153,14 @@ export async function messageViews(
           : m.author === "admin"
             ? t["chat.admin_name"]
             : t["chat.system_name"];
-    const view: MessageView = { id: m.id, author: m.author, authorName, body: m.body, createdAt: m.createdAt.toISOString() };
+    const view: MessageView = {
+      id: m.id,
+      author: m.author,
+      authorName,
+      expertId: m.expertId,
+      body: m.body,
+      createdAt: m.createdAt.toISOString(),
+    };
     if (m.productId !== null) {
       const offer = await offerForLead(db, conversation.leadId, m.productId);
       view.offer = offer
@@ -183,7 +192,7 @@ export interface InboxItem {
   unread: number;
 }
 
-/** Все чаты, свежие сверху. Эксперт видит все, а отвечать может только в своих. */
+/** Все чаты, свежие сверху. Эксперт видит все и может ответить в любом. */
 export async function inbox(db: Db, limit = 300): Promise<InboxItem[]> {
   const rows = await db
     .select({

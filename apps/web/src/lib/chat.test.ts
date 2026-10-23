@@ -198,6 +198,17 @@ describe("чат", () => {
     expect(order.ok).toBe(true);
   });
 
+  it("другой эксперт отвечает в чужом чате — клиент видит его настоящее имя", async () => {
+    const maria = await onlineExpert("Мария", "maria");
+    const olga = await onlineExpert("Ольга", "olga");
+    const l = await lead(null);
+    const res = await startConversation(db, l, maria, new Date());
+    if (!res.ok) throw new Error(res.error);
+    await postMessage(db, res.conversation.id, { author: "expert", expertId: olga, body: "Подменяю коллегу" });
+    const [m] = await messageViews(db, res.conversation, 0, "client");
+    expect(m).toMatchObject({ authorName: "Ольга", expertId: olga });
+  });
+
   it("непрочитанные у эксперта и отметка о прочтении", async () => {
     const expertId = await onlineExpert();
     const l = await lead(null);

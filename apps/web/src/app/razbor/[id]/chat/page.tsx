@@ -27,7 +27,6 @@ export default async function ClientChatPage(props: PageProps<"/razbor/[id]/chat
       <h1 className="chat__title">{fillTemplate(t["chat.title"], { expert: expert?.name ?? "" })}</h1>
       <ChatThread
         url={`/api/chat/${lead.id}`}
-        canReply
         ownAuthors={["client"]}
         labels={{ placeholder: t["chat.placeholder"], send: t["chat.send"], buy: t["result.buy_button"] }}
       />

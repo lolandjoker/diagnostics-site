@@ -2,11 +2,11 @@
 
 /**
  * Переписка: опрашивает сервер раз в 3 секунды и дописывает новые сообщения.
- * Один компонент для человека, эксперта и админа — отличаются адреса и права.
+ * Один компонент для человека, эксперта и админа — отличаются адрес и что показывать «своим».
  */
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { FormEvent, ReactNode } from "react";
+import type { FormEvent } from "react";
 import type { MessageView } from "@/lib/chat";
 
 const POLL_MS = 3000;
@@ -19,22 +19,20 @@ export interface ChatLabels {
 
 export function ChatThread({
   url,
-  canReply,
   ownAuthors,
+  ownExpertId,
   labels,
   products,
-  note,
 }: {
   /** GET ?after= и POST — один адрес. */
   url: string;
-  canReply: boolean;
   /** Чьи сообщения показывать справа («свои»). */
   ownAuthors: MessageView["author"][];
+  /** Для эксперта: справа — только его собственные сообщения, а не всех экспертов. */
+  ownExpertId?: number;
   labels: ChatLabels;
-  /** Для эксперта: продукты, которые можно предложить. */
+  /** Для эксперта и админа: продукты, которые можно предложить. */
   products?: { id: number; title: string }[];
-  /** Пояснение вместо поля ввода, когда отвечать нельзя. */
-  note?: ReactNode;
 }) {
   const [items, setItems] = useState<MessageView[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -106,7 +104,9 @@ export function ChatThread({
         {items.map((m) => (
           <div
             key={m.id}
-            className={`msg msg--${m.author} ${ownAuthors.includes(m.author) ? "msg--own" : ""}`}
+            className={`msg msg--${m.author} ${
+              ownAuthors.includes(m.author) || (ownExpertId !== undefined && m.expertId === ownExpertId) ? "msg--own" : ""
+            }`}
           >
             <div className="msg__author">
               {m.authorName}
@@ -135,39 +135,33 @@ export function ChatThread({
         <div ref={bottom} />
       </div>
 
-      {canReply ? (
-        <>
-          <form className="chat__form" onSubmit={onSubmit}>
-            <textarea
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  e.currentTarget.form?.requestSubmit();
-                }
-              }}
-              placeholder={labels.placeholder}
-              maxLength={4000}
-              rows={2}
-            />
-            <button className="button" disabled={sending || text.trim() === ""}>
-              {labels.send}
+      <form className="chat__form" onSubmit={onSubmit}>
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              e.currentTarget.form?.requestSubmit();
+            }
+          }}
+          placeholder={labels.placeholder}
+          maxLength={4000}
+          rows={2}
+        />
+        <button className="button" disabled={sending || text.trim() === ""}>
+          {labels.send}
+        </button>
+      </form>
+      {products && products.length > 0 && (
+        <div className="chat__offer">
+          <span className="muted">Предложить продукт:</span>
+          {products.map((p) => (
+            <button key={p.id} className="link-button" disabled={sending} onClick={() => void send({ productId: p.id })}>
+              {p.title}
             </button>
-          </form>
-          {products && products.length > 0 && (
-            <div className="chat__offer">
-              <span className="muted">Предложить продукт:</span>
-              {products.map((p) => (
-                <button key={p.id} className="link-button" disabled={sending} onClick={() => void send({ productId: p.id })}>
-                  {p.title}
-                </button>
-              ))}
-            </div>
-          )}
-        </>
-      ) : (
-        note && <p className="muted chat__note">{note}</p>
+          ))}
+        </div>
       )}
       {error && (
         <p className="form__error" role="alert">

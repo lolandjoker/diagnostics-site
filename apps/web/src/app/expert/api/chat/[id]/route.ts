@@ -1,6 +1,6 @@
 /**
- * Чат для эксперта. Читать может любой эксперт (видно, как работают коллеги),
- * писать — только эксперт этого чата. Открытие своего чата отмечает сообщения прочитанными.
+ * Чат для эксперта. Читать и писать может любой эксперт; сообщение подписано его именем.
+ * Прочитанными сообщения отмечаются, только когда чат открывает эксперт этого чата.
  */
 import { getDb } from "@/db";
 import { getConversation, markExpertRead, messageViews, postMessage } from "@/lib/chat";
@@ -26,7 +26,6 @@ export async function POST(req: Request, ctx: RouteContext<"/expert/api/chat/[id
   const db = await getDb();
   const conversation = await getConversation(db, (await ctx.params).id);
   if (!conversation) return jsonError("Чат не найден", 404);
-  if (conversation.expertId !== expert.id) return jsonError("Отвечать в этом чате может только его эксперт", 403);
 
   const data = await jsonBody(req);
   const productId = typeof data?.productId === "number" && Number.isInteger(data.productId) ? data.productId : undefined;

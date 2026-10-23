@@ -27,7 +27,6 @@ export default async function AdminChatPage(props: PageProps<"/admin/chats/[id]"
       </p>
       <ChatThread
         url={`/admin/api/chat/${conversation.id}`}
-        canReply
         ownAuthors={["admin"]}
         labels={{ placeholder: t["chat.placeholder"], send: t["chat.send"], buy: t["result.buy_button"] }}
         products={products}
