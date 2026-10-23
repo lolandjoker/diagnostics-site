@@ -19,7 +19,11 @@ export const ONLINE_TIMEOUT_MS = 5 * 60_000;
 export const MIN_EXPERT_PASSWORD = 10;
 export const EXPERT_SESSION_DAYS = 14;
 
-export function isOnline(e: Pick<Expert, "online" | "lastSeenAt">, now: Date): boolean {
+/** Сколько держится «в сети», включённое админом. */
+export const ADMIN_ONLINE_MS = 60 * 60_000;
+
+export function isOnline(e: Pick<Expert, "online" | "lastSeenAt" | "onlineUntil">, now: Date): boolean {
+  if (e.onlineUntil !== null && e.onlineUntil.getTime() > now.getTime()) return true;
   return e.online && e.lastSeenAt !== null && now.getTime() - e.lastSeenAt.getTime() < ONLINE_TIMEOUT_MS;
 }
 
@@ -75,6 +79,7 @@ const publicColumns = {
   login: experts.login,
   online: experts.online,
   lastSeenAt: experts.lastSeenAt,
+  onlineUntil: experts.onlineUntil,
   active: experts.active,
   sort: experts.sort,
   createdAt: experts.createdAt,
@@ -127,8 +132,20 @@ export async function touchExpert(db: Db, id: number, now: Date): Promise<void> 
   await db.update(experts).set({ lastSeenAt: now }).where(eq(experts.id, id));
 }
 
+/** Эксперт сам включает или выключает «в сети». Выключение снимает и включение админом. */
 export async function setExpertOnline(db: Db, id: number, online: boolean, now: Date): Promise<void> {
-  await db.update(experts).set({ online, lastSeenAt: now }).where(eq(experts.id, id));
+  await db
+    .update(experts)
+    .set({ online, lastSeenAt: now, ...(!online && { onlineUntil: null }) })
+    .where(eq(experts.id, id));
+}
+
+/** Админ: «в сети» на ADMIN_ONLINE_MS или выключить совсем. */
+export async function setOnlineByAdmin(db: Db, id: number, on: boolean, now: Date): Promise<void> {
+  await db
+    .update(experts)
+    .set(on ? { onlineUntil: new Date(now.getTime() + ADMIN_ONLINE_MS) } : { online: false, onlineUntil: null })
+    .where(eq(experts.id, id));
 }
 
 // --- Фото: JPEG, PNG или WebP до 2 МБ; тип определяется по содержимому, а не по имени файла ---

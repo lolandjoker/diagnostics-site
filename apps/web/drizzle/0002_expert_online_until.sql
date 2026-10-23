@@ -1,0 +1,1 @@
+ALTER TABLE "experts" ADD COLUMN "online_until" timestamp with time zone;

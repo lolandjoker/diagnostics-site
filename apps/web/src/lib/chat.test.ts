@@ -15,10 +15,12 @@ import {
   createExpert,
   createExpertToken,
   detectImageMime,
+  getExpert,
   getExpertWithSecret,
   isOnline,
   setExpertOnline,
   setExpertPassword,
+  setOnlineByAdmin,
   verifyExpertToken,
   verifyPassword,
 } from "./experts";
@@ -134,9 +136,33 @@ describe("эксперты", () => {
 
   it("онлайн гаснет, если эксперт давно не заходил", () => {
     const now = new Date();
-    expect(isOnline({ online: true, lastSeenAt: new Date(now.getTime() - 60_000) }, now)).toBe(true);
-    expect(isOnline({ online: true, lastSeenAt: new Date(now.getTime() - ONLINE_TIMEOUT_MS - 1) }, now)).toBe(false);
-    expect(isOnline({ online: false, lastSeenAt: now }, now)).toBe(false);
+    const base = { onlineUntil: null };
+    expect(isOnline({ ...base, online: true, lastSeenAt: new Date(now.getTime() - 60_000) }, now)).toBe(true);
+    expect(isOnline({ ...base, online: true, lastSeenAt: new Date(now.getTime() - ONLINE_TIMEOUT_MS - 1) }, now)).toBe(false);
+    expect(isOnline({ ...base, online: false, lastSeenAt: now }, now)).toBe(false);
+  });
+
+  it("админ включает «в сети» на час без панели эксперта и выключает", async () => {
+    const res = await createExpert(db, { name: "Ольга", login: "olga", password: "пароль-эксперта" });
+    if (!res.ok) throw new Error(res.error);
+    const now = new Date();
+    await setOnlineByAdmin(db, res.id, true, now);
+    const e = (await getExpert(db, res.id))!;
+    expect(isOnline(e, new Date(now.getTime() + 59 * 60_000))).toBe(true);
+    expect(isOnline(e, new Date(now.getTime() + 61 * 60_000))).toBe(false);
+
+    const l = await lead(null);
+    expect(await startConversation(db, l, res.id, new Date())).toMatchObject({ ok: true });
+
+    await setOnlineByAdmin(db, res.id, false, new Date());
+    expect(isOnline((await getExpert(db, res.id))!, new Date())).toBe(false);
+  });
+
+  it("эксперт сам ушёл из сети — включение админом тоже снимается", async () => {
+    const id = await onlineExpert();
+    await setOnlineByAdmin(db, id, true, new Date());
+    await setExpertOnline(db, id, false, new Date());
+    expect(isOnline((await getExpert(db, id))!, new Date())).toBe(false);
   });
 
   it("тип фото — по содержимому", () => {
