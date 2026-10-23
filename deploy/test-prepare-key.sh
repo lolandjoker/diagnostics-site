@@ -45,6 +45,10 @@ broken=$(awk -v n=3 -v l="${line3:0:4}${r}${line3:5}" 'NR==n{print l; next} {pri
 check "испорчена середина"              1 "повреждён" "$broken"
 check "случайный текст"                 1 "неполный" "привет"
 
+ssh-keygen -q -t ed25519 -N "pw-test" -f "$tmp/key_pw" -C test >/dev/null
+check "ключ с паролем"                  1 "защищён паролем" "$(cat "$tmp/key_pw")"
+check "пустая строка и пробелы по краям" 0 "$expected_fp" $'\n  '"$(sed 's/$/  /' "$tmp/key")"
+
 # Ключ не должен попадать в вывод
 out=$(SSH_PRIVATE_KEY="$good" bash "$here/prepare-key.sh" "$tmp/out" 2>&1)
 if grep -q "PRIVATE KEY" <<<"$out" || grep -qF "$(sed -n 2p "$tmp/key")" <<<"$out"; then

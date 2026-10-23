@@ -21,7 +21,8 @@ if [ -z "${SSH_PRIVATE_KEY:-}" ]; then
   fail "Секрет SSH_PRIVATE_KEY пуст или недоступен этому запуску (проверьте, что он в окружении production и запуск идёт с ветки main)."
 fi
 
-printf '%s\n' "$SSH_PRIVATE_KEY" | tr -d '\r' > "$out"
+# Убираем \r, пробелы в конце строк и пустые строки/пробелы в начале — частые следы вставки
+printf '%s\n' "$SSH_PRIVATE_KEY" | tr -d '\r' | sed -e 's/[[:space:]]*$//' -e 's/^[[:space:]]*//' -e '/./,$!d' > "$out"
 chmod 600 "$out"
 
 if grep -q '^ssh-' "$out"; then
@@ -31,7 +32,11 @@ if ! grep -q -- '-----BEGIN [A-Z ]*PRIVATE KEY-----' "$out" || ! grep -q -- '---
   fail "Ключ в секрете неполный: нет первой строки «-----BEGIN … PRIVATE KEY-----» или последней «-----END … PRIVATE KEY-----»."
 fi
 
-if ! pub=$(ssh-keygen -y -f "$out" 2>/dev/null); then
+# -P '' и </dev/null: ключ с паролем не должен ждать ввода пароля
+if ! pub=$(ssh-keygen -y -P '' -f "$out" 2>&1 </dev/null); then
+  if [[ "$pub" == *passphrase* ]]; then
+    fail "Ключ защищён паролем, а выкату нужен ключ без пароля (создайте его заново: ssh-keygen -t ed25519 -f ~/.ssh/deploy_key -N \"\")."
+  fi
   fail "Ключ в секрете повреждён: его не удаётся прочитать (обрезан или изменён при вставке)."
 fi
 
