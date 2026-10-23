@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { getDb } from "@/db";
-import { METHODS, getMethod } from "@/lib/diagnostic";
 import { formatRub } from "@/lib/offers";
 import { VARIATION_MODES, getVariationMode, listVariations, variationStats } from "@/lib/variations";
 import { ActionForm } from "../../ActionForm";
@@ -17,9 +16,9 @@ export default async function VariationsPage() {
     <>
       <h1>Варианты диагностики</h1>
       <p className="muted">
-        В варианте для каждого значения расчёта пишутся два текста: короткая диагностика (страница разбора) и полная
-        (приходит в чат с подписью «Подробный разбор», когда человек выбрал эксперта). Новому человеку достаётся один
-        активный вариант и закрепляется за ним.
+        В варианте два текста, одинаковые для всех — от имени и даты рождения не зависят: текст 1 показывается на
+        странице разбора, текст 2 приходит в чат с подписью «Подробный разбор» через 3 минуты после того, как человек
+        выбрал эксперта. Новому человеку достаётся один активный вариант и закрепляется за ним.
       </p>
 
       <section className="admin-section">
@@ -45,7 +44,6 @@ export default async function VariationsPage() {
               <thead>
                 <tr>
                   <th>Вариант</th>
-                  <th>Расчёт</th>
                   <th>Получили диагностику</th>
                   <th>Перешли в чат</th>
                   <th>Написали</th>
@@ -63,7 +61,6 @@ export default async function VariationsPage() {
                         <Link href={`/admin/variations/${v.id}`}>{v.title}</Link>
                         {!v.active && " (выключен)"}
                       </td>
-                      <td>{getMethod(v.method)?.label ?? v.method}</td>
                       <td>{leads}</td>
                       <td>
                         {s?.chats ?? 0} <small className="muted">{pct(s?.chats ?? 0, leads)}</small>
@@ -91,19 +88,6 @@ export default async function VariationsPage() {
           <label className="field">
             <span>Название (видно только вам)</span>
             <input name="title" required placeholder="например: «Вариант А — мягкий»" />
-          </label>
-          <label className="field">
-            <span>Способ расчёта — от него зависит, под какие значения писать тексты</span>
-            <select name="method" required defaultValue="">
-              <option value="" disabled>
-                Выберите…
-              </option>
-              {METHODS.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.label} ({m.values.length} значений)
-                </option>
-              ))}
-            </select>
           </label>
           <button className="button">Создать и перейти к текстам</button>
         </ActionForm>

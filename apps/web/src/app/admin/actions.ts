@@ -11,8 +11,8 @@ import { getDb } from "@/db";
 import { diagnosticBlocks, experts, priceVariants, products, variations } from "@/db/schema";
 import { requireAdmin } from "@/lib/admin-auth";
 import { getBlock, getMethod, saveBlockTexts } from "@/lib/diagnostic";
-import { createExpert, getExpert, saveExpertPhoto, setExpertPassword, setOnlineByAdmin } from "@/lib/experts";
-import { VARIATION_MODES, getVariation, saveVariationTexts, setVariationMode } from "@/lib/variations";
+import { adminOnlineMs, createExpert, getExpert, saveExpertPhoto, setExpertPassword, setOnlineByAdmin } from "@/lib/experts";
+import { NO_METHOD, VARIATION_MODES, getVariation, saveVariationTexts, setVariationMode } from "@/lib/variations";
 import type { VariationMode } from "@/lib/variations";
 import { smtpMailer } from "@/lib/mail";
 import { parseRub } from "@/lib/offers";
@@ -191,10 +191,8 @@ export async function setVariationModeAction(_prev: ActionResult, form: FormData
 export async function createVariationAction(_prev: ActionResult, form: FormData): Promise<ActionResult> {
   await requireAdmin();
   const title = str(form, "title").trim();
-  const method = str(form, "method");
   if (!title) return fail("Укажите название варианта");
-  if (!getMethod(method)) return fail("Выберите способ расчёта");
-  const [v] = await (await getDb()).insert(variations).values({ title, method }).returning();
+  const [v] = await (await getDb()).insert(variations).values({ title, method: NO_METHOD }).returning();
   refresh();
   redirect(`/admin/variations/${v?.id}`);
 }
@@ -212,15 +210,10 @@ export async function updateVariationAction(_prev: ActionResult, form: FormData)
     .set({ title, active: form.get("active") === "on" })
     .where(eq(variations.id, variation.id));
 
-  const texts = new Map<number, { shortText: string; fullText: string }>();
-  for (const value of getMethod(variation.method)?.values ?? []) {
-    const shortText = form.get(`short_${value}`);
-    const fullText = form.get(`full_${value}`);
-    if (typeof shortText === "string" && typeof fullText === "string") {
-      texts.set(value, { shortText: shortText.replace(/\r\n/g, "\n"), fullText: fullText.replace(/\r\n/g, "\n") });
-    }
-  }
-  await saveVariationTexts(db, variation.id, texts);
+  await saveVariationTexts(db, variation.id, {
+    shortText: str(form, "short_text").replace(/\r\n/g, "\n"),
+    fullText: str(form, "full_text").replace(/\r\n/g, "\n"),
+  });
   refresh();
   return done("Сохранено");
 }
@@ -239,11 +232,18 @@ export async function createExpertAction(_prev: ActionResult, form: FormData): P
   redirect(`/admin/experts/${res.id}`);
 }
 
-/** «В сети» на час или выключить — за эксперта (для проверки и подмены). */
+/** «В сети» на выбранный срок или выключить — за эксперта (для проверки и подмены). */
 export async function setExpertOnlineAction(form: FormData): Promise<void> {
   await requireAdmin();
   const id = int(form, "id");
-  if (id !== null) await setOnlineByAdmin(await getDb(), id, form.get("online") === "true", new Date());
+  if (id === null) return;
+  if (form.get("online") === "true") {
+    // Срок вне пределов — ничего не меняем; поле в форме не даст ввести такой
+    const ms = adminOnlineMs(str(form, "amount"), str(form, "unit"));
+    if (ms !== null) await setOnlineByAdmin(await getDb(), id, ms, new Date());
+  } else {
+    await setOnlineByAdmin(await getDb(), id, null, new Date());
+  }
   refresh();
 }
 

@@ -3,7 +3,7 @@
  * GET ?after=<id> — новые сообщения; POST {body} — отправить сообщение.
  */
 import { getDb } from "@/db";
-import { conversationForLead, messageViews, postMessage } from "@/lib/chat";
+import { conversationForLead, deliverDueFullTexts, messageViews, postMessage } from "@/lib/chat";
 import { getExpert, isOnline } from "@/lib/experts";
 import { afterParam, jsonBody, jsonError, noStore, sameOrigin } from "@/lib/http";
 import { getLead } from "@/lib/leads";
@@ -21,6 +21,7 @@ export async function GET(req: Request, ctx: RouteContext<"/api/chat/[leadId]">)
   const { leadId } = await ctx.params;
   const { db, conversation } = await load(leadId);
   if (!conversation) return jsonError("Чат не найден", 404);
+  await deliverDueFullTexts(db, new Date(), conversation.id);
   const expert = await getExpert(db, conversation.expertId);
   return Response.json(
     {

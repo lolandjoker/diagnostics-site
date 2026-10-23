@@ -29,7 +29,7 @@ export default async function ResultPage(props: PageProps<"/razbor/[id]">) {
   const vars = { name: lead.name };
   const input = { birth: parseIsoDate(lead.birthDate), name: lead.name, year: new Date().getUTCFullYear() };
   const [variation, sections, offers, chat] = await Promise.all([
-    variationFor(db, lead.variationId, input),
+    variationFor(db, lead.variationId),
     buildDiagnostic(db, input),
     offersForLead(db, lead.id),
     conversationForLead(db, lead.id),
