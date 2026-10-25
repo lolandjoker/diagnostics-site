@@ -1,6 +1,7 @@
 # Боевой сервер. Запуск: docker compose up -d --build
 # Секреты — в файле .env рядом с этим файлом (образец — .env.example).
 # База и Redis наружу не открыты: доступны только сайту внутри сети docker.
+# turn — сервер для голосовых звонков в чате; его порты открывает файрвол (deploy/setup-server.sh).
 # Фоновые задачи (worker) и чат (realtime) добавятся отдельными сервисами по мере готовности.
 
 services:
@@ -39,6 +40,40 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+
+  # Голосовые звонки в чате идут между браузерами напрямую, а если напрямую нельзя (мобильный
+  # интернет, офисные сети) — через этот TURN-сервер. Сеть хоста — чтобы не пробрасывать диапазон
+  # UDP-портов для звука. Пускает только по временным паролям сайта (TURN_SECRET, lib/calls.ts);
+  # пересылать трафик во внутренние и служебные сети сервера запрещено (denied-peer-ip).
+  turn:
+    image: coturn/coturn:4.18-alpine
+    restart: unless-stopped
+    network_mode: host
+    command:
+      - -n
+      - --log-file=stdout
+      - --no-cli
+      - --no-tls
+      - --no-dtls
+      - --fingerprint
+      - --use-auth-secret
+      - --static-auth-secret=${TURN_SECRET:?укажите TURN_SECRET в .env}
+      - --realm=${SITE_DOMAIN}
+      - --listening-ip=${TURN_IP:?укажите TURN_IP (публичный адрес сервера) в .env}
+      - --relay-ip=${TURN_IP}
+      - --listening-port=3478
+      - --min-port=49160
+      - --max-port=49260
+      - --no-multicast-peers
+      - --denied-peer-ip=0.0.0.0-0.255.255.255
+      - --denied-peer-ip=10.0.0.0-10.255.255.255
+      - --denied-peer-ip=100.64.0.0-100.127.255.255
+      - --denied-peer-ip=127.0.0.0-127.255.255.255
+      - --denied-peer-ip=169.254.0.0-169.254.255.255
+      - --denied-peer-ip=172.16.0.0-172.31.255.255
+      - --denied-peer-ip=192.168.0.0-192.168.255.255
+      - --user-quota=12
+      - --total-quota=200
 
   postgres:
     image: postgres:16-alpine

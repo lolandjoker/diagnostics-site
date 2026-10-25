@@ -36,6 +36,13 @@
       "when": 1792762047164,
       "tag": "0004_message_photos",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792958881438,
+      "tag": "0005_calls",
+      "breakpoints": true
     }
   ]
 }

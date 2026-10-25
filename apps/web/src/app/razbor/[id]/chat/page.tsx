@@ -4,6 +4,7 @@ import { conversationForLead } from "@/lib/chat";
 import { expertPhotoUrls, getExpert } from "@/lib/experts";
 import { getLead } from "@/lib/leads";
 import { fillTemplate, getTexts } from "@/lib/texts";
+import { CallPanel } from "../../../CallPanel";
 import { ChatThread } from "../../../ChatThread";
 
 export const dynamic = "force-dynamic";
@@ -21,6 +22,9 @@ export default async function ClientChatPage(props: PageProps<"/razbor/[id]/chat
     getTexts(db, ["chat.title", "chat.placeholder", "chat.send", "result.buy_button"]),
   ]);
 
+  const expertName = expert?.name ?? "Эксперт";
+  const expertPhoto = expert ? (photos.get(expert.id) ?? null) : null;
+
   return (
     <main className="page page--chat">
       {/* Заголовок из «Текстов сайта» — для программ чтения с экрана; видимая шапка — с фото эксперта */}
@@ -29,12 +33,15 @@ export default async function ClientChatPage(props: PageProps<"/razbor/[id]/chat
         url={`/api/chat/${lead.id}`}
         ownAuthors={["client"]}
         labels={{ placeholder: t["chat.placeholder"], send: t["chat.send"], buy: t["result.buy_button"] }}
-        peer={{
-          name: expert?.name ?? "Эксперт",
-          photo: expert ? (photos.get(expert.id) ?? null) : null,
-          backHref: `/razbor/${lead.id}`,
-          backLabel: "К разбору",
-        }}
+        peer={{ name: expertName, photo: expertPhoto, backHref: `/razbor/${lead.id}`, backLabel: "К разбору" }}
+        call={
+          <CallPanel
+            url={`/api/chat/${lead.id}/call`}
+            role="client"
+            peer={{ name: expertName, photo: expertPhoto }}
+            initialRequested={conversation.callRequestedAt !== null}
+          />
+        }
       />
     </main>
   );

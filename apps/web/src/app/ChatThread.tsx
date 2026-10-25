@@ -7,7 +7,7 @@
  */
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { FormEvent } from "react";
+import type { FormEvent, ReactNode } from "react";
 import type { MessageView } from "@/lib/chat";
 import { Avatar } from "./Avatar";
 
@@ -99,6 +99,7 @@ export function ChatThread({
   labels,
   products,
   peer,
+  call,
 }: {
   /** GET ?after= и POST — один адрес. */
   url: string;
@@ -111,6 +112,8 @@ export function ChatThread({
   products?: { id: number; title: string }[];
   /** Шапка чата с собеседником; статус «в сети» берётся из ответа сервера (expertOnline). */
   peer?: ChatPeer;
+  /** Звонок (CallPanel): с шапкой — справа в ней, без шапки — полосой над перепиской. */
+  call?: ReactNode;
 }) {
   const [items, setItems] = useState<MessageView[]>([]);
   const [online, setOnline] = useState<boolean | undefined>(undefined);
@@ -246,8 +249,10 @@ export function ChatThread({
               {online === undefined ? " " : online ? "в сети" : "не в сети"}
             </span>
           </div>
+          {call && <div className="chat__head-actions">{call}</div>}
         </header>
       )}
+      {!peer && call}
 
       <div className="chat__messages" ref={scroller} aria-live="polite">
         {items.map((m, i) => {

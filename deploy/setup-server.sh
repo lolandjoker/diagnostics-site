@@ -7,11 +7,11 @@
 #   1. Ставит Docker, git, tmux, файрвол, fail2ban, автообновления.
 #   2. Добавляет файл подкачки 2 ГБ (если подкачки нет).
 #   3. Ограничивает размер логов Docker.
-#   4. Файрвол: открыты только SSH, HTTP, HTTPS; остальное закрыто.
+#   4. Файрвол: открыты только SSH, HTTP, HTTPS и порты голосовых звонков (TURN); остальное закрыто.
 #   5. Автоматические обновления безопасности Ubuntu.
 #   6. fail2ban: блокирует адреса, которые подбирают вход по SSH.
 #   7. Скачивает код сайта в /opt/diagnostics/app и создаёт .env с паролем базы.
-#      Пароль генерируется на сервере и никуда не передаётся.
+#      Пароль и секрет звонков генерируются на сервере и никуда не передаются.
 
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
@@ -117,12 +117,16 @@ ufw allow "${ssh_port}/tcp" comment 'SSH' >/dev/null
 ufw allow 80/tcp comment 'HTTP' >/dev/null
 ufw allow 443/tcp comment 'HTTPS' >/dev/null
 ufw allow 443/udp comment 'HTTP/3' >/dev/null
+# Голосовые звонки (сервис turn в docker-compose): вход TURN и диапазон портов для звука
+ufw allow 3478/udp comment 'TURN' >/dev/null
+ufw allow 3478/tcp comment 'TURN' >/dev/null
+ufw allow 49160:49260/udp comment 'TURN relay' >/dev/null
 # Проверяем, что SSH разрешён, ДО включения — чтобы не закрыть себе вход
 if ! ufw show added | grep -q "allow ${ssh_port}/tcp"; then
   echo "SSH (порт ${ssh_port}) не удалось разрешить — файрвол не включаю"; exit 1
 fi
 ufw --force enable >/dev/null
-log "Файрвол включён: открыты ${ssh_port}/tcp (SSH), 80, 443"
+log "Файрвол включён: открыты ${ssh_port}/tcp (SSH), 80, 443, 3478 и 49160–49260/udp (звонки)"
 
 # --- 5. Автоматические обновления безопасности ---
 cat > /etc/apt/apt.conf.d/20auto-upgrades <<'APT'
@@ -167,6 +171,14 @@ add_env_if_missing() {
 }
 add_env_if_missing ADMIN_PASSWORD "$(openssl rand -hex 12)"
 add_env_if_missing SESSION_SECRET "$(openssl rand -hex 32)"
+add_env_if_missing TURN_SECRET "$(openssl rand -hex 32)"
+# Публичный адрес сервера: на нём TURN принимает звонки и пересылает звук (а не на внутреннем адресе)
+turn_ip=$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for (i = 1; i < NF; i++) if ($i == "src") print $(i + 1)}')
+if [ -n "$turn_ip" ]; then
+  add_env_if_missing TURN_IP "$turn_ip"
+else
+  warn "Не удалось определить публичный адрес для звонков — впишите TURN_IP в $BASE/app/.env вручную"
+fi
 chmod 600 "$BASE/app/.env"
 
 touch "$BASE/state/setup.done"

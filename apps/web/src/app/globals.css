@@ -1295,6 +1295,259 @@ td.actions {
   width: 6em;
 }
 
+/* --- Звонки --- */
+
+.chat {
+  position: relative;
+}
+
+.chat__head-actions {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.chat__icon-button--done {
+  color: var(--ok);
+}
+
+.badge--call {
+  background: var(--ok);
+  color: #10301c;
+}
+
+/* Экран звонка у клиента — поверх чата, как в мессенджере */
+.call-screen {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 30%, rgba(93, 69, 163, 0.55), transparent 70%),
+    var(--bg);
+  text-align: center;
+  animation: fade-in 0.25s ease-out;
+}
+
+.call-screen__avatar {
+  position: relative;
+  margin-bottom: 12px;
+  border-radius: 50%;
+}
+
+.call-screen__avatar--ringing::before,
+.call-screen__avatar--ringing::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 2px solid rgba(126, 214, 160, 0.6);
+  border-radius: 50%;
+  animation: ring-wave 2s ease-out infinite;
+}
+
+.call-screen__avatar--ringing::after {
+  animation-delay: 1s;
+}
+
+@keyframes ring-wave {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.7);
+  }
+}
+
+.call-screen__name {
+  font-family: var(--font-display);
+  font-size: 1.9rem;
+  line-height: 1.2;
+}
+
+.call-screen__status {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.call-screen__actions {
+  display: flex;
+  gap: 48px;
+  margin-top: 40px;
+}
+
+.call-btn {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(127, 127, 127, 0.22);
+  color: var(--text);
+  cursor: pointer;
+  transition:
+    transform 0.15s,
+    background 0.15s;
+}
+
+.call-btn:hover:not(:disabled) {
+  transform: scale(1.06);
+}
+
+.call-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.call-btn:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 3px;
+}
+
+.call-btn--muted {
+  background: var(--text);
+  color: var(--bg);
+}
+
+.call-btn--end {
+  background: #e5484d;
+  color: #fff;
+}
+
+.call-btn--accept {
+  background: #30a46c;
+  color: #fff;
+  animation: accept-bounce 1.2s ease-in-out infinite;
+}
+
+@keyframes accept-bounce {
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+/* Большие кнопки с подписью под кругом */
+.call-btn--big {
+  position: relative;
+  width: 68px;
+  height: 68px;
+}
+
+.call-btn--big svg {
+  width: 30px;
+  height: 30px;
+}
+
+.call-btn--big span {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+
+.call-screen .call-btn:not(.call-btn--big) {
+  width: 60px;
+  height: 60px;
+}
+
+.call-toast {
+  position: absolute;
+  top: 72px;
+  left: 50%;
+  z-index: 20;
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: rgba(20, 15, 36, 0.92);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  font-size: 0.875rem;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  animation: fade-in 0.2s ease-out;
+}
+
+/* Звонок у эксперта и админа — полоса над перепиской */
+.call-staff {
+  border-bottom: 1px solid var(--line);
+}
+
+.call-staff .form__error {
+  padding: 0 14px 8px;
+}
+
+.call-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  padding: 8px 14px;
+}
+
+.call-bar:not(.call-bar--idle) {
+  background: rgba(48, 164, 108, 0.12);
+}
+
+.call-bar .call-btn {
+  width: 40px;
+  height: 40px;
+}
+
+.call-bar__status {
+  margin-right: auto;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.call-bar__status--live::before {
+  content: "● ";
+  color: #30a46c;
+  animation: twinkle 1s ease-in-out infinite alternate;
+}
+
+.call-start {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 16px;
+  border: 1px solid #30a46c;
+  border-radius: 999px;
+  background: transparent;
+  color: #1f7a4d;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.call-start svg {
+  width: 18px;
+  height: 18px;
+}
+
+.call-start:hover:not(:disabled) {
+  background: rgba(48, 164, 108, 0.1);
+}
+
+.call-request {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(48, 164, 108, 0.15);
+  color: #1f7a4d;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
 /* Без анимаций для тех, кто отключил их в системе */
 @media (prefers-reduced-motion: reduce) {
   *,

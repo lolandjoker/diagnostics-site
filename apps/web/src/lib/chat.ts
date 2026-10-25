@@ -255,6 +255,8 @@ export interface InboxItem {
   lastMessage: string;
   /** Сообщений клиента, которые эксперт этого чата ещё не открывал. */
   unread: number;
+  /** Клиент попросил позвонить, а звонка ещё не было. */
+  callRequested: boolean;
 }
 
 /** Все чаты, свежие сверху. Эксперт видит все и может ответить в любом. */
@@ -286,6 +288,7 @@ export async function inbox(db: Db, limit = 300): Promise<InboxItem[]> {
     lastMessageAt: r.c.lastMessageAt.toISOString(),
     lastMessage: r.lastMessage,
     unread: r.unread,
+    callRequested: r.c.callRequestedAt !== null,
   }));
 }
 
