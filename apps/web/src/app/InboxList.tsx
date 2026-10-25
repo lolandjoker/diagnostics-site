@@ -24,6 +24,11 @@ function Rows({ items, linkBase, showExpert }: { items: InboxItem[]; linkBase: s
               {c.leadName}
               {showExpert && <span className="muted"> → {c.expertName}</span>}
               {c.unread > 0 && <span className="badge">{c.unread}</span>}
+              {c.callRequested && (
+                <span className="badge badge--call" title="Клиент просит позвонить">
+                  📞 звонок
+                </span>
+              )}
             </span>
             <span className="inbox__last">{c.lastMessage || "—"}</span>
             <time className="muted" dateTime={c.lastMessageAt}>

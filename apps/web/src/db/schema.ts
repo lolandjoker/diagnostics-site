@@ -3,6 +3,7 @@
  * столбцы и таблицы не удаляются и не переименовываются.
  * После правки схемы: pnpm --filter @diag/web db:generate (создаёт миграцию в drizzle/).
  */
+import { sql } from "drizzle-orm";
 import {
   boolean,
   customType,
@@ -14,6 +15,7 @@ import {
   serial,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 
@@ -207,6 +209,8 @@ export const conversations = pgTable("conversations", {
   expertReadAt: timestamp("expert_read_at", { withTimezone: true }),
   /** Когда в чат ушёл текст 2 варианта (через 3 минуты после начала чата); null — ещё не ушёл. */
   fullTextSentAt: timestamp("full_text_sent_at", { withTimezone: true }),
+  /** Клиент попросил позвонить; сбрасывается, когда эксперт или админ начал звонок. */
+  callRequestedAt: timestamp("call_requested_at", { withTimezone: true }),
 });
 
 export const MESSAGE_AUTHORS = ["client", "expert", "admin", "system"] as const;
@@ -241,3 +245,52 @@ export const messagePhotos = pgTable("message_photos", {
   data: bytea("data").notNull(),
   createdAt: createdAt(),
 });
+
+export const CALL_STATUSES = ["ringing", "active", "ended", "missed", "declined"] as const;
+export type CallStatus = (typeof CALL_STATUSES)[number];
+
+/**
+ * Голосовой звонок в чате (через браузер). Звонит эксперт (expertId) или админ, клиент принимает.
+ * ringing → active → ended; ringing → missed (не ответили) / declined (отклонили).
+ * В чате одновременно может идти только один звонок (уникальный индекс по открытым).
+ * clientSeenAt / staffSeenAt — когда сторона последний раз опрашивала звонок: пропала — звонок завершается.
+ */
+export const calls = pgTable(
+  "calls",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    caller: text("caller", { enum: ["expert", "admin"] }).notNull(),
+    expertId: integer("expert_id").references(() => experts.id),
+    status: text("status", { enum: CALL_STATUSES }).notNull().default("ringing"),
+    createdAt: createdAt(),
+    answeredAt: timestamp("answered_at", { withTimezone: true }),
+    endedAt: timestamp("ended_at", { withTimezone: true }),
+    clientSeenAt: timestamp("client_seen_at", { withTimezone: true }),
+    staffSeenAt: timestamp("staff_seen_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("calls_conversation_idx").on(t.conversationId, t.createdAt),
+    uniqueIndex("calls_one_open_idx")
+      .on(t.conversationId)
+      .where(sql`${t.status} in ('ringing', 'active')`),
+  ],
+);
+
+/** «Рукопожатие» браузеров при звонке: offer от сотрудника, answer от клиента (SDP). Звук сюда не идёт. */
+export const callSignals = pgTable(
+  "call_signals",
+  {
+    id: serial("id").primaryKey(),
+    callId: uuid("call_id")
+      .notNull()
+      .references(() => calls.id, { onDelete: "cascade" }),
+    side: text("side", { enum: ["client", "staff"] }).notNull(),
+    kind: text("kind", { enum: ["offer", "answer"] }).notNull(),
+    sdp: text("sdp").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("call_signals_call_idx").on(t.callId, t.id)],
+);

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getDb } from "@/db";
 import { conversationHeader, getConversation, offerableProducts } from "@/lib/chat";
 import { getTexts } from "@/lib/texts";
+import { CallPanel } from "../../../../CallPanel";
 import { ChatThread } from "../../../../ChatThread";
 
 export default async function AdminChatPage(props: PageProps<"/admin/chats/[id]">) {
@@ -31,6 +32,14 @@ export default async function AdminChatPage(props: PageProps<"/admin/chats/[id]"
         ownAuthors={["admin"]}
         labels={{ placeholder: t["chat.placeholder"], send: t["chat.send"], buy: t["result.buy_button"] }}
         products={products}
+        call={
+          <CallPanel
+            url={`/admin/api/chat/${conversation.id}/call`}
+            role="staff"
+            peer={{ name: header?.leadName ?? "Клиент" }}
+            initialRequested={conversation.callRequestedAt !== null}
+          />
+        }
       />
     </>
   );

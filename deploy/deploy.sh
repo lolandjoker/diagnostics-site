@@ -63,7 +63,7 @@ backup_db() {
 save_failure_logs() {
   local f
   f="$LOGS/failure-$(date -u +%Y%m%d-%H%M%S).log"
-  { compose ps; compose logs --tail=200 web caddy postgres redis; } > "$f" 2>&1 || true
+  { compose ps; compose logs --tail=200 web caddy postgres redis turn; } > "$f" 2>&1 || true
   chmod 600 "$f"
   log "Журналы контейнеров сохранены на сервере: $f"
   compose ps --format '{{.Service}}: {{.State}} {{.Health}}' 2>/dev/null || true

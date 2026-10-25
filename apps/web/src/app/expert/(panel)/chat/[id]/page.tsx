@@ -4,6 +4,7 @@ import { getDb } from "@/db";
 import { conversationHeader, getConversation, offerableProducts } from "@/lib/chat";
 import { requireExpert } from "@/lib/expert-auth";
 import { getTexts } from "@/lib/texts";
+import { CallPanel } from "../../../../CallPanel";
 import { ChatThread } from "../../../../ChatThread";
 
 export default async function ExpertChatPage(props: PageProps<"/expert/chat/[id]">) {
@@ -41,6 +42,14 @@ export default async function ExpertChatPage(props: PageProps<"/expert/chat/[id]
         ownExpertId={expert.id}
         labels={{ placeholder: t["chat.placeholder"], send: t["chat.send"], buy: t["result.buy_button"] }}
         products={products}
+        call={
+          <CallPanel
+            url={`/expert/api/chat/${conversation.id}/call`}
+            role="staff"
+            peer={{ name: header?.leadName ?? "Клиент" }}
+            initialRequested={conversation.callRequestedAt !== null}
+          />
+        }
       />
     </>
   );
