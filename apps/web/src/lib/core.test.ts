@@ -18,7 +18,7 @@ beforeEach(async () => {
 });
 
 async function newLead(name = "Анна", birthDate = "1990-03-15") {
-  return createLead(db, { name, birthDate, consent: true }, NOW);
+  return createLead(db, { name, birthDate }, NOW);
 }
 
 async function newProduct(prices: number[], opts: { active?: boolean; title?: string } = {}) {
@@ -113,17 +113,16 @@ describe("разбор", () => {
 });
 
 describe("заявка", () => {
-  const ok = { name: "Анна", birthDate: "1990-03-15", consent: true };
+  const ok = { name: "Анна", birthDate: "1990-03-15" };
 
   it("принимает верные данные", () => {
     expect(validateLead(ok, NOW)).toBeNull();
   });
 
-  it("отклоняет пустое имя, неверную дату, отсутствие согласия", () => {
+  it("отклоняет пустое имя и неверную дату", () => {
     expect(validateLead({ ...ok, name: "  " }, NOW)).toMatch("имя");
     expect(validateLead({ ...ok, birthDate: "1990-02-30" }, NOW)).toMatch("не существует");
     expect(validateLead({ ...ok, birthDate: "" }, NOW)).toMatch("дату");
-    expect(validateLead({ ...ok, consent: false }, NOW)).toMatch("согласие");
   });
 
   it("только с 18 лет: день в день — можно, днём раньше — нельзя", () => {

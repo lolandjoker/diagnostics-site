@@ -12,12 +12,11 @@ export interface FormState {
 
 const str = (v: FormDataEntryValue | null) => (typeof v === "string" ? v : "");
 
-/** Форма на главной: имя, дата рождения, согласие → страница разбора. */
+/** Форма на главной: имя и дата рождения → страница разбора. */
 export async function submitLead(_prev: FormState, form: FormData): Promise<FormState> {
   const input = {
     name: str(form.get("name")),
     birthDate: str(form.get("birthDate")),
-    consent: form.get("consent") === "on",
   };
   const now = new Date();
   const error = validateLead(input, now);

@@ -29,7 +29,7 @@ beforeEach(async () => {
   if (!res.ok) throw new Error(res.error);
   expertId = res.id;
   await setExpertOnline(db, expertId, true, new Date());
-  const lead = await createLead(db, { name: "Анна", birthDate: "1990-03-15", consent: true }, new Date(), null);
+  const lead = await createLead(db, { name: "Анна", birthDate: "1990-03-15" }, new Date(), null);
   const c = await startConversation(db, lead, expertId, new Date());
   if (!c.ok) throw new Error(c.error);
   conv = c.conversation;

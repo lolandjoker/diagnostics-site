@@ -62,7 +62,7 @@ async function onlineExpert(name = "Мария", login = "maria") {
 }
 
 const lead = (variationId: number | null) =>
-  createLead(db, { name: "Анна", birthDate: "1990-03-15", consent: true }, NOW, variationId);
+  createLead(db, { name: "Анна", birthDate: "1990-03-15" }, NOW, variationId);
 
 describe("варианты диагностики", () => {
   it("нет активных вариантов — null", async () => {
@@ -200,7 +200,7 @@ describe("чат", () => {
     const v = await newVariation("А");
     await saveVariationTexts(db, v.id, { shortText: "к", fullText: "{name}, подробно" });
     const expertId = await onlineExpert();
-    const l = await createLead(db, { name: "Qwerty", birthDate: "2001-01-01", consent: true }, NOW, v.id);
+    const l = await createLead(db, { name: "Qwerty", birthDate: "2001-01-01" }, NOW, v.id);
     const res = await startConversation(db, l, expertId, new Date());
     if (!res.ok) throw new Error(res.error);
     const start = res.conversation.createdAt.getTime();

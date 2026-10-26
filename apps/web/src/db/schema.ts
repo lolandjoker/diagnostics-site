@@ -120,6 +120,7 @@ export const leads = pgTable("leads", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
   birthDate: date("birth_date", { mode: "string" }).notNull(),
+  /** Раньше — время согласия (галочка в форме); галочку убрали, теперь совпадает со временем заявки. */
   consentAt: timestamp("consent_at", { withTimezone: true }).notNull(),
   createdAt: createdAt(),
   /** Доставшийся вариант диагностики; null — вариантов не было. */

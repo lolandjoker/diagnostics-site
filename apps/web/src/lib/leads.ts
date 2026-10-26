@@ -1,4 +1,4 @@
-/** Заявки: человек ввёл имя и дату рождения и дал согласие на обработку данных. */
+/** Заявки: человек ввёл имя и дату рождения. */
 import { eq } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { assertValidBirthDate } from "@diag/engine";
@@ -20,7 +20,7 @@ export function ageOn(birthIso: string, today: Date): number {
   return y - b.year - (m < b.month || (m === b.month && d < b.day) ? 1 : 0);
 }
 
-export type LeadInput = { name: string; birthDate: string; consent: boolean };
+export type LeadInput = { name: string; birthDate: string };
 
 /** Проверка формы. Возвращает текст ошибки для человека или null. */
 export function validateLead(input: LeadInput, today: Date): string | null {
@@ -34,13 +34,14 @@ export function validateLead(input: LeadInput, today: Date): string | null {
     return err instanceof Error ? err.message : "Неверная дата рождения";
   }
   if (ageOn(input.birthDate, today) < MIN_AGE) return `Сервис доступен с ${MIN_AGE} лет`;
-  if (!input.consent) return "Нужно согласие на обработку персональных данных";
   return null;
 }
 
 export async function createLead(db: Db, input: LeadInput, now: Date, variationId: number | null = null): Promise<Lead> {
   const [lead] = await db
     .insert(leads)
+    // consent_at — столбец обязательный и не удаляется (правило схемы); галочки согласия больше нет,
+    // пишем время заявки
     .values({ name: input.name.trim(), birthDate: input.birthDate, consentAt: now, variationId })
     .returning();
   return lead as Lead;
