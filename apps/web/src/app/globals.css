@@ -1619,6 +1619,59 @@ td.actions {
   margin: 4px 0 0;
 }
 
+.pager {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  margin-top: 14px;
+}
+
+.pager__btn {
+  min-width: 34px;
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.pager__btn:hover:not(:disabled) {
+  border-color: var(--gold);
+}
+
+.pager__btn.is-current {
+  border-color: var(--gold);
+  background: var(--gold-soft);
+  color: var(--gold);
+  font-weight: 700;
+}
+
+.pager__btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.pager__gap {
+  padding: 0 4px;
+  color: var(--muted);
+}
+
+.filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin: 8px 0 16px;
+}
+
+.filter .is-current {
+  font-weight: 700;
+  text-decoration: none;
+}
+
 .review-icon {
   display: block;
   width: 21px;

@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { getDb } from "@/db";
+import { listExperts } from "@/lib/experts";
 import { listAllReviews } from "@/lib/reviews";
 import { requireStaff } from "@/lib/staff-auth";
-import { deleteReviewAction, setReviewHiddenAction } from "../../actions";
+import { ActionForm } from "../../ActionForm";
+import { addReviewAction, deleteReviewAction, setReviewHiddenAction } from "../../actions";
 import { Stars } from "../../../Stars";
 
 const when = new Intl.DateTimeFormat("ru-RU", {
@@ -14,19 +16,80 @@ const when = new Intl.DateTimeFormat("ru-RU", {
   minute: "2-digit",
 });
 
-export default async function ReviewsPage() {
+export default async function ReviewsPage(props: PageProps<"/admin/reviews">) {
   const staff = await requireStaff();
-  const list = await listAllReviews(await getDb());
+  const { expert: expertParam } = await props.searchParams;
+  const db = await getDb();
+  const experts = await listExperts(db);
+  const current = experts.find((e) => typeof expertParam === "string" && String(e.id) === expertParam) ?? null;
+  const list = await listAllReviews(db, current?.id);
+  const today = new Date().toISOString().slice(0, 10);
   // Эксперт открывает чат в своей панели, админ — в админке
   const chatBase = staff.kind === "admin" ? "/admin/chats" : "/expert/chat";
 
   return (
     <>
-      <h1>Отзывы</h1>
+      <h1>Отзывы{current ? ` — ${current.name}` : ""}</h1>
       <p className="muted">
-        Клиенты оставляют отзыв в своём чате — один на чат, могут поправить. Отзыв сразу виден на карточке эксперта с
-        именем клиента. Скрытый отзыв клиентам не показывается; удаление — насовсем.
+        Клиенты оставляют отзыв в своём чате — один на чат, могут поправить; здесь можно добавить отзыв и без чата.
+        Отзыв сразу виден на карточке эксперта (листается по 5). Скрытый клиентам не показывается; удаление — насовсем.
+        Число отзывов на карточке («347 отзывов») задаётся на странице эксперта.
       </p>
+
+      <nav className="filter">
+        <Link href="/admin/reviews" className={current ? "" : "is-current"}>
+          Все
+        </Link>
+        {experts.map((e) => (
+          <Link key={e.id} href={`/admin/reviews?expert=${e.id}`} className={current?.id === e.id ? "is-current" : ""}>
+            {e.name}
+          </Link>
+        ))}
+      </nav>
+
+      <section className="admin-section">
+        <h2>Добавить отзыв</h2>
+        <ActionForm action={addReviewAction} resetOnSuccess>
+          <div className="row">
+            <label className="field">
+              <span>Эксперт</span>
+              <select name="expert_id" defaultValue={current?.id ?? ""} required>
+                <option value="" disabled>
+                  Выберите…
+                </option>
+                {experts.map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span>Имя автора</span>
+              <input name="author" required maxLength={60} placeholder="например, Ольга" />
+            </label>
+            <label className="field field--short">
+              <span>Оценка</span>
+              <select name="stars" defaultValue="5">
+                {[5, 4, 3, 2, 1].map((n) => (
+                  <option key={n} value={n}>
+                    {"★".repeat(n)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field field--short">
+              <span>Дата</span>
+              <input name="date" type="date" defaultValue={today} required />
+            </label>
+          </div>
+          <label className="field">
+            <span>Текст</span>
+            <textarea name="body" rows={3} maxLength={2000} />
+          </label>
+          <button className="button">Добавить</button>
+        </ActionForm>
+      </section>
       {list.length === 0 ? (
         <p className="muted">Отзывов пока нет.</p>
       ) : (
@@ -48,7 +111,13 @@ export default async function ReviewsPage() {
                   <td>{when.format(r.createdAt)}</td>
                   <td>{r.expertName}</td>
                   <td>
-                    <Link href={`${chatBase}/${r.conversationId}`}>{r.authorName}</Link>
+                    {r.conversationId ? (
+                      <Link href={`${chatBase}/${r.conversationId}`}>{r.authorName}</Link>
+                    ) : (
+                      <>
+                        {r.authorName} <span className="muted">(добавлен вручную)</span>
+                      </>
+                    )}
                   </td>
                   <td>
                     <Stars n={r.stars} />

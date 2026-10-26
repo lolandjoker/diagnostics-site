@@ -110,6 +110,7 @@ const publicColumns = {
   createdAt: experts.createdAt,
   deletedAt: experts.deletedAt,
   rating: experts.rating,
+  reviewsShown: experts.reviewsShown,
 };
 
 /** Эксперты без удалённых. */
@@ -148,7 +149,13 @@ export async function createExpert(db: Db, input: { name: string; login: string;
   if (await getExpertWithSecret(db, { login })) return { ok: false, error: "Такой логин уже есть" };
   const [e] = await db
     .insert(experts)
-    .values({ name, login, passwordHash: await hashPassword(input.password), rating: newExpertRating() })
+    .values({
+      name,
+      login,
+      passwordHash: await hashPassword(input.password),
+      rating: newExpertRating(),
+      reviewsShown: newExpertReviewsShown(),
+    })
     .returning({ id: experts.id });
   return { ok: true, id: (e as { id: number }).id };
 }
@@ -174,6 +181,21 @@ export function parseRating(raw: string): number | null {
   if (!/^\d(\.\d)?$/.test(s)) return null;
   const tenths = Math.round(Number(s) * 10);
   return tenths >= MIN_RATING && tenths <= MAX_RATING ? tenths : null;
+}
+
+/** Число отзывов на карточке нового эксперта — случайное от 200 до 500; потом меняется в админке. */
+export function newExpertReviewsShown(): number {
+  return randomInt(200, 501);
+}
+
+export const MAX_REVIEWS_SHOWN = 100_000;
+
+/** Число отзывов из формы админки; не целое или вне 0–MAX_REVIEWS_SHOWN — null. */
+export function parseReviewsShown(raw: string): number | null {
+  const s = raw.trim();
+  if (!/^\d{1,6}$/.test(s)) return null;
+  const n = Number(s);
+  return n <= MAX_REVIEWS_SHOWN ? n : null;
 }
 
 export async function setExpertPassword(db: Db, id: number, password: string): Promise<string | null> {

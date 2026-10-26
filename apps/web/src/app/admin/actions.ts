@@ -11,7 +11,7 @@ import { redirect } from "next/navigation";
 import { getDb } from "@/db";
 import { experts, variations } from "@/db/schema";
 import { requireAdmin } from "@/lib/admin-auth";
-import { deleteReview, setReviewHidden } from "@/lib/reviews";
+import { addReview, deleteReview, setReviewHidden } from "@/lib/reviews";
 import { requireStaff } from "@/lib/staff-auth";
 import {
   ADMIN_ONLINE_FOREVER,
@@ -20,6 +20,7 @@ import {
   deleteExpert,
   getExpert,
   parseRating,
+  parseReviewsShown,
   saveExpertPhoto,
   setExpertBusy,
   setExpertPassword,
@@ -156,6 +157,8 @@ export async function updateExpertAction(_prev: ActionResult, form: FormData): P
   if (!name) return fail("Укажите имя эксперта");
   const rating = parseRating(str(form, "rating"));
   if (rating === null) return fail("Рейтинг — число от 1,0 до 5,0, например 4,8");
+  const reviewsShown = parseReviewsShown(str(form, "reviews_shown"));
+  if (reviewsShown === null) return fail("Число отзывов на карточке — целое от 0 до 100 000");
 
   const password = str(form, "password");
   if (password !== "") {
@@ -175,6 +178,7 @@ export async function updateExpertAction(_prev: ActionResult, form: FormData): P
       description: str(form, "description").replace(/\r\n/g, "\n").trim(),
       sort: int(form, "sort") ?? expert.sort,
       rating,
+      reviewsShown,
       active,
       // Выключенный эксперт сразу пропадает из выбора
       ...(!active && { online: false, onlineUntil: null }),
@@ -218,4 +222,23 @@ export async function deleteReviewAction(form: FormData): Promise<void> {
   const id = int(form, "id");
   if (id !== null && form.get("confirm") === "on") await deleteReview(await getDb(), id);
   refresh();
+}
+
+/** Отзыв из админки: эксперт, имя автора, звёзды, текст, дата (ГГГГ-ММ-ДД из поля даты; время — полдень по Москве). */
+export async function addReviewAction(_prev: ActionResult, form: FormData): Promise<ActionResult> {
+  await requireStaff();
+  const expertId = int(form, "expert_id");
+  if (expertId === null) return fail("Выберите эксперта");
+  const day = str(form, "date");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return fail("Укажите дату");
+  const res = await addReview(await getDb(), {
+    expertId,
+    authorName: str(form, "author"),
+    stars: int(form, "stars") ?? 0,
+    body: str(form, "body"),
+    createdAt: new Date(`${day}T12:00:00+03:00`),
+  });
+  if (!res.ok) return fail(res.error);
+  refresh();
+  return done("Отзыв добавлен");
 }

@@ -37,7 +37,9 @@ export default async function ExpertsAdminPage() {
                     <Link href={`/admin/experts/${e.id}`}>{e.name}</Link>
                   </td>
                   <td>{e.login}</td>
-                  <td>★ {formatRating(e.rating)}</td>
+                  <td>
+                    ★ {formatRating(e.rating)} · <Link href={`/admin/reviews?expert=${e.id}`}>{e.reviewsShown} отз.</Link>
+                  </td>
                   <td>
                     <OnlineToggle expert={e} />
                   </td>
