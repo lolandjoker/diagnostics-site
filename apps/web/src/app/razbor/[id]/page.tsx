@@ -47,8 +47,9 @@ export default async function ResultPage(props: PageProps<"/razbor/[id]">) {
           </p>
         </section>
 
+        {/* Список экспертов: чата нет — «Написать», чат уже есть — «Хочу к этому эксперту» (заявка) */}
         <p className="again">
-          <Link href="/?new=1">Сделать разбор для другого человека</Link>
+          <Link href={`/razbor/${lead.id}/eksperty`}>Посмотреть всех экспертов и отзывы</Link>
         </p>
       </main>
       <Footer />
