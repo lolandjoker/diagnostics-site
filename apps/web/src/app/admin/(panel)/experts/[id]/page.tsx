@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDb } from "@/db";
-import { MIN_EXPERT_PASSWORD, expertPhotoUrls, getExpert } from "@/lib/experts";
+import { MIN_EXPERT_PASSWORD, expertPhotoUrls, formatRating, getExpert } from "@/lib/experts";
 import { ActionForm } from "../../../ActionForm";
 import { OnlineToggle } from "../../../OnlineToggle";
 import { DeleteForm } from "../../../DeleteForm";
@@ -52,6 +52,10 @@ export default async function ExpertAdminPage(props: PageProps<"/admin/experts/[
           <label className="field field--short">
             <span>Порядок</span>
             <input name="sort" type="number" defaultValue={expert.sort} />
+          </label>
+          <label className="field field--short">
+            <span>Рейтинг (1,0–5,0)</span>
+            <input name="rating" inputMode="decimal" defaultValue={formatRating(expert.rating)} required />
           </label>
           <label className="check">
             <input name="active" type="checkbox" defaultChecked={expert.active} />

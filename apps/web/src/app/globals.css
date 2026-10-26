@@ -1555,6 +1555,149 @@ td.actions {
   font-weight: 600;
 }
 
+/* --- Рейтинг и отзывы --- */
+
+.rating {
+  color: var(--gold);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.expert__rating {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 0.9375rem;
+}
+
+.chat__meta {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  min-width: 0;
+  font-size: 0.8125rem;
+}
+
+.stars {
+  color: #e0a63c;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+
+.stars__off {
+  color: rgba(127, 127, 127, 0.35);
+}
+
+.reviews {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.reviews summary {
+  color: var(--gold);
+  cursor: pointer;
+}
+
+.reviews ul {
+  display: grid;
+  gap: 12px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.review__head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  align-items: baseline;
+  font-size: 0.875rem;
+}
+
+.review p {
+  margin: 4px 0 0;
+}
+
+.review-icon {
+  display: block;
+  width: 21px;
+  height: 21px;
+}
+
+/* Окно отзыва — поверх чата */
+.review-screen {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(5, 3, 10, 0.75);
+  animation: fade-in 0.2s ease-out;
+}
+
+.review-card {
+  display: grid;
+  gap: 14px;
+  width: min(440px, 100%);
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.review-card__title {
+  font-size: 1.0625rem;
+}
+
+.review-stars {
+  display: flex;
+  gap: 6px;
+}
+
+.review-star {
+  width: 40px;
+  height: 40px;
+  padding: 2px;
+  border: 0;
+  background: none;
+  color: rgba(127, 127, 127, 0.55);
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+
+.review-star--on {
+  color: #e0a63c;
+}
+
+.review-star:hover {
+  transform: scale(1.12);
+}
+
+.review-card__note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+.review-card__actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.review-card .button {
+  padding: 10px 20px;
+}
+
+.inline-delete {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+
 /* Без анимаций для тех, кто отключил их в системе */
 @media (prefers-reduced-motion: reduce) {
   *,

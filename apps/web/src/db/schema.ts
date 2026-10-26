@@ -82,6 +82,11 @@ export const experts = pgTable("experts", {
   createdAt: createdAt(),
   /** Удалён: не входит, не виден в списках и клиентам; его переписка и подпись в старых чатах остаются. */
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  /**
+   * Рейтинг на карточке эксперта в десятых (48 = 4,8). Задаётся в админке, из отзывов не считается.
+   * Новому эксперту — случайный от 4,6 до 4,9 (lib/experts.ts).
+   */
+  rating: integer("rating").notNull().default(48),
 });
 
 export const expertPhotos = pgTable("expert_photos", {
@@ -256,6 +261,33 @@ export const messagePhotos = pgTable("message_photos", {
   data: bytea("data").notNull(),
   createdAt: createdAt(),
 });
+
+/**
+ * Отзыв клиента об эксперте: один на чат (клиент может его поправить). Виден на карточке эксперта
+ * с именем клиента из заявки; админ и эксперты могут скрыть или удалить.
+ */
+export const reviews = pgTable(
+  "reviews",
+  {
+    id: serial("id").primaryKey(),
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .unique()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    expertId: integer("expert_id")
+      .notNull()
+      .references(() => experts.id),
+    /** Имя клиента на момент отзыва — как он ввёл его в форме. */
+    authorName: text("author_name").notNull(),
+    /** Звёзды 1–5. */
+    stars: integer("stars").notNull(),
+    body: text("body").notNull().default(""),
+    hidden: boolean("hidden").notNull().default(false),
+    createdAt: createdAt(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("reviews_expert_idx").on(t.expertId, t.createdAt)],
+);
 
 export const CALL_STATUSES = ["ringing", "active", "ended", "missed", "declined"] as const;
 export type CallStatus = (typeof CALL_STATUSES)[number];
