@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { getDb } from "@/db";
-import { createLead, rememberLead, validateLead } from "@/lib/leads";
+import { birthDateToIso, createLead, rememberLead, validateLead } from "@/lib/leads";
 import { createOrder } from "@/lib/orders";
 import { pickVariation } from "@/lib/variations";
 
@@ -16,7 +16,8 @@ const str = (v: FormDataEntryValue | null) => (typeof v === "string" ? v : "");
 export async function submitLead(_prev: FormState, form: FormData): Promise<FormState> {
   const input = {
     name: str(form.get("name")),
-    birthDate: str(form.get("birthDate")),
+    // В форме — ДД.ММ.ГГГГ, в базе — ГГГГ-ММ-ДД; неразборчивое отклонит validateLead
+    birthDate: birthDateToIso(str(form.get("birthDate"))) ?? str(form.get("birthDate")),
   };
   const now = new Date();
   const error = validateLead(input, now);

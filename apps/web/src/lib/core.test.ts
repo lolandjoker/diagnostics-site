@@ -2,7 +2,8 @@ import { createTestDb } from "@/db";
 import type { Db } from "@/db";
 import { diagnosticBlocks, priceVariants, products } from "@/db/schema";
 import { buildDiagnostic, getMethod, METHODS, saveBlockTexts } from "./diagnostic";
-import { ageOn, createLead, validateLead } from "./leads";
+import { maskBirthDate } from "./date-input";
+import { ageOn, birthDateToIso, createLead, validateLead } from "./leads";
 import type { MailMessage } from "./mail";
 import { formatRub, offerForLead, offersForLead, parseRub, variantStats } from "./offers";
 import { cancelOrder, createOrder, getOrderWithProduct, markPaid } from "./orders";
@@ -117,6 +118,29 @@ describe("заявка", () => {
 
   it("принимает верные данные", () => {
     expect(validateLead(ok, NOW)).toBeNull();
+  });
+
+  it("поле даты: точки подставляются сами, лишнее отбрасывается", () => {
+    expect(maskBirthDate("1")).toBe("1");
+    expect(maskBirthDate("150")).toBe("15.0");
+    expect(maskBirthDate("15031990")).toBe("15.03.1990");
+    expect(maskBirthDate("15.03.1990")).toBe("15.03.1990");
+    expect(maskBirthDate("150319901234")).toBe("15.03.1990");
+    expect(maskBirthDate("1.5.1990")).toBe("01.05.1990");
+    expect(maskBirthDate("15.")).toBe("15");
+    expect(maskBirthDate("ab12")).toBe("12");
+  });
+
+  it("дата из формы ДД.ММ.ГГГГ → ГГГГ-ММ-ДД", () => {
+    expect(birthDateToIso("15.03.1990")).toBe("1990-03-15");
+    expect(birthDateToIso(" 1.5.1990 ")).toBe("1990-05-01");
+    expect(birthDateToIso("15/03/1990")).toBe("1990-03-15");
+    expect(birthDateToIso("1990-03-15")).toBe("1990-03-15");
+    expect(birthDateToIso("15.03.90")).toBeNull();
+    expect(birthDateToIso("15031990")).toBeNull();
+    expect(birthDateToIso("")).toBeNull();
+    // Несуществующую дату разбор пропускает — её отклоняет проверка заявки
+    expect(validateLead({ ...ok, birthDate: birthDateToIso("31.02.1990")! }, NOW)).toMatch("не существует");
   });
 
   it("отклоняет пустое имя и неверную дату", () => {

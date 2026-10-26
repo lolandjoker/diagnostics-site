@@ -19,7 +19,6 @@ export default async function HomePage(props: PageProps<"/">) {
   }
 
   const t = await getTexts(db, ["home.title", "home.subtitle", "home.button"]);
-  const maxDate = new Date().toISOString().slice(0, 10);
   return (
     <>
       <main className="page page--narrow">
@@ -36,7 +35,7 @@ export default async function HomePage(props: PageProps<"/">) {
         </svg>
         <h1>{t["home.title"]}</h1>
         {t["home.subtitle"] && <p className="lead text">{t["home.subtitle"]}</p>}
-        <LeadForm button={t["home.button"]} maxDate={maxDate} />
+        <LeadForm button={t["home.button"]} />
       </main>
       <Footer />
     </>
