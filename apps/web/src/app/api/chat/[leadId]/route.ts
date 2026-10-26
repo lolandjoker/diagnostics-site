@@ -4,7 +4,7 @@
  */
 import { getDb } from "@/db";
 import { MAX_CHAT_PHOTO_BYTES, conversationForLead, deliverDueFullTexts, messageViews, postMessage } from "@/lib/chat";
-import { getExpert, isOnline } from "@/lib/experts";
+import { expertStatus, getExpert, isOnline } from "@/lib/experts";
 import { afterParam, jsonError, messagePayload, noStore, sameOrigin } from "@/lib/http";
 import { getLead } from "@/lib/leads";
 
@@ -27,6 +27,7 @@ export async function GET(req: Request, ctx: RouteContext<"/api/chat/[leadId]">)
     {
       messages: await messageViews(db, conversation, afterParam(req), "client"),
       expertOnline: expert ? isOnline(expert, new Date()) : false,
+      expertStatus: expert ? expertStatus(expert, new Date()) : "offline",
     },
     { headers: noStore },
   );

@@ -1,7 +1,8 @@
 /**
- * Эксперты: профили, пароли, вход в панель, статус «онлайн», фото.
- * Онлайн = эксперт включил статус И открывал панель за последние ONLINE_TIMEOUT_MS:
- * забытый включённым статус гаснет сам.
+ * Эксперты: профили, пароли, вход в панель, статус, фото.
+ * Статус: «в сети» — эксперт (или админ «навсегда») включил и он держится, пока не выключат,
+ * либо админ включил на срок (onlineUntil); «занят» — в сети, писать можно, ответит позже;
+ * «не в сети» — выбрать эксперта нельзя.
  */
 import { randomBytes, scrypt as scryptCb, timingSafeEqual, createHmac } from "node:crypto";
 import { promisify } from "node:util";
@@ -15,11 +16,10 @@ export type Expert = typeof experts.$inferSelect;
 /** Эксперт без хеша пароля — то, что можно отдавать в страницы. */
 export type PublicExpert = Omit<Expert, "passwordHash">;
 
-export const ONLINE_TIMEOUT_MS = 5 * 60_000;
 export const MIN_EXPERT_PASSWORD = 10;
 export const EXPERT_SESSION_DAYS = 14;
 
-/** На сколько админ может включить «в сети»: единицы срока и пределы. */
+/** На сколько админ может включить «в сети»: единицы срока и пределы. «Навсегда» — ADMIN_ONLINE_FOREVER. */
 export const ADMIN_ONLINE_UNITS = {
   minutes: { label: "минут", ms: 60_000 },
   hours: { label: "часов", ms: 60 * 60_000 },
@@ -28,6 +28,8 @@ export const ADMIN_ONLINE_UNITS = {
 export type AdminOnlineUnit = keyof typeof ADMIN_ONLINE_UNITS;
 export const ADMIN_ONLINE_MIN_MS = 60_000;
 export const ADMIN_ONLINE_MAX_MS = 365 * 24 * 60 * 60_000;
+/** Значение единицы срока в форме админа: «в сети», пока не выключат. */
+export const ADMIN_ONLINE_FOREVER = "forever";
 
 /** Срок из формы админа («3» + «hours») в мс или null, если срок вне пределов. */
 export function adminOnlineMs(amount: string, unit: string): number | null {
@@ -36,9 +38,17 @@ export function adminOnlineMs(amount: string, unit: string): number | null {
   return ms >= ADMIN_ONLINE_MIN_MS && ms <= ADMIN_ONLINE_MAX_MS ? ms : null;
 }
 
-export function isOnline(e: Pick<Expert, "online" | "lastSeenAt" | "onlineUntil">, now: Date): boolean {
-  if (e.onlineUntil !== null && e.onlineUntil.getTime() > now.getTime()) return true;
-  return e.online && e.lastSeenAt !== null && now.getTime() - e.lastSeenAt.getTime() < ONLINE_TIMEOUT_MS;
+/** В сети (в том числе «занят») — клиент может выбрать эксперта и написать ему. */
+export function isOnline(e: Pick<Expert, "online" | "onlineUntil">, now: Date): boolean {
+  return e.online || (e.onlineUntil !== null && e.onlineUntil.getTime() > now.getTime());
+}
+
+export const EXPERT_STATUSES = ["online", "busy", "offline"] as const;
+export type ExpertStatus = (typeof EXPERT_STATUSES)[number];
+
+export function expertStatus(e: Pick<Expert, "online" | "onlineUntil" | "busy">, now: Date): ExpertStatus {
+  if (!isOnline(e, now)) return "offline";
+  return e.busy ? "busy" : "online";
 }
 
 // --- Пароли: scrypt со случайной солью ---
@@ -94,6 +104,7 @@ const publicColumns = {
   online: experts.online,
   lastSeenAt: experts.lastSeenAt,
   onlineUntil: experts.onlineUntil,
+  busy: experts.busy,
   active: experts.active,
   sort: experts.sort,
   createdAt: experts.createdAt,
@@ -146,20 +157,38 @@ export async function touchExpert(db: Db, id: number, now: Date): Promise<void> 
   await db.update(experts).set({ lastSeenAt: now }).where(eq(experts.id, id));
 }
 
-/** Эксперт сам включает или выключает «в сети». Выключение снимает и включение админом. */
-export async function setExpertOnline(db: Db, id: number, online: boolean, now: Date): Promise<void> {
+/**
+ * Статус, который выбрал эксперт в панели (или админ — «навсегда» и «выключить»).
+ * «В сети» и «занят» держатся, пока их не сменят; «не в сети» снимает и включение админом на срок.
+ */
+export async function setExpertStatus(db: Db, id: number, status: ExpertStatus, now: Date): Promise<void> {
   await db
     .update(experts)
-    .set({ online, lastSeenAt: now, ...(!online && { onlineUntil: null }) })
+    .set(
+      status === "offline"
+        ? { online: false, busy: false, onlineUntil: null, lastSeenAt: now }
+        : { online: true, busy: status === "busy", lastSeenAt: now },
+    )
     .where(eq(experts.id, id));
+}
+
+/** Включить или выключить «в сети» (вход и выход из панели, тесты). */
+export function setExpertOnline(db: Db, id: number, online: boolean, now: Date): Promise<void> {
+  return setExpertStatus(db, id, online ? "online" : "offline", now);
 }
 
 /** Админ: «в сети» на forMs или выключить совсем (forMs = null). */
 export async function setOnlineByAdmin(db: Db, id: number, forMs: number | null, now: Date): Promise<void> {
+  if (forMs === null) return setExpertStatus(db, id, "offline", now);
   await db
     .update(experts)
-    .set(forMs !== null ? { onlineUntil: new Date(now.getTime() + forMs) } : { online: false, onlineUntil: null })
+    .set({ onlineUntil: new Date(now.getTime() + forMs) })
     .where(eq(experts.id, id));
+}
+
+/** Админ отмечает «занят» / «свободен», не меняя, как и на сколько эксперт в сети. */
+export async function setExpertBusy(db: Db, id: number, busy: boolean): Promise<void> {
+  await db.update(experts).set({ busy }).where(eq(experts.id, id));
 }
 
 // --- Фото: JPEG, PNG или WebP до 2 МБ; тип определяется по содержимому, а не по имени файла ---

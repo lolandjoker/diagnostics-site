@@ -1,14 +1,17 @@
-import { count } from "drizzle-orm";
+import { count, countDistinct, eq, sql } from "drizzle-orm";
 import { getDb } from "@/db";
-import { leads } from "@/db/schema";
-import { dashboardTotals, formatRub, variantStats } from "@/lib/offers";
+import { calls, conversations, leads, messages } from "@/db/schema";
 
 export default async function DashboardPage() {
   const db = await getDb();
-  const [totals, stats, [leadRow]] = await Promise.all([
-    dashboardTotals(db),
-    variantStats(db),
+  const [[leadRow], [chatRow], [repliedRow], [callRow]] = await Promise.all([
     db.select({ n: count() }).from(leads),
+    db.select({ n: count() }).from(conversations),
+    db.select({ n: countDistinct(messages.conversationId) }).from(messages).where(eq(messages.author, "client")),
+    db
+      .select({ n: count() })
+      .from(calls)
+      .where(sql`${calls.answeredAt} is not null`),
   ]);
 
   return (
@@ -19,56 +22,16 @@ export default async function DashboardPage() {
           <b>{leadRow?.n ?? 0}</b> заявок на разбор
         </div>
         <div>
-          <b>{totals.pending}</b> заказов ждут оплаты
+          <b>{chatRow?.n ?? 0}</b> перешли в чат
         </div>
         <div>
-          <b>{totals.paid}</b> оплачено
+          <b>{repliedRow?.n ?? 0}</b> написали в чат
         </div>
         <div>
-          <b>{formatRub(totals.revenue)}</b> выручка
+          <b>{callRow?.n ?? 0}</b> состоявшихся звонков
         </div>
       </div>
-
-      <h2>Варианты цен</h2>
-      <p className="muted">
-        Показы — скольким людям досталась эта цена. Конверсия — доля оплат от показов. Сравнивать варианты стоит после
-        хотя бы нескольких сотен показов каждого.
-      </p>
-      {stats.length === 0 ? (
-        <p className="muted">Продуктов пока нет.</p>
-      ) : (
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Продукт</th>
-                <th>Вариант</th>
-                <th>Цена</th>
-                <th>Показы</th>
-                <th>Оплаты</th>
-                <th>Конверсия</th>
-                <th>Выручка</th>
-              </tr>
-            </thead>
-            <tbody>
-              {stats.map((s) => (
-                <tr key={s.variantId} className={s.active ? "" : "muted"}>
-                  <td>{s.productTitle}</td>
-                  <td>
-                    {s.label || `№ ${s.variantId}`}
-                    {!s.active && " (выключен)"}
-                  </td>
-                  <td>{formatRub(s.amountKopecks)}</td>
-                  <td>{s.shown}</td>
-                  <td>{s.paid}</td>
-                  <td>{(s.conversion * 100).toFixed(1)}%</td>
-                  <td>{formatRub(s.revenueKopecks)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <p className="muted">Воронка по каждому варианту диагностики — в разделе «Варианты диагностики».</p>
     </>
   );
 }

@@ -7,11 +7,10 @@
  */
 import { and, asc, desc, eq, gt, isNull, lte, sql } from "drizzle-orm";
 import type { Db } from "@/db";
-import { conversations, experts, leads, messagePhotos, messages, products } from "@/db/schema";
+import { conversations, experts, leads, messagePhotos, messages } from "@/db/schema";
 import type { MessageAuthor } from "@/db/schema";
-import { detectImageMime, expertPhotoUrls, getExpert, isOnline, listExperts } from "./experts";
+import { detectImageMime, expertPhotoUrls, expertStatus, getExpert, isOnline, listExperts } from "./experts";
 import type { Lead } from "./leads";
-import { formatRub, offerForLead } from "./offers";
 import { fillTemplate, getTexts } from "./texts";
 import { variationFor } from "./variations";
 
@@ -38,7 +37,7 @@ export async function getConversation(db: Db, id: string): Promise<Conversation 
 /** Эксперты, которых может выбрать человек: онлайн; если онлайн никого — никого. */
 export async function selectableExperts(db: Db, now: Date) {
   const all = (await listExperts(db)).filter((e) => e.active);
-  return all.map((e) => ({ ...e, isOnline: isOnline(e, now) }));
+  return all.map((e) => ({ ...e, isOnline: isOnline(e, now), status: expertStatus(e, now) }));
 }
 
 export type StartResult = { ok: true; conversation: Conversation } | { ok: false; error: string };
@@ -99,13 +98,13 @@ export async function deliverDueFullTexts(db: Db, now: Date, conversationId?: st
   }
 }
 
-export type PostInput = { author: MessageAuthor; body?: string; expertId?: number; productId?: number; photo?: Buffer };
+export type PostInput = { author: MessageAuthor; body?: string; expertId?: number; photo?: Buffer };
 export type PostResult = { ok: true; id: number } | { ok: false; error: string };
 
 export async function postMessage(db: Db, conversationId: string, input: PostInput): Promise<PostResult> {
   const body = (input.body ?? "").replace(/\r\n/g, "\n").trim();
   const photo = input.photo;
-  if (input.productId === undefined && photo === undefined && body === "") return { ok: false, error: "Пустое сообщение" };
+  if (photo === undefined && body === "") return { ok: false, error: "Пустое сообщение" };
   if (body.length > MAX_MESSAGE_LENGTH) return { ok: false, error: `Сообщение длиннее ${MAX_MESSAGE_LENGTH} символов` };
   const photoMime = photo === undefined ? null : detectImageMime(photo);
   if (photo !== undefined) {
@@ -136,7 +135,6 @@ export async function postMessage(db: Db, conversationId: string, input: PostInp
         author: input.author,
         body,
         expertId: input.expertId ?? null,
-        productId: input.productId ?? null,
       })
       .returning({ id: messages.id });
     const messageId = (m as { id: number }).id;
@@ -172,8 +170,6 @@ export interface MessageView {
   /** Адрес приложенного фото. */
   photo?: string;
   createdAt: string;
-  /** Предложение продукта: что показать и куда ведёт «Купить». null — продукт уже недоступен. */
-  offer?: { title: string; description: string; price: string; url: string } | null;
 }
 
 /**
@@ -222,21 +218,11 @@ export async function messageViews(
       authorName,
       expertId,
       avatar: author === "expert" && expertId !== null ? (avatars.get(expertId) ?? null) : null,
-      body: m.body,
+      // Продукты убраны с сайта; старые предложения продукта в переписке — пометкой
+      body: m.productId !== null && m.body === "" ? "Предложение продукта (больше не действует)" : m.body,
       createdAt: m.createdAt.toISOString(),
     };
     if (photoId !== null) view.photo = `/api/chat/${conversation.leadId}/photo/${m.id}`;
-    if (m.productId !== null) {
-      const offer = await offerForLead(db, conversation.leadId, m.productId);
-      view.offer = offer
-        ? {
-            title: offer.product.title,
-            description: offer.product.description,
-            price: formatRub(offer.variant.amountKopecks),
-            url: `/razbor/${conversation.leadId}/zakaz/${offer.product.id}`,
-          }
-        : null;
-    }
     out.push(view);
   }
   return out;
@@ -301,13 +287,4 @@ export async function conversationHeader(db: Db, conversation: Conversation) {
     .innerJoin(experts, eq(experts.id, conversations.expertId))
     .where(eq(conversations.id, conversation.id));
   return row ?? null;
-}
-
-/** Продукты, которые эксперт может предложить в чате: все включённые. */
-export function offerableProducts(db: Db) {
-  return db
-    .select({ id: products.id, title: products.title })
-    .from(products)
-    .where(eq(products.active, true))
-    .orderBy(asc(products.sort), asc(products.id));
 }

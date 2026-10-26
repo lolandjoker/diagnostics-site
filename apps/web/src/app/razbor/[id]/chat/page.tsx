@@ -19,7 +19,7 @@ export default async function ClientChatPage(props: PageProps<"/razbor/[id]/chat
   const [expert, photos, t] = await Promise.all([
     getExpert(db, conversation.expertId),
     expertPhotoUrls(db),
-    getTexts(db, ["chat.title", "chat.placeholder", "chat.send", "result.buy_button"]),
+    getTexts(db, ["chat.title", "chat.placeholder", "chat.send", "experts.busy"]),
   ]);
 
   const expertName = expert?.name ?? "Эксперт";
@@ -32,8 +32,14 @@ export default async function ClientChatPage(props: PageProps<"/razbor/[id]/chat
       <ChatThread
         url={`/api/chat/${lead.id}`}
         ownAuthors={["client"]}
-        labels={{ placeholder: t["chat.placeholder"], send: t["chat.send"], buy: t["result.buy_button"] }}
-        peer={{ name: expertName, photo: expertPhoto, backHref: `/razbor/${lead.id}`, backLabel: "К разбору" }}
+        labels={{ placeholder: t["chat.placeholder"], send: t["chat.send"] }}
+        peer={{
+          name: expertName,
+          photo: expertPhoto,
+          busyLabel: t["experts.busy"],
+          backHref: `/razbor/${lead.id}`,
+          backLabel: "К разбору",
+        }}
         call={
           <CallPanel
             url={`/api/chat/${lead.id}/call`}

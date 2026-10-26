@@ -21,10 +21,11 @@ export default async function ExpertsPage(props: PageProps<"/razbor/[id]/ekspert
   const [list, photos, t] = await Promise.all([
     selectableExperts(db, new Date()),
     expertPhotoUrls(db),
-    getTexts(db, ["experts.title", "experts.none_online", "experts.choose"]),
+    getTexts(db, ["experts.title", "experts.none_online", "experts.choose", "experts.busy"]),
   ]);
-  // Сначала те, кто в сети
-  const sorted = [...list.filter((e) => e.isOnline), ...list.filter((e) => !e.isOnline)];
+  // Сначала свободные, потом занятые, в конце — не в сети
+  const order = { online: 0, busy: 1, offline: 2 } as const;
+  const sorted = [...list].sort((a, b) => order[a.status] - order[b.status]);
   const anyOnline = sorted.some((e) => e.isOnline);
 
   return (
@@ -43,11 +44,11 @@ export default async function ExpertsPage(props: PageProps<"/razbor/[id]/ekspert
             return (
               <article key={e.id} className={`card expert ${e.isOnline ? "" : "expert--offline"}`}>
                 <div className="expert__head">
-                  <Avatar name={e.name} photo={photo} size={72} online={e.isOnline} />
+                  <Avatar name={e.name} photo={photo} size={72} online={e.isOnline} busy={e.status === "busy"} />
                   <div>
                     <h2>{e.name}</h2>
-                    <span className={e.isOnline ? "status status--online" : "status"}>
-                      {e.isOnline ? "в сети" : "не в сети"}
+                    <span className={`status status--${e.status}`}>
+                      {e.status === "online" ? "в сети" : e.status === "busy" ? t["experts.busy"] : "не в сети"}
                     </span>
                   </div>
                 </div>

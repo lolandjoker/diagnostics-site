@@ -4,18 +4,13 @@ const URL_ = "http://localhost/api/chat/x";
 const LIMIT = 1024 * 1024;
 
 describe("тело отправки в чат", () => {
-  it("JSON: текст и предложение продукта", async () => {
+  it("JSON: текст; лишние поля (старое предложение продукта) не берутся", async () => {
     const req = new Request(URL_, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ body: "привет", productId: 3 }),
     });
-    expect(await messagePayload(req, LIMIT)).toEqual({ body: "привет", productId: 3 });
-  });
-
-  it("JSON: productId не число — не берётся", async () => {
-    const req = new Request(URL_, { method: "POST", body: JSON.stringify({ body: "а", productId: "3" }) });
-    expect(await messagePayload(req, LIMIT)).toEqual({ body: "а" });
+    expect(await messagePayload(req, LIMIT)).toEqual({ body: "привет" });
   });
 
   it("form-data: подпись и фото", async () => {

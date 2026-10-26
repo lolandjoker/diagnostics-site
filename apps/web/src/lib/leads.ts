@@ -2,11 +2,17 @@
 import { eq } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { assertValidBirthDate } from "@diag/engine";
+import type { BirthDate } from "@diag/engine";
 import type { Db } from "@/db";
 import { leads } from "@/db/schema";
-import { parseIsoDate } from "./diagnostic";
 
 export type Lead = typeof leads.$inferSelect;
+
+/** Дата из базы ('1990-03-15') в BirthDate. */
+export function parseIsoDate(iso: string): BirthDate {
+  const [year, month, day] = iso.split("-").map(Number);
+  return { year: year ?? NaN, month: month ?? NaN, day: day ?? NaN };
+}
 
 export const MIN_AGE = 18;
 export const MAX_NAME_LENGTH = 60;

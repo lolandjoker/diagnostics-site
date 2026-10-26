@@ -20,12 +20,13 @@ const PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
 export interface ChatLabels {
   placeholder: string;
   send: string;
-  buy: string;
 }
 
 /** Собеседник в шапке чата (для человека — эксперт). */
 export interface ChatPeer {
   name: string;
+  /** Подпись статуса «занят» (из «Текстов сайта»). */
+  busyLabel: string;
   photo?: string | null;
   backHref: string;
   backLabel: string;
@@ -97,7 +98,6 @@ export function ChatThread({
   ownAuthors,
   ownExpertId,
   labels,
-  products,
   peer,
   call,
 }: {
@@ -108,15 +108,13 @@ export function ChatThread({
   /** Для эксперта: справа — только его собственные сообщения, а не всех экспертов. */
   ownExpertId?: number;
   labels: ChatLabels;
-  /** Для эксперта и админа: продукты, которые можно предложить. */
-  products?: { id: number; title: string }[];
-  /** Шапка чата с собеседником; статус «в сети» берётся из ответа сервера (expertOnline). */
+  /** Шапка чата с собеседником; статус берётся из ответа сервера (expertStatus). */
   peer?: ChatPeer;
   /** Звонок (CallPanel): с шапкой — справа в ней, без шапки — полосой над перепиской. */
   call?: ReactNode;
 }) {
   const [items, setItems] = useState<MessageView[]>([]);
-  const [online, setOnline] = useState<boolean | undefined>(undefined);
+  const [status, setStatus] = useState<"online" | "busy" | "offline" | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [text, setText] = useState("");
@@ -131,8 +129,8 @@ export function ChatThread({
     try {
       const res = await fetch(`${url}?after=${lastId.current}`, { cache: "no-store" });
       if (!res.ok) return;
-      const data = (await res.json()) as { messages: MessageView[]; expertOnline?: boolean };
-      if (typeof data.expertOnline === "boolean") setOnline(data.expertOnline);
+      const data = (await res.json()) as { messages: MessageView[]; expertStatus?: "online" | "busy" | "offline" };
+      if (data.expertStatus) setStatus(data.expertStatus);
       if (data.messages.length > 0) {
         lastId.current = data.messages.at(-1)?.id ?? lastId.current;
         setItems((prev) => {
@@ -178,7 +176,7 @@ export function ChatThread({
     el.style.height = `${el.scrollHeight}px`;
   }, [text]);
 
-  async function send(payload: { body?: string; productId?: number; photo?: File }) {
+  async function send(payload: { body?: string; photo?: File }) {
     setSending(true);
     setError(null);
     try {
@@ -192,7 +190,7 @@ export function ChatThread({
         init = {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ body: payload.body, productId: payload.productId }),
+          body: JSON.stringify({ body: payload.body }),
         };
       }
       const res = await fetch(url, init);
@@ -242,11 +240,16 @@ export function ChatThread({
               <path d="M15 5l-7 7 7 7" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </Link>
-          <Avatar name={peer.name} photo={peer.photo} size={44} {...(online !== undefined && { online })} />
+          <Avatar
+            name={peer.name}
+            photo={peer.photo}
+            size={44}
+            {...(status !== undefined && { online: status !== "offline", busy: status === "busy" })}
+          />
           <div className="chat__peer">
             <b>{peer.name}</b>
-            <span className={online ? "status status--online" : "status"}>
-              {online === undefined ? " " : online ? "в сети" : "не в сети"}
+            <span className={`status status--${status ?? "offline"}`}>
+              {status === undefined ? " " : status === "online" ? "в сети" : status === "busy" ? peer.busyLabel : "не в сети"}
             </span>
           </div>
           {call && <div className="chat__head-actions">{call}</div>}
@@ -297,21 +300,6 @@ export function ChatThread({
                       </button>
                     )}
                     {m.body && <div className="text">{m.body}</div>}
-                    {m.offer !== undefined &&
-                      (m.offer ? (
-                        <div className="msg__offer">
-                          <b>{m.offer.title}</b>
-                          {m.offer.description && <p className="text">{m.offer.description}</p>}
-                          <div className="offer__buy">
-                            <span className="price">{m.offer.price}</span>
-                            <Link className="button" href={m.offer.url}>
-                              {labels.buy}
-                            </Link>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="muted">Предложение больше не действует</div>
-                      ))}
                     <time className="msg__time" dateTime={m.createdAt}>
                       {time(m.createdAt)}
                     </time>
@@ -327,17 +315,6 @@ export function ChatThread({
         <p className="form__error chat__error" role="alert">
           {error}
         </p>
-      )}
-
-      {products && products.length > 0 && (
-        <div className="chat__offer">
-          <span className="muted">Предложить продукт:</span>
-          {products.map((p) => (
-            <button key={p.id} type="button" className="chip" disabled={sending} onClick={() => void send({ productId: p.id })}>
-              {p.title}
-            </button>
-          ))}
-        </div>
       )}
 
       <form className="chat__form" onSubmit={onSubmit}>

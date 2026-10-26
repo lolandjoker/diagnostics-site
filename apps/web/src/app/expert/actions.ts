@@ -8,11 +8,14 @@ import { loginBlocked, recordLoginFail, resetLoginFails } from "@/lib/admin-auth
 import { EXPERT_COOKIE, EXPERT_COOKIE_PATH, requireExpert, sessionSecret } from "@/lib/expert-auth";
 import {
   EXPERT_SESSION_DAYS,
+  EXPERT_STATUSES,
   createExpertToken,
   getExpertWithSecret,
   setExpertOnline,
+  setExpertStatus,
   verifyPassword,
 } from "@/lib/experts";
+import type { ExpertStatus } from "@/lib/experts";
 import type { ActionResult } from "../admin/ActionForm";
 
 export async function expertLogin(_prev: ActionResult, form: FormData): Promise<ActionResult> {
@@ -49,8 +52,12 @@ export async function expertLogout(): Promise<void> {
   redirect("/expert/login");
 }
 
-export async function toggleOnline(form: FormData): Promise<void> {
+/** Эксперт сам выбирает статус: в сети, занят, не в сети. Держится, пока не сменит. */
+export async function setMyStatus(form: FormData): Promise<void> {
   const expert = await requireExpert();
-  await setExpertOnline(await getDb(), expert.id, form.get("online") === "true", new Date());
+  const status = String(form.get("status") ?? "");
+  if ((EXPERT_STATUSES as readonly string[]).includes(status)) {
+    await setExpertStatus(await getDb(), expert.id, status as ExpertStatus, new Date());
+  }
   revalidatePath("/expert", "layout");
 }

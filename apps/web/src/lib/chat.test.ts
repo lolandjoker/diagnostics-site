@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { createTestDb } from "@/db";
 import type { Db } from "@/db";
-import { experts, priceVariants, products, variations } from "@/db/schema";
+import { experts, variations } from "@/db/schema";
 import {
   CLIENT_MESSAGES_PER_MINUTE,
   FULL_TEXT_DELAY_MS,
@@ -15,23 +15,25 @@ import {
   startConversation,
 } from "./chat";
 import {
-  ONLINE_TIMEOUT_MS,
   adminOnlineMs,
   createExpert,
   createExpertToken,
   detectImageMime,
   getExpert,
   getExpertWithSecret,
+  expertStatus,
   isOnline,
   saveExpertPhoto,
+  setExpertBusy,
   setExpertOnline,
+  setExpertStatus,
   setExpertPassword,
   setOnlineByAdmin,
   verifyExpertToken,
   verifyPassword,
 } from "./experts";
 import { createLead } from "./leads";
-import { createOrder, markPaid } from "./orders";
+import { answerCall, startCall } from "./calls";
 import {
   NO_METHOD,
   pickVariation,
@@ -138,12 +140,33 @@ describe("эксперты", () => {
     expect(verifyExpertToken(token, changed, Date.now(), SECRET)).toBe(false);
   });
 
-  it("онлайн гаснет, если эксперт давно не заходил", () => {
-    const now = new Date();
-    const base = { onlineUntil: null };
-    expect(isOnline({ ...base, online: true, lastSeenAt: new Date(now.getTime() - 60_000) }, now)).toBe(true);
-    expect(isOnline({ ...base, online: true, lastSeenAt: new Date(now.getTime() - ONLINE_TIMEOUT_MS - 1) }, now)).toBe(false);
-    expect(isOnline({ ...base, online: false, lastSeenAt: now }, now)).toBe(false);
+  it("«в сети» держится, пока не выключат — даже если эксперт давно не открывал панель", async () => {
+    const id = await onlineExpert();
+    const muchLater = new Date(Date.now() + 30 * 24 * 60 * 60_000);
+    expect(expertStatus((await getExpert(db, id))!, muchLater)).toBe("online");
+    await setExpertStatus(db, id, "offline", new Date());
+    expect(expertStatus((await getExpert(db, id))!, new Date())).toBe("offline");
+  });
+
+  it("«занят»: в сети, клиент может выбрать и написать; админ снимает «занят», не выключая", async () => {
+    const id = await onlineExpert();
+    await setExpertStatus(db, id, "busy", new Date());
+    const busy = (await getExpert(db, id))!;
+    expect(expertStatus(busy, new Date())).toBe("busy");
+    expect(isOnline(busy, new Date())).toBe(true);
+
+    const l = await lead(null);
+    const res = await startConversation(db, l, id, new Date());
+    if (!res.ok) throw new Error(res.error);
+    expect(await postMessage(db, res.conversation.id, { author: "client", body: "Здравствуйте" })).toMatchObject({ ok: true });
+
+    await setExpertBusy(db, id, false);
+    expect(expertStatus((await getExpert(db, id))!, new Date())).toBe("online");
+    // «Не в сети» снимает и «занят»: включили снова — сразу свободен
+    await setExpertStatus(db, id, "busy", new Date());
+    await setExpertStatus(db, id, "offline", new Date());
+    await setExpertStatus(db, id, "online", new Date());
+    expect(expertStatus((await getExpert(db, id))!, new Date())).toBe("online");
   });
 
   it("срок «в сети» от админа: минуты, часы, дни в пределах от минуты до года", () => {
@@ -219,36 +242,28 @@ describe("чат", () => {
     expect(again.ok && again.conversation.id).toBe(res.conversation.id);
   });
 
-  it("подписи сообщений: клиент, эксперт, админ, предложение продукта", async () => {
+  it("подписи сообщений: клиент, эксперт, админ", async () => {
     const expertId = await onlineExpert("Мария", "maria");
     const l = await lead(null);
     const res = await startConversation(db, l, expertId, new Date());
     if (!res.ok) throw new Error(res.error);
     const c = res.conversation;
-    const [p] = await db.insert(products).values({ title: "Курс", active: true, showOnResult: false }).returning();
-    await db.insert(priceVariants).values({ productId: p!.id, amountKopecks: 295000 });
 
     await postMessage(db, c.id, { author: "client", body: "Здравствуйте" });
     await postMessage(db, c.id, { author: "expert", expertId, body: "Добрый день" });
     await postMessage(db, c.id, { author: "admin", body: "Эксперт вышел, скоро вернётся" });
-    await postMessage(db, c.id, { author: "expert", expertId, productId: p!.id });
+    await postMessage(db, c.id, { author: "expert", expertId, body: "Чем могу помочь?" });
 
     const client = await messageViews(db, c, 0, "client");
     // Сообщение админа клиент видит от эксперта чата
     expect(client.map((m) => m.authorName)).toEqual(["Вы", "Мария", "Мария", "Мария"]);
     expect(client[2]).toMatchObject({ author: "expert", expertId });
     expect(JSON.stringify(client)).not.toContain("Администратор");
-    expect(client[3]?.offer).toMatchObject({ title: "Курс", url: `/razbor/${l.id}/zakaz/${p!.id}` });
-    expect(client[3]?.offer?.price).toMatch("2");
 
     const staff = await messageViews(db, c, 0, "staff");
     expect(staff[0]?.authorName).toBe("Анна");
     expect(staff[2]).toMatchObject({ author: "admin", authorName: "Администратор", expertId: null });
     expect(await messageViews(db, c, client[1]!.id, "client")).toHaveLength(2);
-
-    // Продукт, предложенный в чате, можно купить, даже если под разбором его нет
-    const order = await createOrder(db, { leadId: l.id, productId: p!.id, email: "a@b.ru" });
-    expect(order.ok).toBe(true);
   });
 
   it("другой эксперт отвечает в чужом чате — клиент видит его настоящее имя", async () => {
@@ -287,12 +302,10 @@ describe("чат", () => {
     expect(await postMessage(db, id, { author: "expert", expertId, body: "эксперту можно" })).toMatchObject({ ok: true });
   });
 
-  it("воронка по вариантам: заявка → чат → ответ → оплата", async () => {
+  it("воронка по вариантам: заявка → чат → ответ → звонок", async () => {
     const a = await newVariation("А");
     const b = await newVariation("Б");
     const expertId = await onlineExpert();
-    const [p] = await db.insert(products).values({ title: "Курс", active: true }).returning();
-    await db.insert(priceVariants).values({ productId: p!.id, amountKopecks: 100000 });
 
     const l1 = await lead(a.id);
     await lead(a.id);
@@ -300,13 +313,13 @@ describe("чат", () => {
     const res = await startConversation(db, l1, expertId, new Date());
     if (!res.ok) throw new Error(res.error);
     await postMessage(db, res.conversation.id, { author: "client", body: "хочу" });
-    const order = await createOrder(db, { leadId: l1.id, productId: p!.id, email: "a@b.ru" });
-    if (!order.ok) throw new Error(order.error);
-    await markPaid(db, order.order.id, null);
+    const call = await startCall(db, res.conversation, { caller: "expert", expertId }, new Date());
+    if (!call.ok) throw new Error(call.error);
+    await answerCall(db, res.conversation, call.call.id, true, new Date());
 
     const stats = await variationStats(db);
-    expect(stats.find((s) => s.variationId === a.id)).toMatchObject({ leads: 2, chats: 1, replied: 1, paid: 1, revenueKopecks: 100000 });
-    expect(stats.find((s) => s.variationId === b.id)).toMatchObject({ leads: 1, chats: 0, replied: 0, paid: 0 });
+    expect(stats.find((s) => s.variationId === a.id)).toMatchObject({ leads: 2, chats: 1, replied: 1, called: 1 });
+    expect(stats.find((s) => s.variationId === b.id)).toMatchObject({ leads: 1, chats: 0, replied: 0, called: 0 });
   });
 
   it("фото в чате: хранится с сообщением и открывается только из чата этой заявки", async () => {
