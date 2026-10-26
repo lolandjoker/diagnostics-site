@@ -1,14 +1,18 @@
 import { notFound, redirect } from "next/navigation";
 import { getDb } from "@/db";
 import { conversationForLead, selectableExperts } from "@/lib/chat";
-import { expertPhotoUrls } from "@/lib/experts";
+import { expertPhotoUrls, formatRating } from "@/lib/experts";
 import { getLead } from "@/lib/leads";
+import { expertReviews, reviewsCountLabel } from "@/lib/reviews";
 import { getTexts } from "@/lib/texts";
 import { Avatar } from "../../../Avatar";
 import { Footer } from "../../../Footer";
+import { Stars } from "../../../Stars";
 import { chooseExpert } from "./actions";
 
 export const dynamic = "force-dynamic";
+
+const date = new Intl.DateTimeFormat("ru-RU", { timeZone: "Europe/Moscow", day: "numeric", month: "long", year: "numeric" });
 
 export default async function ExpertsPage(props: PageProps<"/razbor/[id]/eksperty">) {
   const { id } = await props.params;
@@ -27,6 +31,10 @@ export default async function ExpertsPage(props: PageProps<"/razbor/[id]/ekspert
   const order = { online: 0, busy: 1, offline: 2 } as const;
   const sorted = [...list].sort((a, b) => order[a.status] - order[b.status]);
   const anyOnline = sorted.some((e) => e.isOnline);
+  const reviews = await expertReviews(
+    db,
+    sorted.map((e) => e.id),
+  );
 
   return (
     <>
@@ -41,18 +49,42 @@ export default async function ExpertsPage(props: PageProps<"/razbor/[id]/ekspert
         <div className="experts">
           {sorted.map((e) => {
             const photo = photos.get(e.id);
+            const r = reviews.get(e.id);
             return (
               <article key={e.id} className={`card expert ${e.isOnline ? "" : "expert--offline"}`}>
                 <div className="expert__head">
                   <Avatar name={e.name} photo={photo} size={72} online={e.isOnline} busy={e.status === "busy"} />
                   <div>
                     <h2>{e.name}</h2>
+                    <div className="expert__rating">
+                      <span className="rating">★ {formatRating(e.rating)}</span>
+                      {r && <span className="muted">{reviewsCountLabel(r.count)}</span>}
+                    </div>
                     <span className={`status status--${e.status}`}>
                       {e.status === "online" ? "в сети" : e.status === "busy" ? t["experts.busy"] : "не в сети"}
                     </span>
                   </div>
                 </div>
                 {e.description && <p className="text">{e.description}</p>}
+                {r && (
+                  <details className="reviews">
+                    <summary>Отзывы ({r.count})</summary>
+                    <ul>
+                      {r.latest.map((rev) => (
+                        <li key={rev.id} className="review">
+                          <div className="review__head">
+                            <b>{rev.authorName}</b>
+                            <Stars n={rev.stars} />
+                            <time className="muted" dateTime={rev.createdAt}>
+                              {date.format(new Date(rev.createdAt))}
+                            </time>
+                          </div>
+                          {rev.body && <p className="text">{rev.body}</p>}
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
                 {e.isOnline && (
                   <form action={chooseExpert} className="card__action">
                     <input type="hidden" name="leadId" value={lead.id} />

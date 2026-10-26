@@ -27,6 +27,8 @@ export interface ChatPeer {
   name: string;
   /** Подпись статуса «занят» (из «Текстов сайта»). */
   busyLabel: string;
+  /** Рейтинг эксперта, «4,8». */
+  rating?: string;
   photo?: string | null;
   backHref: string;
   backLabel: string;
@@ -248,8 +250,11 @@ export function ChatThread({
           />
           <div className="chat__peer">
             <b>{peer.name}</b>
-            <span className={`status status--${status ?? "offline"}`}>
-              {status === undefined ? " " : status === "online" ? "в сети" : status === "busy" ? peer.busyLabel : "не в сети"}
+            <span className="chat__meta">
+              {peer.rating && <span className="rating">★ {peer.rating}</span>}
+              <span className={`status status--${status ?? "offline"}`}>
+                {status === undefined ? " " : status === "online" ? "в сети" : status === "busy" ? peer.busyLabel : "не в сети"}
+              </span>
             </span>
           </div>
           {call && <div className="chat__head-actions">{call}</div>}

@@ -1,11 +1,12 @@
 import { notFound, redirect } from "next/navigation";
 import { getDb } from "@/db";
 import { conversationForLead } from "@/lib/chat";
-import { expertPhotoUrls, getExpert } from "@/lib/experts";
+import { expertPhotoUrls, formatRating, getExpert } from "@/lib/experts";
 import { getLead } from "@/lib/leads";
 import { fillTemplate, getTexts } from "@/lib/texts";
 import { CallPanel } from "../../../CallPanel";
 import { ChatThread } from "../../../ChatThread";
+import { ReviewButton } from "../../../ReviewButton";
 
 export const dynamic = "force-dynamic";
 
@@ -37,16 +38,20 @@ export default async function ClientChatPage(props: PageProps<"/razbor/[id]/chat
           name: expertName,
           photo: expertPhoto,
           busyLabel: t["experts.busy"],
+          ...(expert && { rating: formatRating(expert.rating) }),
           backHref: `/razbor/${lead.id}`,
           backLabel: "К разбору",
         }}
         call={
-          <CallPanel
-            url={`/api/chat/${lead.id}/call`}
-            role="client"
-            peer={{ name: expertName, photo: expertPhoto }}
-            initialRequested={conversation.callRequestedAt !== null}
-          />
+          <>
+            <ReviewButton url={`/api/chat/${lead.id}/review`} expertName={expertName} clientName={lead.name} />
+            <CallPanel
+              url={`/api/chat/${lead.id}/call`}
+              role="client"
+              peer={{ name: expertName, photo: expertPhoto }}
+              initialRequested={conversation.callRequestedAt !== null}
+            />
+          </>
         }
       />
     </main>

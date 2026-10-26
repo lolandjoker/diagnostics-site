@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getDb } from "@/db";
-import { MIN_EXPERT_PASSWORD, listExperts } from "@/lib/experts";
+import { MIN_EXPERT_PASSWORD, formatRating, listExperts } from "@/lib/experts";
 import { ActionForm } from "../../ActionForm";
 import { OnlineToggle } from "../../OnlineToggle";
 import { createExpertAction } from "../../actions";
@@ -25,6 +25,7 @@ export default async function ExpertsAdminPage() {
                 <th>Порядок</th>
                 <th>Имя</th>
                 <th>Логин</th>
+                <th>Рейтинг</th>
                 <th>Сейчас</th>
               </tr>
             </thead>
@@ -36,6 +37,7 @@ export default async function ExpertsAdminPage() {
                     <Link href={`/admin/experts/${e.id}`}>{e.name}</Link>
                   </td>
                   <td>{e.login}</td>
+                  <td>★ {formatRating(e.rating)}</td>
                   <td>
                     <OnlineToggle expert={e} />
                   </td>

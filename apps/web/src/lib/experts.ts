@@ -4,7 +4,7 @@
  * либо админ включил на срок (onlineUntil); «занят» — в сети, писать можно, ответит позже;
  * «не в сети» — выбрать эксперта нельзя.
  */
-import { randomBytes, scrypt as scryptCb, timingSafeEqual, createHmac } from "node:crypto";
+import { randomBytes, randomInt, scrypt as scryptCb, timingSafeEqual, createHmac } from "node:crypto";
 import { promisify } from "node:util";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import type { Db } from "@/db";
@@ -109,6 +109,7 @@ const publicColumns = {
   sort: experts.sort,
   createdAt: experts.createdAt,
   deletedAt: experts.deletedAt,
+  rating: experts.rating,
 };
 
 /** Эксперты без удалённых. */
@@ -147,9 +148,32 @@ export async function createExpert(db: Db, input: { name: string; login: string;
   if (await getExpertWithSecret(db, { login })) return { ok: false, error: "Такой логин уже есть" };
   const [e] = await db
     .insert(experts)
-    .values({ name, login, passwordHash: await hashPassword(input.password) })
+    .values({ name, login, passwordHash: await hashPassword(input.password), rating: newExpertRating() })
     .returning({ id: experts.id });
   return { ok: true, id: (e as { id: number }).id };
+}
+
+// --- Рейтинг: в десятых (48 = 4,8), задаётся в админке ---
+
+export const MIN_RATING = 10;
+export const MAX_RATING = 50;
+
+/** Рейтинг нового эксперта — случайный от 4,6 до 4,9; потом его можно поменять в админке. */
+export function newExpertRating(): number {
+  return randomInt(46, 50);
+}
+
+/** «4,8» из 48. */
+export function formatRating(tenths: number): string {
+  return (tenths / 10).toFixed(1).replace(".", ",");
+}
+
+/** Рейтинг из формы («4,8» или «4.8») в десятых; вне 1,0–5,0 или не число — null. */
+export function parseRating(raw: string): number | null {
+  const s = raw.trim().replace(",", ".");
+  if (!/^\d(\.\d)?$/.test(s)) return null;
+  const tenths = Math.round(Number(s) * 10);
+  return tenths >= MIN_RATING && tenths <= MAX_RATING ? tenths : null;
 }
 
 export async function setExpertPassword(db: Db, id: number, password: string): Promise<string | null> {
