@@ -7,7 +7,7 @@
  */
 import { and, asc, desc, eq, gt, isNull, lte, sql } from "drizzle-orm";
 import type { Db } from "@/db";
-import { conversations, experts, leads, messagePhotos, messages } from "@/db/schema";
+import { conversations, expertChangeRequests, experts, leads, messagePhotos, messages } from "@/db/schema";
 import type { MessageAuthor } from "@/db/schema";
 import { detectImageMime, expertPhotoUrls, expertStatus, getExpert, isOnline, listExperts } from "./experts";
 import type { Lead } from "./leads";
@@ -243,6 +243,8 @@ export interface InboxItem {
   unread: number;
   /** Клиент попросил позвонить, а звонка ещё не было. */
   callRequested: boolean;
+  /** Клиент просит перевести его к другому эксперту. */
+  expertChangeRequested: boolean;
 }
 
 /** Все чаты, свежие сверху. Эксперт видит все и может ответить в любом. */
@@ -256,6 +258,8 @@ export async function inbox(db: Db, limit = 300): Promise<InboxItem[]> {
         and m.author = 'client' and (${conversations.expertReadAt} is null or m.created_at > ${conversations.expertReadAt}))`.mapWith(
         Number,
       ),
+      expertChange: sql<boolean>`exists (select 1 from ${expertChangeRequests} q
+        where q.conversation_id = ${conversations.id} and q.status = 'pending')`,
       lastMessage: sql<string>`coalesce((select case when m.product_id is not null then '[предложение продукта]'
           when m.body = '' and exists (select 1 from ${messagePhotos} p where p.message_id = m.id) then '[фото]'
           else left(m.body, 120) end
@@ -275,6 +279,7 @@ export async function inbox(db: Db, limit = 300): Promise<InboxItem[]> {
     lastMessage: r.lastMessage,
     unread: r.unread,
     callRequested: r.c.callRequestedAt !== null,
+    expertChangeRequested: r.expertChange,
   }));
 }
 

@@ -28,6 +28,7 @@ export async function GET(req: Request, ctx: RouteContext<"/api/chat/[leadId]">)
       messages: await messageViews(db, conversation, afterParam(req), "client"),
       expertOnline: expert ? isOnline(expert, new Date()) : false,
       expertStatus: expert ? expertStatus(expert, new Date()) : "offline",
+      expertId: conversation.expertId,
     },
     { headers: noStore },
   );
