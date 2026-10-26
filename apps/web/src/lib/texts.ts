@@ -28,12 +28,6 @@ export const TEXT_DEFS = [
     default: "Введите имя и дату рождения — разбор будет готов сразу.",
   },
   { key: "home.button", group: "Главная", label: "Кнопка формы", default: "Получить разбор" },
-  {
-    key: "home.consent",
-    group: "Главная",
-    label: "Согласие под формой",
-    default: "Я согласен(на) на обработку персональных данных",
-  },
   // Разбор
   { key: "result.title", group: "Разбор", label: "Заголовок", default: "{name}, ваш разбор", hint: "{name}" },
   { key: "result.intro", group: "Разбор", label: "Текст перед блоками", default: "", hint: "{name}" },

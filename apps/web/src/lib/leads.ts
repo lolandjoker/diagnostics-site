@@ -1,4 +1,4 @@
-/** Заявки: человек ввёл имя и дату рождения и дал согласие на обработку данных. */
+/** Заявки: человек ввёл имя и дату рождения. */
 import { eq } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { assertValidBirthDate } from "@diag/engine";
@@ -20,27 +20,42 @@ export function ageOn(birthIso: string, today: Date): number {
   return y - b.year - (m < b.month || (m === b.month && d < b.day) ? 1 : 0);
 }
 
-export type LeadInput = { name: string; birthDate: string; consent: boolean };
+export type LeadInput = { name: string; birthDate: string };
+
+/**
+ * Дата из формы «ДД.ММ.ГГГГ» (разделитель — точка, косая черта, дефис или пробел; день и месяц можно
+ * одной цифрой) → «ГГГГ-ММ-ДД», как в базе. Уже ГГГГ-ММ-ДД — как есть. Не разобрать — null.
+ * Существует ли такая дата, проверяет validateLead.
+ */
+export function birthDateToIso(raw: string): string | null {
+  const s = raw.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const m = /^(\d{1,2})[./ -](\d{1,2})[./ -](\d{4})$/.exec(s);
+  if (!m) return null;
+  const [, d, mo, y] = m as unknown as [string, string, string, string];
+  return `${y}-${mo.padStart(2, "0")}-${d.padStart(2, "0")}`;
+}
 
 /** Проверка формы. Возвращает текст ошибки для человека или null. */
 export function validateLead(input: LeadInput, today: Date): string | null {
   const name = input.name.trim();
   if (name === "") return "Укажите имя";
   if (name.length > MAX_NAME_LENGTH) return "Имя слишком длинное";
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.birthDate)) return "Укажите дату рождения";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.birthDate)) return "Укажите дату рождения в формате ДД.ММ.ГГГГ";
   try {
     assertValidBirthDate(parseIsoDate(input.birthDate));
   } catch (err) {
     return err instanceof Error ? err.message : "Неверная дата рождения";
   }
   if (ageOn(input.birthDate, today) < MIN_AGE) return `Сервис доступен с ${MIN_AGE} лет`;
-  if (!input.consent) return "Нужно согласие на обработку персональных данных";
   return null;
 }
 
 export async function createLead(db: Db, input: LeadInput, now: Date, variationId: number | null = null): Promise<Lead> {
   const [lead] = await db
     .insert(leads)
+    // consent_at — столбец обязательный и не удаляется (правило схемы); галочки согласия больше нет,
+    // пишем время заявки
     .values({ name: input.name.trim(), birthDate: input.birthDate, consentAt: now, variationId })
     .returning();
   return lead as Lead;

@@ -18,8 +18,7 @@ export default async function HomePage(props: PageProps<"/">) {
     redirect((await conversationForLead(db, remembered.id)) ? `/razbor/${remembered.id}/chat` : `/razbor/${remembered.id}`);
   }
 
-  const t = await getTexts(db, ["home.title", "home.subtitle", "home.button", "home.consent"]);
-  const maxDate = new Date().toISOString().slice(0, 10);
+  const t = await getTexts(db, ["home.title", "home.subtitle", "home.button"]);
   return (
     <>
       <main className="page page--narrow">
@@ -36,7 +35,7 @@ export default async function HomePage(props: PageProps<"/">) {
         </svg>
         <h1>{t["home.title"]}</h1>
         {t["home.subtitle"] && <p className="lead text">{t["home.subtitle"]}</p>}
-        <LeadForm button={t["home.button"]} consent={t["home.consent"]} maxDate={maxDate} />
+        <LeadForm button={t["home.button"]} />
       </main>
       <Footer />
     </>
