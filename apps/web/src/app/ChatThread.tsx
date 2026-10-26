@@ -6,6 +6,7 @@
  * Фото перед отправкой уменьшается в браузере (до PHOTO_MAX_SIDE по большей стороне).
  */
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import type { MessageView } from "@/lib/chat";
@@ -102,6 +103,7 @@ export function ChatThread({
   labels,
   peer,
   call,
+  expertId,
 }: {
   /** GET ?after= и POST — один адрес. */
   url: string;
@@ -114,7 +116,10 @@ export function ChatThread({
   peer?: ChatPeer;
   /** Звонок (CallPanel): с шапкой — справа в ней, без шапки — полосой над перепиской. */
   call?: ReactNode;
+  /** Эксперт чата при загрузке страницы; сервер ответил другим — клиента перевели, обновляем страницу. */
+  expertId?: number;
 }) {
+  const router = useRouter();
   const [items, setItems] = useState<MessageView[]>([]);
   const [status, setStatus] = useState<"online" | "busy" | "offline" | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
@@ -131,8 +136,13 @@ export function ChatThread({
     try {
       const res = await fetch(`${url}?after=${lastId.current}`, { cache: "no-store" });
       if (!res.ok) return;
-      const data = (await res.json()) as { messages: MessageView[]; expertStatus?: "online" | "busy" | "offline" };
+      const data = (await res.json()) as {
+        messages: MessageView[];
+        expertStatus?: "online" | "busy" | "offline";
+        expertId?: number;
+      };
       if (data.expertStatus) setStatus(data.expertStatus);
+      if (expertId !== undefined && data.expertId !== undefined && data.expertId !== expertId) router.refresh();
       if (data.messages.length > 0) {
         lastId.current = data.messages.at(-1)?.id ?? lastId.current;
         setItems((prev) => {
@@ -143,7 +153,7 @@ export function ChatThread({
     } catch {
       // Нет связи — попробуем при следующем опросе
     }
-  }, [url]);
+  }, [url, expertId, router]);
 
   useEffect(() => {
     void poll();

@@ -291,6 +291,38 @@ export const reviews = pgTable(
   (t) => [index("reviews_expert_idx").on(t.expertId, t.createdAt)],
 );
 
+export const EXPERT_CHANGE_STATUSES = ["pending", "approved", "declined"] as const;
+
+/**
+ * Заявка клиента перейти к другому эксперту. Чат у заявки один, поэтому клиент не начинает новый,
+ * а просит; админ или эксперт переводит (чат остаётся тот же, меняется его эксперт) или отклоняет.
+ * В чате одновременно не больше одной открытой заявки — повторная меняет эксперта в ней.
+ */
+export const expertChangeRequests = pgTable(
+  "expert_change_requests",
+  {
+    id: serial("id").primaryKey(),
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    fromExpertId: integer("from_expert_id")
+      .notNull()
+      .references(() => experts.id),
+    toExpertId: integer("to_expert_id")
+      .notNull()
+      .references(() => experts.id),
+    status: text("status", { enum: EXPERT_CHANGE_STATUSES }).notNull().default("pending"),
+    createdAt: createdAt(),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("expert_change_conversation_idx").on(t.conversationId, t.createdAt),
+    uniqueIndex("expert_change_one_pending_idx")
+      .on(t.conversationId)
+      .where(sql`${t.status} = 'pending'`),
+  ],
+);
+
 export const CALL_STATUSES = ["ringing", "active", "ended", "missed", "declined"] as const;
 export type CallStatus = (typeof CALL_STATUSES)[number];
 
