@@ -5,9 +5,9 @@
  * (settings: variation_mode).
  */
 import { randomInt } from "node:crypto";
-import { and, asc, count, countDistinct, eq, sql } from "drizzle-orm";
+import { and, asc, count, countDistinct, eq, isNotNull, sql } from "drizzle-orm";
 import type { Db } from "@/db";
-import { conversations, leads, messages, orders, settings, variationTexts, variations } from "@/db/schema";
+import { calls, conversations, leads, messages, settings, variationTexts, variations } from "@/db/schema";
 
 export type Variation = typeof variations.$inferSelect;
 
@@ -114,11 +114,11 @@ export interface VariationStats {
   chats: number;
   /** Написали в чат хотя бы одно сообщение. */
   replied: number;
-  paid: number;
-  revenueKopecks: number;
+  /** Поговорили с экспертом по телефону в чате (был принятый звонок). */
+  called: number;
 }
 
-/** Воронка по каждому варианту: заявка → чат → ответ → оплата. */
+/** Воронка по каждому варианту: заявка → чат → ответ → звонок. */
 export async function variationStats(db: Db): Promise<VariationStats[]> {
   const base = await db
     .select({ id: variations.id, title: variations.title, active: variations.active, leads: count(leads.id) })
@@ -140,19 +140,16 @@ export async function variationStats(db: Db): Promise<VariationStats[]> {
     .leftJoin(messages, eq(messages.conversationId, conversations.id))
     .groupBy(leads.variationId);
 
-  const paidRows = await db
-    .select({
-      variationId: leads.variationId,
-      paid: count(orders.id),
-      revenue: sql<number>`coalesce(sum(${orders.amountKopecks}), 0)`.mapWith(Number),
-    })
-    .from(orders)
-    .innerJoin(leads, eq(leads.id, orders.leadId))
-    .where(eq(orders.status, "paid"))
+  const callRows = await db
+    .select({ variationId: leads.variationId, called: countDistinct(calls.conversationId) })
+    .from(calls)
+    .innerJoin(conversations, eq(conversations.id, calls.conversationId))
+    .innerJoin(leads, eq(leads.id, conversations.leadId))
+    .where(isNotNull(calls.answeredAt))
     .groupBy(leads.variationId);
 
   const chats = new Map(chatRows.map((r) => [r.variationId, r]));
-  const paid = new Map(paidRows.map((r) => [r.variationId, r]));
+  const called = new Map(callRows.map((r) => [r.variationId, r.called]));
   return base.map((v) => ({
     variationId: v.id,
     title: v.title,
@@ -160,7 +157,6 @@ export async function variationStats(db: Db): Promise<VariationStats[]> {
     leads: v.leads,
     chats: chats.get(v.id)?.chats ?? 0,
     replied: chats.get(v.id)?.replied ?? 0,
-    paid: paid.get(v.id)?.paid ?? 0,
-    revenueKopecks: paid.get(v.id)?.revenue ?? 0,
+    called: called.get(v.id) ?? 0,
   }));
 }

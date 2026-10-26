@@ -45,7 +45,6 @@ grep ^ADMIN_PASSWORD= /opt/diagnostics/app/.env
 
 Сменить пароль: поправить строку в `/opt/diagnostics/app/.env` и перезапустить сайт —
 `cd /opt/diagnostics/app && docker compose --project-name diagnostics up -d web`.
-Чтобы письма с заказами уходили, туда же добавить `SMTP_URL` и `MAIL_FROM` (см. `.env.example`).
 
 ## Команды на сервере
 

@@ -30,9 +30,7 @@ export const TEXT_DEFS = [
   { key: "home.button", group: "Главная", label: "Кнопка формы", default: "Получить разбор" },
   // Разбор
   { key: "result.title", group: "Разбор", label: "Заголовок", default: "{name}, ваш разбор", hint: "{name}" },
-  { key: "result.intro", group: "Разбор", label: "Текст перед блоками", default: "", hint: "{name}" },
-  { key: "result.offers_title", group: "Разбор", label: "Заголовок раздела с продуктами", default: "Что дальше" },
-  { key: "result.buy_button", group: "Разбор", label: "Кнопка покупки", default: "Купить" },
+  { key: "result.intro", group: "Разбор", label: "Текст под заголовком", default: "", hint: "{name}" },
   { key: "result.expert_title", group: "Разбор", label: "Заголовок блока «написать эксперту»", default: "Хотите подробнее?" },
   {
     key: "result.expert_text",
@@ -51,6 +49,12 @@ export const TEXT_DEFS = [
     default: "Сейчас никого нет в сети. Загляните чуть позже.",
   },
   { key: "experts.choose", group: "Эксперты и чат", label: "Кнопка выбора эксперта", default: "Написать" },
+  {
+    key: "experts.busy",
+    group: "Эксперты и чат",
+    label: "Статус «занят» (видит клиент; писать эксперту можно)",
+    default: "занят — обратитесь через 10 минут",
+  },
   { key: "chat.title", group: "Эксперты и чат", label: "Заголовок чата", default: "Чат с экспертом {expert}", hint: "{expert}" },
   { key: "chat.placeholder", group: "Эксперты и чат", label: "Подсказка в поле сообщения", default: "Сообщение" },
   { key: "chat.send", group: "Эксперты и чат", label: "Кнопка отправки", default: "Отправить" },
@@ -62,38 +66,6 @@ export const TEXT_DEFS = [
     label: "Подпись подробного разбора в чате",
     default: "Подробный разбор",
   },
-  // Заказ и оплата
-  { key: "order.title", group: "Заказ", label: "Заголовок страницы заказа", default: "Оформление заказа" },
-  {
-    key: "order.email_hint",
-    group: "Заказ",
-    label: "Пояснение к полю почты",
-    default: "На эту почту придёт ваш заказ после оплаты.",
-  },
-  { key: "order.button", group: "Заказ", label: "Кнопка перехода к оплате", default: "Перейти к оплате" },
-  {
-    key: "order.pending",
-    group: "Заказ",
-    label: "Как оплатить (пока оплата подтверждается вручную)",
-    default: "Заказ № {order} создан. Инструкция по оплате появится здесь.",
-    hint: "{order}, {product}",
-  },
-  { key: "order.paid_title", group: "Заказ", label: "Заголовок после оплаты", default: "Оплата получена" },
-  {
-    key: "order.paid",
-    group: "Заказ",
-    label: "Текст после оплаты",
-    default: "Спасибо! Мы отправили «{product}» на вашу почту.",
-    hint: "{product}, {order}",
-  },
-  // Мессенджеры (показываются после оплаты; пустая ссылка — кнопки нет)
-  { key: "links.title", group: "Мессенджеры", label: "Заголовок блока", default: "Мы на связи" },
-  { key: "links.telegram", group: "Мессенджеры", label: "Ссылка Telegram", default: "", url: true },
-  { key: "links.whatsapp", group: "Мессенджеры", label: "Ссылка WhatsApp", default: "", url: true },
-  { key: "links.max", group: "Мессенджеры", label: "Ссылка MAX", default: "", url: true },
-  // Письмо после оплаты (к нему добавляется «Что получает человек» из продукта)
-  { key: "email.subject", group: "Письмо", label: "Тема", default: "Ваш заказ: {product}", hint: "{product}, {order}" },
-  { key: "email.intro", group: "Письмо", label: "Начало письма", default: "Здравствуйте! Спасибо за заказ.", hint: "{product}, {order}" },
   // Документы и подвал
   { key: "legal.offer", group: "Документы", label: "Публичная оферта", default: "Текст оферты пока не заполнен." },
   {

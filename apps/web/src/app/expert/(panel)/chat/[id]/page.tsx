@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDb } from "@/db";
-import { conversationHeader, getConversation, offerableProducts } from "@/lib/chat";
+import { conversationHeader, getConversation } from "@/lib/chat";
 import { requireExpert } from "@/lib/expert-auth";
 import { getTexts } from "@/lib/texts";
 import { CallPanel } from "../../../../CallPanel";
@@ -13,10 +13,9 @@ export default async function ExpertChatPage(props: PageProps<"/expert/chat/[id]
   const db = await getDb();
   const conversation = await getConversation(db, id);
   if (!conversation) notFound();
-  const [header, products, t] = await Promise.all([
+  const [header, t] = await Promise.all([
     conversationHeader(db, conversation),
-    offerableProducts(db),
-    getTexts(db, ["chat.placeholder", "chat.send", "result.buy_button"]),
+    getTexts(db, ["chat.placeholder", "chat.send"]),
   ]);
   const mine = conversation.expertId === expert.id;
   const birth = header?.birthDate.split("-").reverse().join(".");
@@ -40,8 +39,7 @@ export default async function ExpertChatPage(props: PageProps<"/expert/chat/[id]
         url={`/expert/api/chat/${conversation.id}`}
         ownAuthors={[]}
         ownExpertId={expert.id}
-        labels={{ placeholder: t["chat.placeholder"], send: t["chat.send"], buy: t["result.buy_button"] }}
-        products={products}
+        labels={{ placeholder: t["chat.placeholder"], send: t["chat.send"] }}
         call={
           <CallPanel
             url={`/expert/api/chat/${conversation.id}/call`}

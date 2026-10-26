@@ -59,7 +59,10 @@ export const variationTexts = pgTable(
   (t) => [primaryKey({ columns: [t.variationId, t.value] })],
 );
 
-/** Эксперт: профиль на сайте + вход в панель. Онлайн — если включил статус и заходил в панель недавно. */
+/**
+ * Эксперт: профиль на сайте + вход в панель. Статус: «в сети» (online — держится, пока не выключат;
+ * или onlineUntil — админ включил на срок), «занят» (busy — в сети, но ответит позже), «не в сети».
+ */
 export const experts = pgTable("experts", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
@@ -70,6 +73,8 @@ export const experts = pgTable("experts", {
   lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
   /** Админ включил «в сети» до этого времени — независимо от того, открыта ли панель эксперта. */
   onlineUntil: timestamp("online_until", { withTimezone: true }),
+  /** «Занят — обратитесь через 10 минут»: в сети, писать можно, но ответит позже. */
+  busy: boolean("busy").notNull().default(false),
   active: boolean("active").notNull().default(true),
   sort: integer("sort").notNull().default(0),
   createdAt: createdAt(),
@@ -91,7 +96,7 @@ export const texts = pgTable("texts", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-/** Блок бесплатного разбора: заголовок + способ расчёта числа (lib/diagnostic.ts). */
+/** Не используется: продукты, заказы и доп. блоки разбора убраны с сайта; таблица остаётся (правило схемы). */
 export const diagnosticBlocks = pgTable("diagnostic_blocks", {
   id: serial("id").primaryKey(),
   title: text("title").notNull(),
@@ -101,7 +106,7 @@ export const diagnosticBlocks = pgTable("diagnostic_blocks", {
   createdAt: createdAt(),
 });
 
-/** Текст блока для конкретного значения: «архетип 4 → такой-то текст». */
+/** Не используется: продукты, заказы и доп. блоки разбора убраны с сайта; таблица остаётся (правило схемы). */
 export const diagnosticTexts = pgTable(
   "diagnostic_texts",
   {
@@ -127,7 +132,7 @@ export const leads = pgTable("leads", {
   variationId: integer("variation_id").references(() => variations.id, { onDelete: "set null" }),
 });
 
-/** Продукт (курс, отчёт). delivery — что человек получает письмом после оплаты. */
+/** Не используется: продукты, заказы и доп. блоки разбора убраны с сайта; таблица остаётся (правило схемы). */
 export const products = pgTable("products", {
   id: serial("id").primaryKey(),
   title: text("title").notNull(),
@@ -140,7 +145,7 @@ export const products = pgTable("products", {
   showOnResult: boolean("show_on_result").notNull().default(true),
 });
 
-/** Вариант цены продукта. Каждому человеку случайно показывается один из активных вариантов. */
+/** Не используется: продукты, заказы и доп. блоки разбора убраны с сайта; таблица остаётся (правило схемы). */
 export const priceVariants = pgTable("price_variants", {
   id: serial("id").primaryKey(),
   productId: integer("product_id")
@@ -152,7 +157,7 @@ export const priceVariants = pgTable("price_variants", {
   createdAt: createdAt(),
 });
 
-/** Какой вариант цены показан человеку. Один раз выбран — дальше не меняется. */
+/** Не используется: продукты, заказы и доп. блоки разбора убраны с сайта; таблица остаётся (правило схемы). */
 export const offerImpressions = pgTable(
   "offer_impressions",
   {
@@ -173,6 +178,7 @@ export const offerImpressions = pgTable(
 export const ORDER_STATUSES = ["pending", "paid", "cancelled"] as const;
 export type OrderStatus = (typeof ORDER_STATUSES)[number];
 
+/** Не используется: продукты, заказы и доп. блоки разбора убраны с сайта; таблица остаётся (правило схемы). */
 export const orders = pgTable("orders", {
   id: uuid("id").primaryKey().defaultRandom(),
   leadId: uuid("lead_id").references(() => leads.id, { onDelete: "set null" }),

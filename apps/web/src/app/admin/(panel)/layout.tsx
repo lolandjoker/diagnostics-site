@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { requireAdmin } from "@/lib/admin-auth";
-import { smtpMailer } from "@/lib/mail";
 import { logout } from "../auth-actions";
 
 export const dynamic = "force-dynamic";
@@ -13,10 +12,7 @@ const NAV = [
   ["/admin/chats", "Чаты"],
   ["/admin/variations", "Варианты диагностики"],
   ["/admin/experts", "Эксперты"],
-  ["/admin/products", "Продукты и цены"],
-  ["/admin/orders", "Заказы"],
   ["/admin/texts", "Тексты сайта"],
-  ["/admin/diagnostic", "Доп. блоки разбора"],
 ] as const;
 
 export default async function PanelLayout({ children }: { children: ReactNode }) {
@@ -35,11 +31,6 @@ export default async function PanelLayout({ children }: { children: ReactNode })
           <button className="link-button">Выйти</button>
         </form>
       </header>
-      {!smtpMailer() && (
-        <p className="notice notice--error">
-          Почта не настроена: письма с заказами не уходят. Нужны SMTP_URL и MAIL_FROM в .env на сервере.
-        </p>
-      )}
       <main>{children}</main>
     </div>
   );

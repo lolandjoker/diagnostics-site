@@ -32,10 +32,10 @@ export async function jsonBody(req: Request): Promise<Record<string, unknown> | 
 
 export const noStore = { "Cache-Control": "no-store" };
 
-export type MessagePayload = { body: string; productId?: number; photo?: Buffer };
+export type MessagePayload = { body: string; photo?: Buffer };
 
 /**
- * Тело отправки в чат: JSON {body, productId} или form-data с полями body и photo (файл).
+ * Тело отправки в чат: JSON {body} или form-data с полями body и photo (файл).
  * Строка — ошибка для человека. Слишком большой запрос отклоняется до чтения тела.
  */
 export async function messagePayload(req: Request, maxPhotoBytes: number): Promise<MessagePayload | string> {
@@ -43,11 +43,7 @@ export async function messagePayload(req: Request, maxPhotoBytes: number): Promi
   if (length > maxPhotoBytes + 64 * 1024) return `Фото больше ${Math.round(maxPhotoBytes / 1024 / 1024)} МБ`;
   if (!(req.headers.get("content-type") ?? "").startsWith("multipart/form-data")) {
     const data = await jsonBody(req);
-    const productId = data?.productId;
-    return {
-      body: typeof data?.body === "string" ? data.body : "",
-      ...(typeof productId === "number" && Number.isInteger(productId) && { productId }),
-    };
+    return { body: typeof data?.body === "string" ? data.body : "" };
   }
   let form: FormData;
   try {

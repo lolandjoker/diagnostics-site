@@ -3,7 +3,6 @@
 import { redirect } from "next/navigation";
 import { getDb } from "@/db";
 import { birthDateToIso, createLead, rememberLead, validateLead } from "@/lib/leads";
-import { createOrder } from "@/lib/orders";
 import { pickVariation } from "@/lib/variations";
 
 export interface FormState {
@@ -26,18 +25,4 @@ export async function submitLead(_prev: FormState, form: FormData): Promise<Form
   const lead = await createLead(db, input, now, await pickVariation(db));
   await rememberLead(lead.id);
   redirect(`/razbor/${lead.id}`);
-}
-
-/** Оформление заказа: почта и согласие с офертой → страница оплаты. */
-export async function submitOrder(_prev: FormState, form: FormData): Promise<FormState> {
-  if (form.get("offer") !== "on") return { error: "Нужно принять условия оферты" };
-  const productId = Number(str(form.get("productId")));
-  if (!Number.isInteger(productId)) return { error: "Продукт не найден" };
-  const res = await createOrder(await getDb(), {
-    leadId: str(form.get("leadId")),
-    productId,
-    email: str(form.get("email")),
-  });
-  if (!res.ok) return { error: res.error };
-  redirect(`/zakaz/${res.order.id}`);
 }

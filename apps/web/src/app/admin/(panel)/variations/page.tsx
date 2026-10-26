@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { getDb } from "@/db";
-import { formatRub } from "@/lib/offers";
 import { VARIATION_MODES, getVariationMode, listVariations, variationStats } from "@/lib/variations";
 import { ActionForm } from "../../ActionForm";
 import { createVariationAction, setVariationModeAction } from "../../actions";
@@ -47,8 +46,7 @@ export default async function VariationsPage() {
                   <th>Получили диагностику</th>
                   <th>Перешли в чат</th>
                   <th>Написали</th>
-                  <th>Оплатили</th>
-                  <th>Выручка</th>
+                  <th>Был звонок</th>
                 </tr>
               </thead>
               <tbody>
@@ -69,9 +67,8 @@ export default async function VariationsPage() {
                         {s?.replied ?? 0} <small className="muted">{pct(s?.replied ?? 0, leads)}</small>
                       </td>
                       <td>
-                        {s?.paid ?? 0} <small className="muted">{pct(s?.paid ?? 0, leads)}</small>
+                        {s?.called ?? 0} <small className="muted">{pct(s?.called ?? 0, leads)}</small>
                       </td>
-                      <td>{formatRub(s?.revenueKopecks ?? 0)}</td>
                     </tr>
                   );
                 })}

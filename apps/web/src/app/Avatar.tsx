@@ -1,17 +1,19 @@
 import type { CSSProperties } from "react";
 
-/** Круглая аватарка: фото или первая буква имени; online — точка статуса в углу. */
+/** Круглая аватарка: фото или первая буква имени; online — точка статуса в углу (busy — жёлтая). */
 export function Avatar({
   name,
   photo,
   size = 40,
   online,
+  busy,
   tone,
 }: {
   name: string;
   photo?: string | null | undefined;
   size?: number;
   online?: boolean;
+  busy?: boolean;
   /** Цвет буквы, когда фото нет: gold — эксперты и разбор, plain — клиент. */
   tone?: "gold" | "plain";
 }) {
@@ -23,7 +25,7 @@ export function Avatar({
         <span aria-hidden="true">{name.trim().slice(0, 1).toUpperCase() || "?"}</span>
       )}
       {online !== undefined && (
-        <span className={online ? "avatar__dot avatar__dot--on" : "avatar__dot"} aria-hidden="true" />
+        <span className={online ? (busy ? "avatar__dot avatar__dot--busy" : "avatar__dot avatar__dot--on") : "avatar__dot"} aria-hidden="true" />
       )}
     </span>
   );
