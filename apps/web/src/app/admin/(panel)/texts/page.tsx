@@ -1,10 +1,14 @@
+import { redirect } from "next/navigation";
 import { getDb } from "@/db";
+import { isAdmin } from "@/lib/admin-auth";
 import { TEXT_DEFS, getAllTexts } from "@/lib/texts";
 import type { TextDef } from "@/lib/texts";
 import { ActionForm } from "../../ActionForm";
 import { saveTextsAction } from "../../actions";
 
 export default async function TextsPage() {
+  // Тексты сайта правит только админ; эксперту этот раздел закрыт
+  if (!(await isAdmin())) redirect("/admin");
   const values = await getAllTexts(await getDb());
   const groups = new Map<string, TextDef[]>();
   for (const def of TEXT_DEFS as readonly TextDef[]) {

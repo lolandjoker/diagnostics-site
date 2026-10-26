@@ -43,6 +43,8 @@ export const variations = pgTable("variations", {
   method: text("method").notNull(),
   active: boolean("active").notNull().default(true),
   createdAt: createdAt(),
+  /** Удалён из админки: новым людям не выдаётся и в списках не виден; у тех, кому уже достался, тексты остаются. */
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
 });
 
 export const variationTexts = pgTable(
@@ -78,6 +80,8 @@ export const experts = pgTable("experts", {
   active: boolean("active").notNull().default(true),
   sort: integer("sort").notNull().default(0),
   createdAt: createdAt(),
+  /** Удалён: не входит, не виден в списках и клиентам; его переписка и подпись в старых чатах остаются. */
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
 });
 
 export const expertPhotos = pgTable("expert_photos", {

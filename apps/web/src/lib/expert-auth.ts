@@ -1,12 +1,19 @@
-/** Вход эксперта в панель /expert: cookie с подписью, проверка по базе на каждом запросе. */
+/**
+ * Вход эксперта: cookie с подписью, проверка по базе на каждом запросе.
+ * Эксперт работает в панели /expert и в админке /admin — с правами админа, кроме «Текстов сайта».
+ */
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getDb } from "@/db";
 import { getExpertWithSecret, touchExpert, tokenExpertId, verifyExpertToken } from "./experts";
 import type { PublicExpert } from "./experts";
 
-export const EXPERT_COOKIE = "diag_expert";
-export const EXPERT_COOKIE_PATH = "/expert";
+/**
+ * Cookie на весь сайт: нужна и в /expert, и в /admin. Имя новое: прежняя cookie «diag_expert» была
+ * только для /expert — её больше не читаем (после обновления эксперт входит один раз заново).
+ */
+export const EXPERT_COOKIE = "diag_expert_session";
+export const EXPERT_COOKIE_PATH = "/";
 
 /** Секрет подписи сессий (тот же, что у админки) или null, если он не задан. */
 export function sessionSecret(): string | null {

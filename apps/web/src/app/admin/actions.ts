@@ -1,8 +1,9 @@
 "use server";
 
 /**
- * Действия админки. Каждое начинается с requireAdmin(): действие — это POST-запрос,
+ * Действия админки. Каждое начинается с проверки входа: действие — это POST-запрос,
  * отправить его может кто угодно, а не только тот, кто видит форму.
+ * requireStaff — админ или эксперт (у эксперта права админа); requireAdmin — только админ («Тексты сайта»).
  */
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -10,10 +11,12 @@ import { redirect } from "next/navigation";
 import { getDb } from "@/db";
 import { experts, variations } from "@/db/schema";
 import { requireAdmin } from "@/lib/admin-auth";
+import { requireStaff } from "@/lib/staff-auth";
 import {
   ADMIN_ONLINE_FOREVER,
   adminOnlineMs,
   createExpert,
+  deleteExpert,
   getExpert,
   saveExpertPhoto,
   setExpertBusy,
@@ -21,7 +24,7 @@ import {
   setExpertStatus,
   setOnlineByAdmin,
 } from "@/lib/experts";
-import { NO_METHOD, VARIATION_MODES, getVariation, saveVariationTexts, setVariationMode } from "@/lib/variations";
+import { NO_METHOD, VARIATION_MODES, deleteVariation, getVariation, saveVariationTexts, setVariationMode } from "@/lib/variations";
 import type { VariationMode } from "@/lib/variations";
 import { TEXT_DEFS, saveTexts } from "@/lib/texts";
 import type { TextKey } from "@/lib/texts";
@@ -62,7 +65,7 @@ export async function saveTextsAction(_prev: ActionResult, form: FormData): Prom
 // --- Варианты диагностики ---
 
 export async function setVariationModeAction(_prev: ActionResult, form: FormData): Promise<ActionResult> {
-  await requireAdmin();
+  await requireStaff();
   const mode = str(form, "mode");
   if (!(mode in VARIATION_MODES)) return fail("Выберите способ");
   await setVariationMode(await getDb(), mode as VariationMode);
@@ -71,7 +74,7 @@ export async function setVariationModeAction(_prev: ActionResult, form: FormData
 }
 
 export async function createVariationAction(_prev: ActionResult, form: FormData): Promise<ActionResult> {
-  await requireAdmin();
+  await requireStaff();
   const title = str(form, "title").trim();
   if (!title) return fail("Укажите название варианта");
   const [v] = await (await getDb()).insert(variations).values({ title, method: NO_METHOD }).returning();
@@ -80,7 +83,7 @@ export async function createVariationAction(_prev: ActionResult, form: FormData)
 }
 
 export async function updateVariationAction(_prev: ActionResult, form: FormData): Promise<ActionResult> {
-  await requireAdmin();
+  await requireStaff();
   const db = await getDb();
   const id = int(form, "id");
   const variation = id === null ? null : await getVariation(db, id);
@@ -103,7 +106,7 @@ export async function updateVariationAction(_prev: ActionResult, form: FormData)
 // --- Эксперты ---
 
 export async function createExpertAction(_prev: ActionResult, form: FormData): Promise<ActionResult> {
-  await requireAdmin();
+  await requireStaff();
   const res = await createExpert(await getDb(), {
     name: str(form, "name"),
     login: str(form, "login"),
@@ -116,7 +119,7 @@ export async function createExpertAction(_prev: ActionResult, form: FormData): P
 
 /** «В сети» на выбранный срок, навсегда (пока не выключат) или выключить — за эксперта. */
 export async function setExpertOnlineAction(form: FormData): Promise<void> {
-  await requireAdmin();
+  await requireStaff();
   const id = int(form, "id");
   if (id === null) return;
   if (form.get("online") === "true") {
@@ -135,14 +138,14 @@ export async function setExpertOnlineAction(form: FormData): Promise<void> {
 
 /** «Занят» / «свободен» — за эксперта; как и на сколько он в сети, не меняется. */
 export async function setExpertBusyAction(form: FormData): Promise<void> {
-  await requireAdmin();
+  await requireStaff();
   const id = int(form, "id");
   if (id !== null) await setExpertBusy(await getDb(), id, form.get("busy") === "true");
   refresh();
 }
 
 export async function updateExpertAction(_prev: ActionResult, form: FormData): Promise<ActionResult> {
-  await requireAdmin();
+  await requireStaff();
   const db = await getDb();
   const id = int(form, "id");
   const expert = id === null ? null : await getExpert(db, id);
@@ -174,4 +177,24 @@ export async function updateExpertAction(_prev: ActionResult, form: FormData): P
     .where(eq(experts.id, expert.id));
   refresh();
   return done(password ? "Сохранено, пароль изменён — эксперту нужно войти заново" : "Сохранено");
+}
+
+// --- Удаление (с галочкой подтверждения в форме) ---
+
+/** Удалить эксперта: не входит и не виден клиентам; его старые чаты и сообщения остаются. */
+export async function deleteExpertAction(form: FormData): Promise<void> {
+  await requireStaff();
+  const id = int(form, "id");
+  if (id !== null && form.get("confirm") === "on") await deleteExpert(await getDb(), id, new Date());
+  refresh();
+  redirect("/admin/experts");
+}
+
+/** Удалить вариант диагностики: новым людям не выдаётся; кому уже достался — тексты остаются. */
+export async function deleteVariationAction(form: FormData): Promise<void> {
+  await requireStaff();
+  const id = int(form, "id");
+  if (id !== null && form.get("confirm") === "on") await deleteVariation(await getDb(), id, new Date());
+  refresh();
+  redirect("/admin/variations");
 }

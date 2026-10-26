@@ -1,33 +1,37 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { requireAdmin } from "@/lib/admin-auth";
+import { requireStaff } from "@/lib/staff-auth";
 import { logout } from "../auth-actions";
+import { expertLogout } from "../../expert/actions";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Админка" };
 
-const NAV = [
-  ["/admin", "Сводка"],
-  ["/admin/chats", "Чаты"],
-  ["/admin/variations", "Варианты диагностики"],
-  ["/admin/experts", "Эксперты"],
-  ["/admin/texts", "Тексты сайта"],
-] as const;
+/** Эксперт видит всё, кроме «Текстов сайта»; чаты у него — в его панели. */
+const NAV: { href: string; label: string; expertHref?: string; adminOnly?: boolean }[] = [
+  { href: "/admin", label: "Сводка" },
+  { href: "/admin/chats", label: "Чаты", expertHref: "/expert" },
+  { href: "/admin/variations", label: "Варианты диагностики" },
+  { href: "/admin/experts", label: "Эксперты" },
+  { href: "/admin/texts", label: "Тексты сайта", adminOnly: true },
+];
 
 export default async function PanelLayout({ children }: { children: ReactNode }) {
-  await requireAdmin();
+  const staff = await requireStaff();
+  const expert = staff.kind === "expert";
   return (
     <div className="admin">
       <header className="admin__header">
         <nav>
-          {NAV.map(([href, label]) => (
-            <Link key={href} href={href}>
-              {label}
+          {NAV.filter((n) => !(expert && n.adminOnly)).map((n) => (
+            <Link key={n.href} href={expert ? (n.expertHref ?? n.href) : n.href}>
+              {n.label}
             </Link>
           ))}
+          {expert && <span className="muted">{staff.expert.name}</span>}
         </nav>
-        <form action={logout}>
+        <form action={expert ? expertLogout : logout}>
           <button className="link-button">Выйти</button>
         </form>
       </header>
