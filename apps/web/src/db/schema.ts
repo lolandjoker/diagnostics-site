@@ -87,6 +87,8 @@ export const experts = pgTable("experts", {
    * Новому эксперту — случайный от 4,6 до 4,9 (lib/experts.ts).
    */
   rating: integer("rating").notNull().default(48),
+  /** Число отзывов на карточке («347 отзывов») — задаётся в админке, новому — случайное от 200 до 500. */
+  reviewsShown: integer("reviews_shown").notNull().default(0),
 });
 
 export const expertPhotos = pgTable("expert_photos", {
@@ -263,21 +265,21 @@ export const messagePhotos = pgTable("message_photos", {
 });
 
 /**
- * Отзыв клиента об эксперте: один на чат (клиент может его поправить). Виден на карточке эксперта
- * с именем клиента из заявки; админ и эксперты могут скрыть или удалить.
+ * Отзыв об эксперте: от клиента из чата (один на чат, клиент может поправить) или добавленный в админке
+ * (без чата). Виден на карточке эксперта с именем автора; админ и эксперты могут скрыть или удалить.
  */
 export const reviews = pgTable(
   "reviews",
   {
     id: serial("id").primaryKey(),
+    /** Чат, из которого клиент оставил отзыв; null — отзыв добавлен в админке. */
     conversationId: uuid("conversation_id")
-      .notNull()
       .unique()
       .references(() => conversations.id, { onDelete: "cascade" }),
     expertId: integer("expert_id")
       .notNull()
       .references(() => experts.id),
-    /** Имя клиента на момент отзыва — как он ввёл его в форме. */
+    /** Имя автора: клиента на момент отзыва (как он ввёл его в форме) или заданное в админке. */
     authorName: text("author_name").notNull(),
     /** Звёзды 1–5. */
     stars: integer("stars").notNull(),

@@ -1,7 +1,8 @@
 /**
- * Отзывы клиентов об экспертах. Клиент оставляет отзыв в своём чате — один на чат, может поправить.
- * Отзыв сразу виден на карточке эксперта с именем клиента из заявки (форма об этом предупреждает).
- * Админ и эксперты в разделе «Отзывы» скрывают или удаляют отзывы.
+ * Отзывы об экспертах. Клиент оставляет отзыв в своём чате — один на чат, может поправить; отзыв сразу
+ * виден на карточке эксперта с именем клиента из заявки (форма об этом предупреждает). Админ и эксперты
+ * в разделе «Отзывы» добавляют отзывы (без чата), скрывают и удаляют.
+ * Число отзывов на карточке — не подсчёт, а поле эксперта reviewsShown (lib/experts.ts).
  */
 import { and, desc, eq, inArray } from "drizzle-orm";
 import type { Db } from "@/db";
@@ -11,8 +12,10 @@ import type { Conversation } from "./chat";
 export type Review = typeof reviews.$inferSelect;
 
 export const MAX_REVIEW_LENGTH = 2000;
-/** Сколько отзывов показывать на карточке эксперта. */
-export const REVIEWS_ON_CARD = 5;
+/** Отзывов на странице в списке на карточке эксперта. */
+export const REVIEWS_PAGE_SIZE = 5;
+/** Сколько последних отзывов отдавать на карточку (листаются по REVIEWS_PAGE_SIZE). */
+export const MAX_REVIEWS_ON_CARD = 200;
 
 export async function reviewForConversation(db: Db, conversationId: string): Promise<Review | null> {
   const [r] = await db.select().from(reviews).where(eq(reviews.conversationId, conversationId));
@@ -55,7 +58,7 @@ export interface PublicReview {
   createdAt: string;
 }
 
-/** Видимые отзывы для карточек экспертов: эксперт → число отзывов и последние REVIEWS_ON_CARD. */
+/** Видимые отзывы для карточек экспертов: эксперт → число видимых и последние MAX_REVIEWS_ON_CARD, свежие сверху. */
 export async function expertReviews(db: Db, expertIds: number[]): Promise<Map<number, { count: number; latest: PublicReview[] }>> {
   const out = new Map<number, { count: number; latest: PublicReview[] }>();
   if (expertIds.length === 0) return out;
@@ -74,7 +77,7 @@ export async function expertReviews(db: Db, expertIds: number[]): Promise<Map<nu
   for (const r of rows) {
     const e = out.get(r.expertId) ?? { count: 0, latest: [] };
     e.count += 1;
-    if (e.latest.length < REVIEWS_ON_CARD) {
+    if (e.latest.length < MAX_REVIEWS_ON_CARD) {
       e.latest.push({ id: r.id, authorName: r.authorName, stars: r.stars, body: r.body, createdAt: r.createdAt.toISOString() });
     }
     out.set(r.expertId, e);
@@ -82,12 +85,13 @@ export async function expertReviews(db: Db, expertIds: number[]): Promise<Map<nu
   return out;
 }
 
-/** Все отзывы для админки и экспертов, свежие сверху. */
-export function listAllReviews(db: Db) {
+/** Отзывы для админки и экспертов, свежие сверху; expertId — только этого эксперта. */
+export function listAllReviews(db: Db, expertId?: number) {
   return db
     .select({
       id: reviews.id,
       conversationId: reviews.conversationId,
+      expertId: reviews.expertId,
       expertName: experts.name,
       authorName: reviews.authorName,
       stars: reviews.stars,
@@ -98,8 +102,32 @@ export function listAllReviews(db: Db) {
     })
     .from(reviews)
     .innerJoin(experts, eq(experts.id, reviews.expertId))
+    .where(expertId === undefined ? undefined : eq(reviews.expertId, expertId))
     .orderBy(desc(reviews.createdAt))
-    .limit(500);
+    .limit(1000);
+}
+
+export type AddReviewInput = { expertId: number; authorName: string; stars: number; body: string; createdAt: Date };
+
+/** Отзыв, добавленный в админке: без чата, с заданными именем автора и датой. */
+export async function addReview(db: Db, input: AddReviewInput): Promise<SaveReviewResult> {
+  const authorName = input.authorName.trim();
+  if (authorName === "" || authorName.length > 60) return { ok: false, error: "Укажите имя автора (до 60 символов)" };
+  if (!Number.isInteger(input.stars) || input.stars < 1 || input.stars > 5) return { ok: false, error: "Поставьте от 1 до 5 звёзд" };
+  const body = input.body.replace(/\r\n/g, "\n").trim();
+  if (body.length > MAX_REVIEW_LENGTH) return { ok: false, error: `Отзыв длиннее ${MAX_REVIEW_LENGTH} символов` };
+  if (Number.isNaN(input.createdAt.getTime())) return { ok: false, error: "Неверная дата" };
+  const [expert] = await db.select({ id: experts.id }).from(experts).where(eq(experts.id, input.expertId));
+  if (!expert) return { ok: false, error: "Эксперт не найден" };
+  await db.insert(reviews).values({
+    expertId: input.expertId,
+    authorName,
+    stars: input.stars,
+    body,
+    createdAt: input.createdAt,
+    updatedAt: input.createdAt,
+  });
+  return { ok: true };
 }
 
 export async function setReviewHidden(db: Db, id: number, hidden: boolean): Promise<void> {

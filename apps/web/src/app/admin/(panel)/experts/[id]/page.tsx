@@ -24,6 +24,9 @@ export default async function ExpertAdminPage(props: PageProps<"/admin/experts/[
         Логин: <b>{expert.login}</b>.
       </p>
       <OnlineToggle expert={expert} />
+      <p>
+        <Link href={`/admin/reviews?expert=${expert.id}`}>Отзывы эксперта — посмотреть, добавить, удалить</Link>
+      </p>
 
       <ActionForm action={updateExpertAction}>
         <input type="hidden" name="id" value={expert.id} />
@@ -56,6 +59,10 @@ export default async function ExpertAdminPage(props: PageProps<"/admin/experts/[
           <label className="field field--short">
             <span>Рейтинг (1,0–5,0)</span>
             <input name="rating" inputMode="decimal" defaultValue={formatRating(expert.rating)} required />
+          </label>
+          <label className="field field--short">
+            <span>Отзывов на карточке</span>
+            <input name="reviews_shown" type="number" min={0} max={100000} defaultValue={expert.reviewsShown} required />
           </label>
           <label className="check">
             <input name="active" type="checkbox" defaultChecked={expert.active} />
