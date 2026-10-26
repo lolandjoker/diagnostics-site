@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { getDb } from "@/db";
 import { getVariation, getVariationTexts } from "@/lib/variations";
 import { ActionForm } from "../../../ActionForm";
-import { updateVariationAction } from "../../../actions";
+import { DeleteForm } from "../../../DeleteForm";
+import { deleteVariationAction, updateVariationAction } from "../../../actions";
 
 export default async function VariationPage(props: PageProps<"/admin/variations/[id]">) {
   const { id } = await props.params;
@@ -46,6 +47,14 @@ export default async function VariationPage(props: PageProps<"/admin/variations/
         </label>
         <button className="button sticky-save">Сохранить</button>
       </ActionForm>
+
+      <DeleteForm
+        action={deleteVariationAction}
+        id={variation.id}
+        title="Удалить вариант"
+        hint="Новым людям вариант больше не выдаётся, из списка и воронки он пропадёт. Тем, кому он уже достался, тексты по-прежнему показываются."
+        confirm={`Да, удалить вариант «${variation.title}»`}
+      />
     </>
   );
 }

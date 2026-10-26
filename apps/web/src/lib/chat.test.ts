@@ -12,14 +12,17 @@ import {
   markExpertRead,
   messageViews,
   postMessage,
+  selectableExperts,
   startConversation,
 } from "./chat";
 import {
   adminOnlineMs,
   createExpert,
+  deleteExpert,
   createExpertToken,
   detectImageMime,
   getExpert,
+  listExperts,
   getExpertWithSecret,
   expertStatus,
   isOnline,
@@ -36,6 +39,9 @@ import { createLead } from "./leads";
 import { answerCall, startCall } from "./calls";
 import {
   NO_METHOD,
+  deleteVariation,
+  getVariation,
+  listVariations,
   pickVariation,
   saveVariationTexts,
   setVariationMode,
@@ -92,6 +98,21 @@ describe("варианты диагностики", () => {
     const seen = new Set<number | null>();
     for (let i = 0; i < 40; i++) seen.add(await pickVariation(db));
     expect(seen.size).toBe(2);
+  });
+
+  it("удалённый вариант: новым не выдаётся, в списке и воронке нет, у выданных тексты остаются", async () => {
+    const a = await newVariation("А");
+    const b = await newVariation("Б");
+    await saveVariationTexts(db, a.id, { shortText: "Текст 1", fullText: "Текст 2" });
+    const l = await lead(a.id);
+
+    expect(await deleteVariation(db, a.id, new Date())).toBe(true);
+    expect(await deleteVariation(db, a.id, new Date())).toBe(false);
+    for (let i = 0; i < 10; i++) expect(await pickVariation(db)).toBe(b.id);
+    expect((await listVariations(db)).map((v) => v.id)).toEqual([b.id]);
+    expect((await variationStats(db)).map((s) => s.variationId)).toEqual([b.id]);
+    expect(await getVariation(db, a.id)).toBeNull();
+    expect(await variationFor(db, l.variationId)).toEqual({ shortText: "Текст 1", fullText: "Текст 2" });
   });
 
   it("тексты одни для всех — не зависят от имени и даты", async () => {
@@ -363,6 +384,26 @@ describe("чат", () => {
     const [fromExpert, fromClient] = await messageViews(db, res.conversation, 0, "client");
     expect(fromExpert?.avatar).toMatch(new RegExp(`^/experts/${expertId}/photo\\?v=\\d+$`));
     expect(fromClient?.avatar).toBeNull();
+  });
+
+  it("удалённый эксперт: пропадает из списков, чат с ним не начать, логин свободен, старый чат остаётся", async () => {
+    const id = await onlineExpert("Мария", "maria");
+    const l = await lead(null);
+    const res = await startConversation(db, l, id, new Date());
+    if (!res.ok) throw new Error(res.error);
+    await postMessage(db, res.conversation.id, { author: "expert", expertId: id, body: "Здравствуйте" });
+
+    expect(await deleteExpert(db, id, new Date())).toBe(true);
+    expect((await listExperts(db)).map((e) => e.id)).not.toContain(id);
+    expect((await selectableExperts(db, new Date())).map((e) => e.id)).not.toContain(id);
+    const deleted = (await getExpert(db, id))!;
+    expect(deleted).toMatchObject({ active: false, online: false });
+    expect(deleted.deletedAt).not.toBeNull();
+    expect(await startConversation(db, await lead(null), id, new Date())).toMatchObject({ ok: false });
+    // Старый чат и подпись в нём остаются
+    expect((await messageViews(db, res.conversation, 0, "client"))[0]).toMatchObject({ authorName: "Мария" });
+    // Логин освобождён — можно завести нового эксперта с ним же
+    expect(await createExpert(db, { name: "Мария 2", login: "maria", password: "пароль-эксперта" })).toMatchObject({ ok: true });
   });
 
   it("выключенный эксперт не может начать чат", async () => {

@@ -568,12 +568,30 @@ td.actions {
 
 .danger-zone {
   margin-top: 48px;
+  padding: 16px;
+  border: 1px solid var(--error);
+  border-radius: var(--radius);
+}
+
+.danger-zone h2 {
+  color: var(--error);
+}
+
+.danger-zone__form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  align-items: center;
 }
 
 /* В админке кнопки остаются тёмно-золотыми и плоскими: белый текст на светлом градиенте не читается */
 .admin .button {
   background: var(--gold);
   box-shadow: none;
+}
+
+.admin .button--danger {
+  background: var(--error);
 }
 
 /* --- Аватарка --- */

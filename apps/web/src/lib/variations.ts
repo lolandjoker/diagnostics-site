@@ -5,7 +5,7 @@
  * (settings: variation_mode).
  */
 import { randomInt } from "node:crypto";
-import { and, asc, count, countDistinct, eq, isNotNull, sql } from "drizzle-orm";
+import { and, asc, count, countDistinct, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { calls, conversations, leads, messages, settings, variationTexts, variations } from "@/db/schema";
 
@@ -45,7 +45,7 @@ export async function pickVariation(db: Db): Promise<number | null> {
     .select({ id: variations.id, leads: count(leads.id) })
     .from(variations)
     .leftJoin(leads, eq(leads.variationId, variations.id))
-    .where(eq(variations.active, true))
+    .where(and(eq(variations.active, true), isNull(variations.deletedAt)))
     .groupBy(variations.id)
     .orderBy(asc(variations.id));
   if (active.length === 0) return null;
@@ -74,12 +74,29 @@ export async function variationFor(db: Db, variationId: number | null): Promise<
 // --- Для админки ---
 
 export function listVariations(db: Db) {
-  return db.select().from(variations).orderBy(asc(variations.id));
+  return db.select().from(variations).where(isNull(variations.deletedAt)).orderBy(asc(variations.id));
 }
 
+/** Вариант для админки; удалённый — null. */
 export async function getVariation(db: Db, id: number) {
-  const [v] = await db.select().from(variations).where(eq(variations.id, id));
+  const [v] = await db
+    .select()
+    .from(variations)
+    .where(and(eq(variations.id, id), isNull(variations.deletedAt)));
   return v ?? null;
+}
+
+/**
+ * Удаление варианта: новым людям больше не выдаётся, из списка и воронки пропадает.
+ * Тем, кому он уже достался, тексты по-прежнему показываются (variationFor не смотрит на удаление).
+ */
+export async function deleteVariation(db: Db, id: number, now: Date): Promise<boolean> {
+  const done = await db
+    .update(variations)
+    .set({ deletedAt: now, active: false })
+    .where(and(eq(variations.id, id), isNull(variations.deletedAt)))
+    .returning({ id: variations.id });
+  return done.length > 0;
 }
 
 export async function getVariationTexts(db: Db, variationId: number): Promise<VariationTexts> {
@@ -124,6 +141,7 @@ export async function variationStats(db: Db): Promise<VariationStats[]> {
     .select({ id: variations.id, title: variations.title, active: variations.active, leads: count(leads.id) })
     .from(variations)
     .leftJoin(leads, eq(leads.variationId, variations.id))
+    .where(isNull(variations.deletedAt))
     .groupBy(variations.id)
     .orderBy(asc(variations.id));
 

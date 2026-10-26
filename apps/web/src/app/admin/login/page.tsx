@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { isAdmin } from "@/lib/admin-auth";
+import Link from "next/link";
+import { currentStaff } from "@/lib/staff-auth";
 import { ActionForm } from "../ActionForm";
 import { login } from "../auth-actions";
 
@@ -8,7 +9,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Вход в админку" };
 
 export default async function LoginPage() {
-  if (await isAdmin()) redirect("/admin");
+  if (await currentStaff()) redirect("/admin");
   return (
     <main className="admin admin--login">
       <h1>Вход в админку</h1>
@@ -19,6 +20,10 @@ export default async function LoginPage() {
         </label>
         <button className="button">Войти</button>
       </ActionForm>
+      <p className="muted">
+        Эксперты входят со своим логином на странице <Link href="/expert/login">/expert/login</Link> — после входа
+        админка доступна и им.
+      </p>
     </main>
   );
 }

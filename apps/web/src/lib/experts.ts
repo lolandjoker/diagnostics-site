@@ -6,7 +6,7 @@
  */
 import { randomBytes, scrypt as scryptCb, timingSafeEqual, createHmac } from "node:crypto";
 import { promisify } from "node:util";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq, isNull } from "drizzle-orm";
 import type { Db } from "@/db";
 import { expertPhotos, experts } from "@/db/schema";
 
@@ -108,10 +108,16 @@ const publicColumns = {
   active: experts.active,
   sort: experts.sort,
   createdAt: experts.createdAt,
+  deletedAt: experts.deletedAt,
 };
 
+/** Эксперты без удалённых. */
 export function listExperts(db: Db): Promise<PublicExpert[]> {
-  return db.select(publicColumns).from(experts).orderBy(asc(experts.sort), asc(experts.id));
+  return db
+    .select(publicColumns)
+    .from(experts)
+    .where(isNull(experts.deletedAt))
+    .orderBy(asc(experts.sort), asc(experts.id));
 }
 
 export async function getExpert(db: Db, id: number): Promise<PublicExpert | null> {
@@ -150,6 +156,30 @@ export async function setExpertPassword(db: Db, id: number, password: string): P
   if (password.length < MIN_EXPERT_PASSWORD) return `Пароль — не короче ${MIN_EXPERT_PASSWORD} символов`;
   await db.update(experts).set({ passwordHash: await hashPassword(password) }).where(eq(experts.id, id));
   return null;
+}
+
+/**
+ * Удаление эксперта: выключен навсегда (не входит, не виден клиентам и в списках), логин освобождается
+ * для нового эксперта. Строка в базе остаётся — на неё ссылаются его чаты и сообщения.
+ */
+export async function deleteExpert(db: Db, id: number, now: Date): Promise<boolean> {
+  const [e] = await db
+    .select({ login: experts.login })
+    .from(experts)
+    .where(and(eq(experts.id, id), isNull(experts.deletedAt)));
+  if (!e) return false;
+  await db
+    .update(experts)
+    .set({
+      deletedAt: now,
+      active: false,
+      online: false,
+      busy: false,
+      onlineUntil: null,
+      login: `deleted-${id}-${e.login}`,
+    })
+    .where(eq(experts.id, id));
+  return true;
 }
 
 /** Отметка «эксперт на месте» — при каждом обращении к панели. */

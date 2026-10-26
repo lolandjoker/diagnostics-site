@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { getDb } from "@/db";
+import { isAdmin } from "@/lib/admin-auth";
 import { conversationHeader, getConversation } from "@/lib/chat";
 import { getTexts } from "@/lib/texts";
 import { CallPanel } from "../../../../CallPanel";
@@ -8,6 +9,7 @@ import { ChatThread } from "../../../../ChatThread";
 
 export default async function AdminChatPage(props: PageProps<"/admin/chats/[id]">) {
   const { id } = await props.params;
+  if (!(await isAdmin())) redirect(`/expert/chat/${id}`);
   const db = await getDb();
   const conversation = await getConversation(db, id);
   if (!conversation) notFound();

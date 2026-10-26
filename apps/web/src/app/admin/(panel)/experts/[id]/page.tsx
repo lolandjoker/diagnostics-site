@@ -4,13 +4,14 @@ import { getDb } from "@/db";
 import { MIN_EXPERT_PASSWORD, expertPhotoUrls, getExpert } from "@/lib/experts";
 import { ActionForm } from "../../../ActionForm";
 import { OnlineToggle } from "../../../OnlineToggle";
-import { updateExpertAction } from "../../../actions";
+import { DeleteForm } from "../../../DeleteForm";
+import { deleteExpertAction, updateExpertAction } from "../../../actions";
 
 export default async function ExpertAdminPage(props: PageProps<"/admin/experts/[id]">) {
   const { id } = await props.params;
   const db = await getDb();
   const expert = /^\d+$/.test(id) ? await getExpert(db, Number(id)) : null;
-  if (!expert) notFound();
+  if (!expert || expert.deletedAt) notFound();
   const photo = (await expertPhotoUrls(db)).get(expert.id);
 
   return (
@@ -63,6 +64,14 @@ export default async function ExpertAdminPage(props: PageProps<"/admin/experts/[
         </label>
         <button className="button">Сохранить</button>
       </ActionForm>
+
+      <DeleteForm
+        action={deleteExpertAction}
+        id={expert.id}
+        title="Удалить эксперта"
+        hint="Эксперт больше не сможет войти и пропадёт из списков и у клиентов. Его чаты останутся — ответить в них можно из панели любого эксперта. Логин освободится для нового эксперта."
+        confirm={`Да, удалить эксперта «${expert.name}»`}
+      />
     </>
   );
 }
