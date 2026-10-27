@@ -148,8 +148,9 @@ export async function variationStats(db: Db): Promise<VariationStats[]> {
   const chatRows = await db
     .select({
       variationId: leads.variationId,
-      chats: countDistinct(conversations.id),
-      replied: sql<number>`count(distinct ${conversations.id}) filter (where ${messages.author} = 'client')`.mapWith(
+      // У человека может быть несколько чатов (перевод к другому эксперту) — считаем людей, а не чаты
+      chats: countDistinct(conversations.leadId),
+      replied: sql<number>`count(distinct ${conversations.leadId}) filter (where ${messages.author} = 'client')`.mapWith(
         Number,
       ),
     })
@@ -159,7 +160,7 @@ export async function variationStats(db: Db): Promise<VariationStats[]> {
     .groupBy(leads.variationId);
 
   const callRows = await db
-    .select({ variationId: leads.variationId, called: countDistinct(calls.conversationId) })
+    .select({ variationId: leads.variationId, called: countDistinct(conversations.leadId) })
     .from(calls)
     .innerJoin(conversations, eq(conversations.id, calls.conversationId))
     .innerJoin(leads, eq(leads.id, conversations.leadId))

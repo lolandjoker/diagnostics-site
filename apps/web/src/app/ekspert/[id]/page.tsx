@@ -1,0 +1,150 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { getDb } from "@/db";
+import { listCertificates } from "@/lib/certificates";
+import { clientChats } from "@/lib/chat";
+import { latestExpertChange } from "@/lib/expert-change";
+import { expertPhotoUrls, expertStatus, expertTags, formatRating, getExpert, isOnline } from "@/lib/experts";
+import { getLead, isUuid } from "@/lib/leads";
+import { REVIEWS_PAGE_SIZE, expertReviews, reviewsCountLabel } from "@/lib/reviews";
+import { getTexts } from "@/lib/texts";
+import { Footer } from "../../Footer";
+import { ReviewsPager } from "../../ReviewsPager";
+import { chooseExpert, requestExpertChangeAction } from "../../razbor/[id]/eksperty/actions";
+
+export const dynamic = "force-dynamic";
+
+/**
+ * Полный профиль эксперта: фото, рейтинг, специализации, подробное описание, сертификаты, отзывы.
+ * ?lead=<заявка>&c=<чат> — человек пришёл из чата: назад — в чат, а внизу — «Открыть чат»,
+ * «Хочу к этому эксперту» (заявка) или «Написать» (если чатов ещё нет).
+ */
+export default async function ExpertProfilePage(props: PageProps<"/ekspert/[id]">) {
+  const { id } = await props.params;
+  const { lead: leadParam, c, sent } = await props.searchParams;
+  const db = await getDb();
+  const expert = /^\d{1,9}$/.test(id) ? await getExpert(db, Number(id)) : null;
+  if (!expert || !expert.active || expert.deletedAt) notFound();
+
+  const lead = typeof leadParam === "string" ? await getLead(db, leadParam) : null;
+  const [photos, certificates, reviews, chats, t] = await Promise.all([
+    expertPhotoUrls(db),
+    listCertificates(db, expert.id),
+    expertReviews(db, [expert.id]),
+    lead ? clientChats(db, lead.id) : Promise.resolve([]),
+    getTexts(db, ["experts.busy", "experts.choose"]),
+  ]);
+  const photo = photos.get(expert.id) ?? null;
+  const status = expertStatus(expert, new Date());
+  const tags = expertTags(expert.tags);
+  const r = reviews.get(expert.id);
+  const withExpert = chats.find((ch) => ch.expertId === expert.id);
+  const fromChat = typeof c === "string" && isUuid(c) ? chats.find((ch) => ch.id === c) : undefined;
+  const current = fromChat ?? chats[0];
+  const change = current ? await latestExpertChange(db, current.id) : null;
+  const pending = change?.status === "pending" && change.toExpertId === expert.id;
+  const self = lead ? `/ekspert/${expert.id}?lead=${lead.id}${fromChat ? `&c=${fromChat.id}` : ""}` : "";
+
+  return (
+    <>
+      <main className="page page--profile">
+        {lead && (
+          <p>
+            {fromChat ? (
+              <Link href={`/razbor/${lead.id}/chat?c=${fromChat.id}`}>← Вернуться в чат</Link>
+            ) : (
+              <Link href={`/razbor/${lead.id}/eksperty`}>← Все эксперты</Link>
+            )}
+          </p>
+        )}
+
+        <section className="profile">
+          <div className="profile__photo">
+            {photo ? <img src={photo} alt={expert.name} /> : <span aria-hidden="true">{expert.name.trim().slice(0, 1).toUpperCase()}</span>}
+          </div>
+          <div className="profile__head">
+            <h1>{expert.name}</h1>
+            <span className={`status status--${status}`}>
+              {status === "online" ? "в сети" : status === "busy" ? t["experts.busy"] : "не в сети"}
+            </span>
+            <div className="expert__rating profile__rating">
+              <span className="rating">★ {formatRating(expert.rating)}</span>
+              {expert.reviewsShown > 0 && <span className="muted">{reviewsCountLabel(expert.reviewsShown)}</span>}
+            </div>
+            {tags.length > 0 && (
+              <ul className="tags">
+                {tags.map((tag) => (
+                  <li key={tag}>{tag}</li>
+                ))}
+              </ul>
+            )}
+            {expert.description && <p className="text profile__lead">{expert.description}</p>}
+
+            {lead && (
+              <div className="profile__action">
+                {sent === "1" && pending && <p className="notice-card notice-card--pending">Заявка отправлена — переведём вас, как только эксперт сможет взять чат.</p>}
+                {withExpert ? (
+                  <Link className="button" href={`/razbor/${lead.id}/chat?c=${withExpert.id}`}>
+                    Открыть чат
+                  </Link>
+                ) : current ? (
+                  pending ? (
+                    <button className="button" disabled>
+                      Заявка отправлена
+                    </button>
+                  ) : (
+                    <form action={requestExpertChangeAction}>
+                      <input type="hidden" name="leadId" value={lead.id} />
+                      <input type="hidden" name="expertId" value={expert.id} />
+                      <input type="hidden" name="return" value={self} />
+                      <button className="button">Хочу к этому эксперту</button>
+                    </form>
+                  )
+                ) : (
+                  isOnline(expert, new Date()) && (
+                    <form action={chooseExpert}>
+                      <input type="hidden" name="leadId" value={lead.id} />
+                      <input type="hidden" name="expertId" value={expert.id} />
+                      <button className="button">{t["experts.choose"]}</button>
+                    </form>
+                  )
+                )}
+              </div>
+            )}
+          </div>
+        </section>
+
+        {expert.about && (
+          <section className="card profile__section">
+            <h2>О себе</h2>
+            <p className="text">{expert.about}</p>
+          </section>
+        )}
+
+        {certificates.length > 0 && (
+          <section className="card profile__section">
+            <h2>Сертификаты</h2>
+            <ul className="certs">
+              {certificates.map((cert) => (
+                <li key={cert.id}>
+                  <a href={cert.url} target="_blank" rel="noopener noreferrer" className="certs__item">
+                    <img src={cert.url} alt={cert.title || "Сертификат"} loading="lazy" />
+                    {cert.title && <span>{cert.title}</span>}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {r && (
+          <section className="card profile__section reviews reviews--open">
+            <h2>Отзывы</h2>
+            <ReviewsPager reviews={r.latest} pageSize={REVIEWS_PAGE_SIZE} />
+          </section>
+        )}
+      </main>
+      <Footer />
+    </>
+  );
+}

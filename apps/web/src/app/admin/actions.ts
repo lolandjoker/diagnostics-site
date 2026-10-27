@@ -12,6 +12,7 @@ import { getDb } from "@/db";
 import { experts, variations } from "@/db/schema";
 import { requireAdmin } from "@/lib/admin-auth";
 import { addReview, deleteReview, setReviewHidden } from "@/lib/reviews";
+import { addCertificate, deleteCertificate } from "@/lib/certificates";
 import { approveExpertChange, declineExpertChange } from "@/lib/expert-change";
 import { requireStaff } from "@/lib/staff-auth";
 import {
@@ -19,6 +20,7 @@ import {
   adminOnlineMs,
   createExpert,
   deleteExpert,
+  expertTags,
   getExpert,
   parseRating,
   parseReviewsShown,
@@ -177,6 +179,8 @@ export async function updateExpertAction(_prev: ActionResult, form: FormData): P
     .set({
       name,
       description: str(form, "description").replace(/\r\n/g, "\n").trim(),
+      about: str(form, "about").replace(/\r\n/g, "\n").trim(),
+      tags: expertTags(str(form, "tags")).join(", "),
       sort: int(form, "sort") ?? expert.sort,
       rating,
       reviewsShown,
@@ -257,5 +261,27 @@ export async function declineExpertChangeAction(form: FormData): Promise<void> {
   await requireStaff();
   const id = int(form, "id");
   if (id !== null) await declineExpertChange(await getDb(), id, new Date());
+  refresh();
+}
+
+// --- Сертификаты эксперта ---
+
+export async function addCertificateAction(_prev: ActionResult, form: FormData): Promise<ActionResult> {
+  await requireStaff();
+  const expertId = int(form, "expert_id");
+  if (expertId === null) return fail("Эксперт не найден");
+  const file = form.get("file");
+  if (!(file instanceof File) || file.size === 0) return fail("Выберите картинку сертификата");
+  const error = await addCertificate(await getDb(), expertId, str(form, "title"), Buffer.from(await file.arrayBuffer()));
+  if (error) return fail(error);
+  refresh();
+  return done("Сертификат добавлен");
+}
+
+export async function deleteCertificateAction(form: FormData): Promise<void> {
+  await requireStaff();
+  const expertId = int(form, "expert_id");
+  const id = int(form, "id");
+  if (expertId !== null && id !== null && form.get("confirm") === "on") await deleteCertificate(await getDb(), expertId, id);
   refresh();
 }

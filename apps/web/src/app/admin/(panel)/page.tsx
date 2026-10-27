@@ -6,8 +6,13 @@ export default async function DashboardPage() {
   const db = await getDb();
   const [[leadRow], [chatRow], [repliedRow], [callRow]] = await Promise.all([
     db.select({ n: count() }).from(leads),
-    db.select({ n: count() }).from(conversations),
-    db.select({ n: countDistinct(messages.conversationId) }).from(messages).where(eq(messages.author, "client")),
+    // Людей, а не чатов: после перевода к другому эксперту у человека их несколько
+    db.select({ n: countDistinct(conversations.leadId) }).from(conversations),
+    db
+      .select({ n: countDistinct(conversations.leadId) })
+      .from(messages)
+      .innerJoin(conversations, eq(conversations.id, messages.conversationId))
+      .where(eq(messages.author, "client")),
     db
       .select({ n: count() })
       .from(calls)

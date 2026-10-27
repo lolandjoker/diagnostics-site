@@ -831,6 +831,7 @@ td.actions {
 
 .chat__peer .status {
   font-size: 0.8125rem;
+  white-space: nowrap;
 }
 
 .chat__messages {
@@ -1789,6 +1790,474 @@ td.actions {
   display: inline-flex;
   gap: 8px;
   align-items: center;
+}
+
+/* --- Чат клиента как в мессенджере: переписки | чат | профиль эксперта --- */
+
+.messenger {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr) 320px;
+  gap: 16px;
+  max-width: 1440px;
+  height: 100dvh;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.messenger__chats,
+.messenger__chat,
+.messenger__profile {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.messenger__chat .chat {
+  flex: 1;
+}
+
+.chat__icon-button--narrow {
+  display: none;
+}
+
+@media (max-width: 1200px) {
+  .messenger {
+    grid-template-columns: 280px minmax(0, 1fr);
+  }
+
+  .messenger__profile {
+    display: none;
+  }
+}
+
+@media (max-width: 860px) {
+  .messenger {
+    grid-template-columns: 1fr;
+    padding: 0;
+  }
+
+  .messenger__chats {
+    display: none;
+  }
+
+  .messenger__chat .chat {
+    border: 0;
+    border-radius: 0;
+  }
+
+  .chat__icon-button--narrow {
+    display: grid;
+  }
+
+  /* На телефоне эксперты — со страницы «Переписки», в шапке место под имя */
+  .chat__icon-button--wide {
+    display: none;
+  }
+}
+
+.chat__peer-name {
+  overflow: hidden;
+  color: inherit;
+  font-size: 1.0625rem;
+  font-weight: 700;
+  white-space: nowrap;
+  text-decoration: none;
+  text-overflow: ellipsis;
+}
+
+.chat__peer-name:hover {
+  text-decoration: underline;
+}
+
+/* Переписки */
+.chats {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.chats__title {
+  padding: 18px 20px 8px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.chats__list {
+  flex: 1;
+  margin: 0;
+  padding: 4px 8px;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.chats__item {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 10px;
+  border-radius: 16px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.chats__item:hover {
+  background: rgba(127, 127, 127, 0.1);
+}
+
+.chats__item.is-current {
+  background: linear-gradient(135deg, #5d45a3, #45337f);
+  color: #fff;
+}
+
+.chats__body {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+
+.chats__top {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.chats__top b {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.chats__top time {
+  flex: none;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.chats__last {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  line-height: 1.35;
+}
+
+.is-current .chats__last,
+.is-current .chats__top time {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.chats__preview {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.chats__unread {
+  display: grid;
+  flex: none;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--gold);
+  color: #1a1206;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.chats__more {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  margin: 12px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #ecd092, #c99a4e);
+  color: #1a1206;
+  font-weight: 700;
+  line-height: 1.3;
+  text-decoration: none;
+}
+
+.chats__more small {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  opacity: 0.75;
+}
+
+.page--chats .chats {
+  flex: none;
+}
+
+.page--chats .chats__title {
+  display: none;
+}
+
+/* Мини-профиль эксперта справа от чата */
+.expert-panel {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.expert-panel__photo,
+.profile__photo {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: linear-gradient(135deg, rgba(217, 182, 111, 0.35), rgba(93, 69, 163, 0.55));
+}
+
+.expert-panel__photo {
+  aspect-ratio: 1 / 1;
+}
+
+.expert-panel__photo img,
+.profile__photo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.expert-panel__photo span,
+.profile__photo span {
+  color: var(--gold);
+  font-family: var(--font-display);
+  font-size: 5rem;
+}
+
+.expert-panel__body {
+  display: grid;
+  gap: 8px;
+  padding: 18px 20px 22px;
+}
+
+.expert-panel__name {
+  font-family: var(--font-display);
+  font-size: 1.7rem;
+  line-height: 1.15;
+}
+
+.expert-panel__text {
+  display: -webkit-box;
+  margin: 6px 0 0;
+  overflow: hidden;
+  font-size: 0.9375rem;
+  -webkit-line-clamp: 6;
+  -webkit-box-orient: vertical;
+}
+
+.expert-panel__more {
+  justify-self: center;
+  margin-top: 10px;
+  color: var(--gold);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.expert-panel__more:hover {
+  text-decoration: underline;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tags li {
+  padding: 4px 11px;
+  border-radius: 999px;
+  background: rgba(127, 127, 127, 0.16);
+  font-size: 0.8125rem;
+}
+
+/* Полный профиль эксперта */
+.page--profile {
+  max-width: 920px;
+}
+
+.profile {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  gap: 28px;
+  align-items: start;
+  margin-bottom: 8px;
+}
+
+.profile__photo {
+  aspect-ratio: 1 / 1.1;
+  border-radius: 24px;
+  box-shadow: var(--shadow);
+}
+
+.profile__head {
+  display: grid;
+  gap: 10px;
+}
+
+.page .profile__head h1 {
+  margin: 0;
+}
+
+.profile__rating {
+  font-size: 1.125rem;
+}
+
+.profile__lead {
+  margin: 0;
+  color: var(--muted);
+}
+
+.profile__action {
+  margin-top: 8px;
+}
+
+.profile__section {
+  margin-top: 16px;
+}
+
+.card.reviews--open {
+  margin-top: 16px;
+  padding-top: 22px;
+}
+
+@media (max-width: 700px) {
+  .profile {
+    grid-template-columns: 1fr;
+  }
+
+  .profile__photo {
+    max-width: 320px;
+  }
+}
+
+.certs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.certs__item {
+  display: grid;
+  gap: 6px;
+  color: inherit;
+  font-size: 0.8125rem;
+  text-decoration: none;
+}
+
+.certs__item img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  object-fit: cover;
+}
+
+.certs--admin {
+  margin-bottom: 16px;
+}
+
+.certs--admin li {
+  display: grid;
+  gap: 6px;
+}
+
+.expert__name-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.expert__name-link:hover {
+  text-decoration: underline;
+}
+
+.expert__profile-link {
+  margin: 12px 0 0;
+  font-size: 0.875rem;
+}
+
+/* «Печатает…» */
+.chat__typing {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 10px 0 0 42px;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  animation: msg-in 0.25s ease-out;
+}
+
+.typing-dots {
+  display: inline-flex;
+  gap: 4px;
+  padding: 9px 12px;
+  border-radius: 16px;
+  background: rgba(127, 127, 127, 0.15);
+}
+
+.typing-dots i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--muted);
+  animation: typing 1.2s ease-in-out infinite;
+}
+
+.typing-dots i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.typing-dots i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes typing {
+  0%,
+  60%,
+  100% {
+    opacity: 0.4;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-4px);
+  }
+}
+
+.status--typing {
+  color: var(--gold);
 }
 
 /* Без анимаций для тех, кто отключил их в системе */

@@ -78,6 +78,13 @@
       "when": 1793004116072,
       "tag": "0010_expert_change",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1793115123333,
+      "tag": "0011_messenger_profile",
+      "breakpoints": true
     }
   ]
 }

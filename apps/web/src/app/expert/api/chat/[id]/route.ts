@@ -6,6 +6,7 @@ import { getDb } from "@/db";
 import { MAX_CHAT_PHOTO_BYTES, deliverDueFullTexts, getConversation, markExpertRead, messageViews, postMessage } from "@/lib/chat";
 import { currentExpert } from "@/lib/expert-auth";
 import { afterParam, jsonError, messagePayload, noStore, sameOrigin } from "@/lib/http";
+import { clearTyping, isTyping } from "@/lib/typing";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +18,13 @@ export async function GET(req: Request, ctx: RouteContext<"/expert/api/chat/[id]
   if (!conversation) return jsonError("Чат не найден", 404);
   await deliverDueFullTexts(db, new Date(), conversation.id);
   if (conversation.expertId === expert.id) await markExpertRead(db, conversation.id, new Date());
-  return Response.json({ messages: await messageViews(db, conversation, afterParam(req), "staff") }, { headers: noStore });
+  return Response.json(
+    {
+      messages: await messageViews(db, conversation, afterParam(req), "staff"),
+      typing: isTyping(conversation.id, "client", new Date()),
+    },
+    { headers: noStore },
+  );
 }
 
 export async function POST(req: Request, ctx: RouteContext<"/expert/api/chat/[id]">) {
@@ -32,5 +39,6 @@ export async function POST(req: Request, ctx: RouteContext<"/expert/api/chat/[id
   if (typeof data === "string") return jsonError(data, 400);
   const res = await postMessage(db, conversation.id, { author: "expert", expertId: expert.id, ...data });
   if (!res.ok) return jsonError(res.error, 400);
+  clearTyping(conversation.id, "staff");
   return Response.json({ id: res.id }, { headers: noStore });
 }

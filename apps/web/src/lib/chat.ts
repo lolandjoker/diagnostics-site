@@ -1,6 +1,8 @@
 /**
  * Чат человека с экспертом. Человек входит без регистрации: доступ к чату — по случайному id
- * его заявки в адресе. Пишут: клиент, любой эксперт, админ.
+ * его заявки в адресе. У заявки может быть несколько чатов — по одному с каждым экспертом (первый
+ * человек начинает сам, следующие — когда его переводят к другому эксперту по заявке); «текущий» —
+ * с последним сообщением. Пишут: клиент, любой эксперт, админ.
  * Ответил другой эксперт — клиент видит его имя. Сообщения админа клиент видит от имени эксперта
  * чата (имя и фото); подпись «Администратор» видят только эксперты и админ.
  * К сообщению можно приложить фото (JPEG, PNG или WebP до MAX_CHAT_PHOTO_BYTES).
@@ -20,12 +22,78 @@ export const MAX_MESSAGE_LENGTH = 4000;
 export const CLIENT_MESSAGES_PER_MINUTE = 20;
 /** Через сколько после начала чата в него приходит текст 2 варианта. */
 export const FULL_TEXT_DELAY_MS = 3 * 60 * 1000;
+/** За сколько до текста 2 у клиента появляется «печатает…» — будто подробный разбор набирают. */
+export const FULL_TEXT_TYPING_MS = 20_000;
 /** Фото в чате. Браузер перед отправкой уменьшает снимок, так что обычно выходит меньше 1 МБ. */
 export const MAX_CHAT_PHOTO_BYTES = 5 * 1024 * 1024;
 
+/** Текущий чат заявки — где последнее сообщение (после перевода — чат с новым экспертом); null — чата нет. */
 export async function conversationForLead(db: Db, leadId: string): Promise<Conversation | null> {
-  const [c] = await db.select().from(conversations).where(eq(conversations.leadId, leadId));
+  const [c] = await db
+    .select()
+    .from(conversations)
+    .where(eq(conversations.leadId, leadId))
+    .orderBy(desc(conversations.lastMessageAt), desc(conversations.createdAt))
+    .limit(1);
   return c ?? null;
+}
+
+/** Чат заявки по его id (только если он этой заявки) или текущий, если id не задан. */
+export async function leadConversation(db: Db, leadId: string, conversationId?: string | null): Promise<Conversation | null> {
+  if (!conversationId) return conversationForLead(db, leadId);
+  if (!/^[0-9a-f-]{36}$/i.test(conversationId)) return null;
+  const [c] = await db
+    .select()
+    .from(conversations)
+    .where(and(eq(conversations.id, conversationId), eq(conversations.leadId, leadId)));
+  return c ?? null;
+}
+
+/** Клиент открыл чат — его сообщения больше не «непрочитанные» в списке чатов. */
+export async function markClientRead(db: Db, conversationId: string, now: Date): Promise<void> {
+  await db.update(conversations).set({ clientReadAt: now }).where(eq(conversations.id, conversationId));
+}
+
+export interface ClientChatItem {
+  id: string;
+  expertId: number;
+  expertName: string;
+  expertPhoto: string | null;
+  lastMessage: string;
+  lastMessageAt: string;
+  /** Сообщений эксперта (и админа, и разбора), которые клиент ещё не видел. */
+  unread: number;
+}
+
+/** Чаты клиента для списка слева: свежие сверху. */
+export async function clientChats(db: Db, leadId: string): Promise<ClientChatItem[]> {
+  const rows = await db
+    .select({
+      c: conversations,
+      expertName: experts.name,
+      unread: sql<number>`(select count(*) from ${messages} m where m.conversation_id = ${conversations.id}
+        and m.author <> 'client' and (${conversations.clientReadAt} is null or m.created_at > ${conversations.clientReadAt}))`.mapWith(
+        Number,
+      ),
+      lastMessage: sql<string>`coalesce((select case when m.product_id is not null then 'Предложение продукта'
+          when m.body = '' and exists (select 1 from ${messagePhotos} p where p.message_id = m.id) then 'Фото'
+          else left(m.body, 120) end
+        from ${messages} m where m.conversation_id = ${conversations.id} order by m.id desc limit 1), '')`,
+    })
+    .from(conversations)
+    .innerJoin(experts, eq(experts.id, conversations.expertId))
+    .where(eq(conversations.leadId, leadId))
+    .orderBy(desc(conversations.lastMessageAt));
+  const photos = await expertPhotoUrls(db);
+  return rows.map((r) => ({
+    id: r.c.id,
+    expertId: r.c.expertId,
+    expertName: r.expertName,
+    expertPhoto: photos.get(r.c.expertId) ?? null,
+    lastMessage: r.lastMessage,
+    lastMessageAt: r.c.lastMessageAt.toISOString(),
+    unread: r.unread,
+  }));
 }
 
 export async function getConversation(db: Db, id: string): Promise<Conversation | null> {
@@ -43,8 +111,9 @@ export async function selectableExperts(db: Db, now: Date) {
 export type StartResult = { ok: true; conversation: Conversation } | { ok: false; error: string };
 
 /**
- * Человек выбрал эксперта: создаётся чат. Текст 2 варианта приходит в него через FULL_TEXT_DELAY_MS
- * (см. deliverDueFullTexts). Повторный выбор — в тот же чат.
+ * Человек выбрал эксперта: создаётся его первый чат. Текст 2 варианта приходит в него через
+ * FULL_TEXT_DELAY_MS (см. deliverDueFullTexts). Чат уже есть — новый не начать (к другому эксперту —
+ * по заявке, lib/expert-change.ts), возвращается текущий.
  */
 export async function startConversation(db: Db, lead: Lead, expertId: number, now: Date): Promise<StartResult> {
   const existing = await conversationForLead(db, lead.id);
@@ -65,6 +134,12 @@ export async function startConversation(db: Db, lead: Lead, expertId: number, no
     return again ? { ok: true, conversation: again } : { ok: false, error: "Не удалось открыть чат" };
   }
   return { ok: true, conversation: created };
+}
+
+/** Текст 2 ещё не пришёл, но придёт в ближайшие FULL_TEXT_TYPING_MS — показываем «печатает…». */
+export function fullTextTyping(c: Pick<Conversation, "createdAt" | "fullTextSentAt">, now: Date): boolean {
+  if (c.fullTextSentAt) return false;
+  return now.getTime() >= c.createdAt.getTime() + FULL_TEXT_DELAY_MS - FULL_TEXT_TYPING_MS;
 }
 
 /**

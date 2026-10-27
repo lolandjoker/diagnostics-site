@@ -1,20 +1,21 @@
 /** Отзыв клиента об эксперте чата. Доступ — как к чату: по id заявки в адресе. */
 import { getDb } from "@/db";
-import { conversationForLead } from "@/lib/chat";
+import { leadConversation } from "@/lib/chat";
 import { jsonBody, jsonError, noStore, sameOrigin } from "@/lib/http";
 import { getLead } from "@/lib/leads";
 import { reviewForConversation, saveReview } from "@/lib/reviews";
 
 export const dynamic = "force-dynamic";
 
-async function load(leadId: string) {
+/** ?c=<id чата> — какой из чатов заявки; без него — текущий. */
+async function load(req: Request, leadId: string) {
   const db = await getDb();
   const lead = await getLead(db, leadId);
-  return { db, conversation: lead ? await conversationForLead(db, lead.id) : null };
+  return { db, conversation: lead ? await leadConversation(db, lead.id, new URL(req.url).searchParams.get("c")) : null };
 }
 
-export async function GET(_req: Request, ctx: RouteContext<"/api/chat/[leadId]/review">) {
-  const { db, conversation } = await load((await ctx.params).leadId);
+export async function GET(req: Request, ctx: RouteContext<"/api/chat/[leadId]/review">) {
+  const { db, conversation } = await load(req, (await ctx.params).leadId);
   if (!conversation) return jsonError("Чат не найден", 404);
   const review = await reviewForConversation(db, conversation.id);
   return Response.json({ review: review && { stars: review.stars, body: review.body } }, { headers: noStore });
@@ -22,7 +23,7 @@ export async function GET(_req: Request, ctx: RouteContext<"/api/chat/[leadId]/r
 
 export async function POST(req: Request, ctx: RouteContext<"/api/chat/[leadId]/review">) {
   if (!sameOrigin(req)) return jsonError("Запрос не с сайта", 403);
-  const { db, conversation } = await load((await ctx.params).leadId);
+  const { db, conversation } = await load(req, (await ctx.params).leadId);
   if (!conversation) return jsonError("Чат не найден", 404);
   const data = await jsonBody(req);
   const res = await saveReview(
