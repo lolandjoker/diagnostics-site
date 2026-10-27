@@ -2,13 +2,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDb } from "@/db";
 import { listCertificates } from "@/lib/certificates";
+import { expertGallery } from "@/lib/gallery";
 import { clientChats } from "@/lib/chat";
 import { latestExpertChange } from "@/lib/expert-change";
 import { expertPhotoUrls, expertStatus, expertTags, formatRating, getExpert, isOnline } from "@/lib/experts";
 import { getLead, isUuid } from "@/lib/leads";
 import { REVIEWS_PAGE_SIZE, expertReviews, reviewsCountLabel } from "@/lib/reviews";
 import { getTexts } from "@/lib/texts";
-import { initial } from "../../Avatar";
+import { PhotoGallery } from "../../PhotoGallery";
 import { Footer } from "../../Footer";
 import { ReviewsPager } from "../../ReviewsPager";
 import { chooseExpert, requestExpertChangeAction } from "../../razbor/[id]/eksperty/actions";
@@ -35,7 +36,7 @@ export default async function ExpertProfilePage(props: PageProps<"/ekspert/[id]"
     lead ? clientChats(db, lead.id) : Promise.resolve([]),
     getTexts(db, ["experts.busy", "experts.choose"]),
   ]);
-  const photo = photos.get(expert.id) ?? null;
+  const gallery = await expertGallery(db, expert.id, photos.get(expert.id) ?? null);
   const status = expertStatus(expert, new Date());
   const tags = expertTags(expert.tags);
   const r = reviews.get(expert.id);
@@ -60,9 +61,7 @@ export default async function ExpertProfilePage(props: PageProps<"/ekspert/[id]"
         )}
 
         <section className="profile">
-          <div className="profile__photo">
-            {photo ? <img src={photo} alt={expert.name} /> : <span aria-hidden="true">{initial(expert.name)}</span>}
-          </div>
+          <PhotoGallery photos={gallery} name={expert.name} className="profile__photo" />
           <div className="profile__head">
             <h1>{expert.name}</h1>
             <span className={`status status--${status}`}>

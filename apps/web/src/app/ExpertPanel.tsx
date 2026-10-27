@@ -2,17 +2,18 @@ import Link from "next/link";
 import { expertStatus, expertTags, formatRating } from "@/lib/experts";
 import type { PublicExpert } from "@/lib/experts";
 import { reviewsCountLabel } from "@/lib/reviews";
-import { initial } from "./Avatar";
+import { PhotoGallery } from "./PhotoGallery";
 
-/** Мини-профиль эксперта справа от чата: фото, рейтинг, специализации, начало описания, ссылка на профиль. */
+/** Мини-профиль эксперта справа от чата: фото (листаются), рейтинг, специализации, начало описания, ссылка на профиль. */
 export function ExpertPanel({
   expert,
-  photo,
+  photos,
   busyLabel,
   profileHref,
 }: {
   expert: PublicExpert;
-  photo: string | null;
+  /** Главное фото и дополнительные — по порядку. */
+  photos: string[];
   busyLabel: string;
   profileHref: string;
 }) {
@@ -21,9 +22,7 @@ export function ExpertPanel({
   const text = expert.about || expert.description;
   return (
     <aside className="expert-panel" aria-label={`Эксперт ${expert.name}`}>
-      <div className="expert-panel__photo">
-        {photo ? <img src={photo} alt="" /> : <span aria-hidden="true">{initial(expert.name)}</span>}
-      </div>
+      <PhotoGallery photos={photos} name={expert.name} className="expert-panel__photo" />
       <div className="expert-panel__body">
         <b className="expert-panel__name">{expert.name}</b>
         <span className={`status status--${status}`}>

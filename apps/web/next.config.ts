@@ -19,9 +19,10 @@ const nextConfig: NextConfig = {
   transpilePackages: ["@diag/engine"],
   // Драйверы базы грузятся из node_modules как есть, без упаковки сборщиком
   serverExternalPackages: ["pg", "@electric-sql/pglite"],
-  // Загрузка фото эксперта (до 2 МБ) и сертификатов (до 5 МБ) идёт через серверные действия; по умолчанию лимит 1 МБ
+  // Фото эксперта и сертификаты загружаются через серверные действия, по нескольку файлов за раз
+  // (до 10 штук по 5 МБ); по умолчанию лимит 1 МБ
   experimental: {
-    serverActions: { bodySizeLimit: "6mb" },
+    serverActions: { bodySizeLimit: "55mb" },
   },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
