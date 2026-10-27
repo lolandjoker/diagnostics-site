@@ -8,6 +8,7 @@ import { expertPhotoUrls, expertStatus, expertTags, formatRating, getExpert, isO
 import { getLead, isUuid } from "@/lib/leads";
 import { REVIEWS_PAGE_SIZE, expertReviews, reviewsCountLabel } from "@/lib/reviews";
 import { getTexts } from "@/lib/texts";
+import { initial } from "../../Avatar";
 import { Footer } from "../../Footer";
 import { ReviewsPager } from "../../ReviewsPager";
 import { chooseExpert, requestExpertChangeAction } from "../../razbor/[id]/eksperty/actions";
@@ -60,7 +61,7 @@ export default async function ExpertProfilePage(props: PageProps<"/ekspert/[id]"
 
         <section className="profile">
           <div className="profile__photo">
-            {photo ? <img src={photo} alt={expert.name} /> : <span aria-hidden="true">{expert.name.trim().slice(0, 1).toUpperCase()}</span>}
+            {photo ? <img src={photo} alt={expert.name} /> : <span aria-hidden="true">{initial(expert.name)}</span>}
           </div>
           <div className="profile__head">
             <h1>{expert.name}</h1>
