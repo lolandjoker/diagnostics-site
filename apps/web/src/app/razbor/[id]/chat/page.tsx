@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { getDb } from "@/db";
 import { clientChats, conversationForLead, leadConversation } from "@/lib/chat";
 import { expertPhotoUrls, formatRating, getExpert } from "@/lib/experts";
+import { expertGallery } from "@/lib/gallery";
 import { getLead } from "@/lib/leads";
 import { fillTemplate, getTexts } from "@/lib/texts";
 import { CallPanel } from "../../../CallPanel";
@@ -39,6 +40,7 @@ export default async function ClientChatPage(props: PageProps<"/razbor/[id]/chat
 
   const expertName = expert?.name ?? "Эксперт";
   const expertPhoto = expert ? (photos.get(expert.id) ?? null) : null;
+  const gallery = expert ? await expertGallery(db, expert.id, expertPhoto) : [];
   const q = `?c=${conversation.id}`;
   const profileHref = `/ekspert/${conversation.expertId}?lead=${lead.id}&c=${conversation.id}`;
 
@@ -105,7 +107,7 @@ export default async function ClientChatPage(props: PageProps<"/razbor/[id]/chat
       </div>
       {expert && (
         <div className="messenger__profile">
-          <ExpertPanel expert={expert} photo={expertPhoto} busyLabel={t["experts.busy"]} profileHref={profileHref} />
+          <ExpertPanel expert={expert} photos={gallery} busyLabel={t["experts.busy"]} profileHref={profileHref} />
         </div>
       )}
     </main>

@@ -34,15 +34,45 @@ export async function getCertificate(db: Db, expertId: number, id: number) {
   return c ?? null;
 }
 
-/** Добавить сертификат. Строка — ошибка для админа, null — готово. */
-export async function addCertificate(db: Db, expertId: number, title: string, data: Buffer): Promise<string | null> {
-  if (data.length === 0) return "Выберите картинку сертификата";
-  if (data.length > MAX_CERTIFICATE_BYTES) return "Картинка больше 5 МБ";
-  const mime = detectImageMime(data);
-  if (!mime) return "Сертификат — картинка JPEG, PNG или WebP";
+/** Не больше стольких файлов за одну загрузку — чтобы запрос не вышел за лимит размера. */
+export const MAX_CERTIFICATES_PER_UPLOAD = 10;
+
+/**
+ * Добавить один или несколько сертификатов с одной подписью (потом её можно поправить у каждого).
+ * Сначала проверяются все файлы: если хоть один не подходит — не добавляется ни один.
+ * Строка — ошибка для админа, null — готово.
+ */
+export async function addCertificates(db: Db, expertId: number, title: string, files: Buffer[]): Promise<string | null> {
+  if (files.length === 0) return "Выберите картинку сертификата";
+  if (files.length > MAX_CERTIFICATES_PER_UPLOAD) return `За раз — не больше ${MAX_CERTIFICATES_PER_UPLOAD} файлов`;
   const t = title.trim();
   if (t.length > MAX_CERTIFICATE_TITLE) return `Подпись длиннее ${MAX_CERTIFICATE_TITLE} символов`;
-  await db.insert(expertCertificates).values({ expertId, title: t, mime, data });
+  const items: { mime: string; data: Buffer }[] = [];
+  for (const [i, data] of files.entries()) {
+    const n = files.length > 1 ? ` (файл ${i + 1})` : "";
+    if (data.length === 0) return `Пустой файл${n}`;
+    if (data.length > MAX_CERTIFICATE_BYTES) return `Картинка больше 5 МБ${n}`;
+    const mime = detectImageMime(data);
+    if (!mime) return `Сертификат — картинка JPEG, PNG или WebP${n}`;
+    items.push({ mime, data });
+  }
+  await db.insert(expertCertificates).values(items.map((it) => ({ expertId, title: t, ...it })));
+  return null;
+}
+
+/** Добавить один сертификат. */
+export function addCertificate(db: Db, expertId: number, title: string, data: Buffer): Promise<string | null> {
+  return addCertificates(db, expertId, title, [data]);
+}
+
+/** Поправить подпись сертификата. Строка — ошибка, null — готово. */
+export async function setCertificateTitle(db: Db, expertId: number, id: number, title: string): Promise<string | null> {
+  const t = title.trim();
+  if (t.length > MAX_CERTIFICATE_TITLE) return `Подпись длиннее ${MAX_CERTIFICATE_TITLE} символов`;
+  await db
+    .update(expertCertificates)
+    .set({ title: t })
+    .where(and(eq(expertCertificates.id, id), eq(expertCertificates.expertId, expertId)));
   return null;
 }
 

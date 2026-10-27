@@ -121,6 +121,22 @@ export const expertPhotos = pgTable("expert_photos", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/** Дополнительные фото эксперта — листаются в профиле после главного (expert_photos). */
+export const expertGalleryPhotos = pgTable(
+  "expert_gallery_photos",
+  {
+    id: serial("id").primaryKey(),
+    expertId: integer("expert_id")
+      .notNull()
+      .references(() => experts.id, { onDelete: "cascade" }),
+    mime: text("mime").notNull(),
+    data: bytea("data").notNull(),
+    sort: integer("sort").notNull().default(0),
+    createdAt: createdAt(),
+  },
+  (t) => [index("expert_gallery_photos_expert_idx").on(t.expertId, t.sort)],
+);
+
 /** Тексты сайта, которые правит админ. Ключи и тексты по умолчанию — в lib/texts.ts. */
 export const texts = pgTable("texts", {
   key: text("key").primaryKey(),

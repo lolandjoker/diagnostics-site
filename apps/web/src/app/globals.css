@@ -2199,6 +2199,122 @@ td.actions {
   gap: 6px;
 }
 
+.cert-title fieldset {
+  display: grid;
+  gap: 4px;
+  justify-items: start;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.cert-title input {
+  width: 100%;
+  min-width: 0;
+  padding: 6px 8px;
+  font-size: 0.8125rem;
+}
+
+.cert-title .notice {
+  margin: 4px 0 0;
+  font-size: 0.75rem;
+}
+
+/* Фото эксперта, которые листаются: свайп, стрелки, точки */
+.gallery {
+  position: relative;
+  display: block;
+}
+
+.gallery__track {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+}
+
+.gallery__track::-webkit-scrollbar {
+  display: none;
+}
+
+.gallery .gallery__track img {
+  flex: 0 0 100%;
+  scroll-snap-align: start;
+}
+
+.gallery__arrow {
+  position: absolute;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0 0 3px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(10, 8, 20, 0.45);
+  color: #fff;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  transform: translateY(-50%);
+  transition: opacity 0.2s;
+}
+
+.gallery__arrow--prev {
+  left: 10px;
+}
+
+.gallery__arrow--next {
+  right: 10px;
+}
+
+/* На компьютере стрелки появляются при наведении; на телефоне листают свайпом */
+@media (hover: hover) {
+  .gallery__arrow {
+    opacity: 0;
+  }
+
+  .gallery:hover .gallery__arrow,
+  .gallery__arrow:focus-visible {
+    opacity: 1;
+  }
+}
+
+@media (hover: none) {
+  .gallery__arrow {
+    display: none;
+  }
+}
+
+.gallery__dots {
+  position: absolute;
+  right: 0;
+  bottom: 10px;
+  left: 0;
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+}
+
+.gallery__dots button {
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.5);
+  box-shadow: 0 0 3px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+}
+
+.gallery__dots button.is-current {
+  background: #fff;
+}
+
 .expert__name-link {
   color: inherit;
   text-decoration: none;

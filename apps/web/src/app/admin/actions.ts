@@ -12,7 +12,8 @@ import { getDb } from "@/db";
 import { experts, variations } from "@/db/schema";
 import { requireAdmin } from "@/lib/admin-auth";
 import { addReview, deleteReview, setReviewHidden } from "@/lib/reviews";
-import { addCertificate, deleteCertificate } from "@/lib/certificates";
+import { addCertificates, deleteCertificate, setCertificateTitle } from "@/lib/certificates";
+import { addGalleryPhotos, deleteGalleryPhoto, deleteMainPhoto, makeMainPhoto } from "@/lib/gallery";
 import { approveExpertChange, declineExpertChange } from "@/lib/expert-change";
 import { requireStaff } from "@/lib/staff-auth";
 import {
@@ -45,6 +46,12 @@ const int = (form: FormData, key: string): number | null => {
   const s = str(form, key).trim();
   return /^-?\d{1,9}$/.test(s) ? Number(s) : null;
 };
+
+/** Выбранные в поле файлы (пустое поле браузер присылает как один пустой файл — его отбрасываем). */
+async function files(form: FormData, key: string): Promise<Buffer[]> {
+  const list = form.getAll(key).filter((f): f is File => f instanceof File && f.size > 0);
+  return Promise.all(list.map(async (f) => Buffer.from(await f.arrayBuffer())));
+}
 
 const fail = (message: string): ActionResult => ({ ok: false, message });
 const done = (message: string): ActionResult => ({ ok: true, message });
@@ -270,12 +277,22 @@ export async function addCertificateAction(_prev: ActionResult, form: FormData):
   await requireStaff();
   const expertId = int(form, "expert_id");
   if (expertId === null) return fail("Эксперт не найден");
-  const file = form.get("file");
-  if (!(file instanceof File) || file.size === 0) return fail("Выберите картинку сертификата");
-  const error = await addCertificate(await getDb(), expertId, str(form, "title"), Buffer.from(await file.arrayBuffer()));
+  const list = await files(form, "file");
+  const error = await addCertificates(await getDb(), expertId, str(form, "title"), list);
   if (error) return fail(error);
   refresh();
-  return done("Сертификат добавлен");
+  return done(list.length > 1 ? `Добавлено сертификатов: ${list.length}` : "Сертификат добавлен");
+}
+
+export async function setCertificateTitleAction(_prev: ActionResult, form: FormData): Promise<ActionResult> {
+  await requireStaff();
+  const expertId = int(form, "expert_id");
+  const id = int(form, "id");
+  if (expertId === null || id === null) return fail("Сертификат не найден");
+  const error = await setCertificateTitle(await getDb(), expertId, id, str(form, "title"));
+  if (error) return fail(error);
+  refresh();
+  return done("Подпись сохранена");
 }
 
 export async function deleteCertificateAction(form: FormData): Promise<void> {
@@ -283,5 +300,41 @@ export async function deleteCertificateAction(form: FormData): Promise<void> {
   const expertId = int(form, "expert_id");
   const id = int(form, "id");
   if (expertId !== null && id !== null && form.get("confirm") === "on") await deleteCertificate(await getDb(), expertId, id);
+  refresh();
+}
+
+// --- Фото эксперта: главное и дополнительные ---
+
+export async function addGalleryPhotosAction(_prev: ActionResult, form: FormData): Promise<ActionResult> {
+  await requireStaff();
+  const expertId = int(form, "expert_id");
+  if (expertId === null) return fail("Эксперт не найден");
+  const list = await files(form, "photos");
+  const error = await addGalleryPhotos(await getDb(), expertId, list);
+  if (error) return fail(error);
+  refresh();
+  return done(list.length > 1 ? `Добавлено фото: ${list.length}` : "Фото добавлено");
+}
+
+export async function makeMainPhotoAction(form: FormData): Promise<void> {
+  await requireStaff();
+  const expertId = int(form, "expert_id");
+  const id = int(form, "id");
+  if (expertId !== null && id !== null) await makeMainPhoto(await getDb(), expertId, id);
+  refresh();
+}
+
+export async function deleteGalleryPhotoAction(form: FormData): Promise<void> {
+  await requireStaff();
+  const expertId = int(form, "expert_id");
+  const id = int(form, "id");
+  if (expertId !== null && id !== null && form.get("confirm") === "on") await deleteGalleryPhoto(await getDb(), expertId, id);
+  refresh();
+}
+
+export async function deleteMainPhotoAction(form: FormData): Promise<void> {
+  await requireStaff();
+  const expertId = int(form, "expert_id");
+  if (expertId !== null && form.get("confirm") === "on") await deleteMainPhoto(await getDb(), expertId);
   refresh();
 }
