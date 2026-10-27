@@ -4,6 +4,7 @@ import { getDb } from "@/db";
 import { listCertificates } from "@/lib/certificates";
 import { MIN_EXPERT_PASSWORD, expertPhotoUrls, formatRating, getExpert } from "@/lib/experts";
 import { ActionForm } from "../../../ActionForm";
+import { initial } from "../../../../Avatar";
 import { OnlineToggle } from "../../../OnlineToggle";
 import { DeleteForm } from "../../../DeleteForm";
 import { addCertificateAction, deleteCertificateAction, deleteExpertAction, updateExpertAction } from "../../../actions";
@@ -41,7 +42,7 @@ export default async function ExpertAdminPage(props: PageProps<"/admin/experts/[
             <img className="expert__photo" src={photo} alt="" width={72} height={72} />
           ) : (
             <div className="expert__photo expert__photo--empty" aria-hidden="true">
-              {expert.name.slice(0, 1)}
+              {initial(expert.name)}
             </div>
           )}
           <label className="field">

@@ -376,7 +376,7 @@ export function ChatThread({
               <i />
               <i />
             </span>
-            {typingName ? `${typingName} печатает…` : "печатает…"}
+            <span className="chat__typing-text">{typingName ? `${typingName} печатает…` : "печатает…"}</span>
           </div>
         )}
       </div>

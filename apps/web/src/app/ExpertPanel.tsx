@@ -2,6 +2,7 @@ import Link from "next/link";
 import { expertStatus, expertTags, formatRating } from "@/lib/experts";
 import type { PublicExpert } from "@/lib/experts";
 import { reviewsCountLabel } from "@/lib/reviews";
+import { initial } from "./Avatar";
 
 /** Мини-профиль эксперта справа от чата: фото, рейтинг, специализации, начало описания, ссылка на профиль. */
 export function ExpertPanel({
@@ -21,7 +22,7 @@ export function ExpertPanel({
   return (
     <aside className="expert-panel" aria-label={`Эксперт ${expert.name}`}>
       <div className="expert-panel__photo">
-        {photo ? <img src={photo} alt="" /> : <span aria-hidden="true">{expert.name.trim().slice(0, 1).toUpperCase()}</span>}
+        {photo ? <img src={photo} alt="" /> : <span aria-hidden="true">{initial(expert.name)}</span>}
       </div>
       <div className="expert-panel__body">
         <b className="expert-panel__name">{expert.name}</b>

@@ -63,7 +63,7 @@ export function ClientChatList({
                 <Avatar name={c.expertName} photo={c.expertPhoto} size={46} />
                 <span className="chats__body">
                   <span className="chats__top">
-                    <b>{c.expertName}</b>
+                    <b title={c.expertName}>{c.expertName}</b>
                     <time dateTime={c.lastMessageAt}>{when(c.lastMessageAt)}</time>
                   </span>
                   <span className="chats__last">

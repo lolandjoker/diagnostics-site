@@ -1896,6 +1896,7 @@ td.actions {
   flex: 1;
   margin: 0;
   padding: 4px 8px;
+  overflow-x: hidden;
   overflow-y: auto;
   list-style: none;
 }
@@ -1922,6 +1923,7 @@ td.actions {
 .chats__body {
   display: grid;
   flex: 1;
+  grid-template-columns: minmax(0, 1fr);
   gap: 2px;
   min-width: 0;
 }
@@ -1934,6 +1936,8 @@ td.actions {
 }
 
 .chats__top b {
+  /* Длинное имя вроде «Вера 🪐 Проводник в рунологию» — в одну строку с «…», время остаётся справа */
+  min-width: 0;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -2057,6 +2061,7 @@ td.actions {
 }
 
 .expert-panel__name {
+  overflow-wrap: anywhere;
   font-family: var(--font-display);
   font-size: 1.7rem;
   line-height: 1.15;
@@ -2219,7 +2224,15 @@ td.actions {
   animation: msg-in 0.25s ease-out;
 }
 
+.chat__typing-text {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 .typing-dots {
+  flex: none;
   display: inline-flex;
   gap: 4px;
   padding: 9px 12px;
