@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDb } from "@/db";
-import { conversationForLead, selectableExperts } from "@/lib/chat";
+import { clientChats, conversationForLead, selectableExperts } from "@/lib/chat";
 import { latestExpertChange } from "@/lib/expert-change";
 import { expertPhotoUrls, formatRating } from "@/lib/experts";
 import { getLead } from "@/lib/leads";
@@ -22,6 +22,7 @@ export default async function ExpertsPage(props: PageProps<"/razbor/[id]/ekspert
   if (!lead) notFound();
   // Чат уже есть — эксперты только для просмотра; к другому — по заявке
   const chat = await conversationForLead(db, lead.id);
+  const chatWith = new Map((chat ? await clientChats(db, lead.id) : []).map((c) => [c.expertId, c.id]));
   const change = chat ? await latestExpertChange(db, chat.id) : null;
   const pendingTo = change?.status === "pending" ? change.toExpertId : null;
 
@@ -78,7 +79,11 @@ export default async function ExpertsPage(props: PageProps<"/razbor/[id]/ekspert
                 <div className="expert__head">
                   <Avatar name={e.name} photo={photo} size={72} online={e.isOnline} busy={e.status === "busy"} />
                   <div>
-                    <h2>{e.name}</h2>
+                    <h2>
+                      <Link className="expert__name-link" href={`/ekspert/${e.id}?lead=${lead.id}`}>
+                        {e.name}
+                      </Link>
+                    </h2>
                     <div className="expert__rating">
                       <span className="rating">★ {formatRating(e.rating)}</span>
                       {e.reviewsShown > 0 && <span className="muted">{reviewsCountLabel(e.reviewsShown)}</span>}
@@ -89,6 +94,9 @@ export default async function ExpertsPage(props: PageProps<"/razbor/[id]/ekspert
                   </div>
                 </div>
                 {e.description && <p className="text">{e.description}</p>}
+                <p className="expert__profile-link">
+                  <Link href={`/ekspert/${e.id}?lead=${lead.id}`}>Профиль, сертификаты и все отзывы →</Link>
+                </p>
                 {r && (
                   <details className="reviews">
                     <summary>Отзывы</summary>
@@ -96,11 +104,11 @@ export default async function ExpertsPage(props: PageProps<"/razbor/[id]/ekspert
                   </details>
                 )}
                 {chat ? (
-                  e.id === chat.expertId ? (
+                  chatWith.has(e.id) ? (
                     <p className="card__action">
-                      <span className="your-expert">Ваш эксперт</span>{" "}
-                      <Link className="button button--ghost" href={`/razbor/${lead.id}/chat`}>
-                        В чат
+                      {e.id === chat.expertId && <span className="your-expert">Ваш эксперт</span>}{" "}
+                      <Link className="button button--ghost" href={`/razbor/${lead.id}/chat?c=${chatWith.get(e.id)}`}>
+                        Открыть чат
                       </Link>
                     </p>
                   ) : e.id === pendingTo ? (

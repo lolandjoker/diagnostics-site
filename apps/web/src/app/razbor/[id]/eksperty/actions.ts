@@ -20,7 +20,10 @@ export async function chooseExpert(form: FormData): Promise<void> {
   redirect(`/razbor/${lead.id}/chat`);
 }
 
-/** Чат уже есть — человек не начинает новый, а оставляет заявку перейти к другому эксперту. */
+/**
+ * Чат уже есть — человек не начинает новый, а оставляет заявку перейти к другому эксперту.
+ * return — куда вернуть (профиль эксперта); без него — к списку экспертов.
+ */
 export async function requestExpertChangeAction(form: FormData): Promise<void> {
   const leadId = String(form.get("leadId") ?? "");
   const expertId = Number(form.get("expertId"));
@@ -30,5 +33,9 @@ export async function requestExpertChangeAction(form: FormData): Promise<void> {
   const conversation = await conversationForLead(db, lead.id);
   if (!conversation) redirect(`/razbor/${lead.id}/eksperty`);
   const res = await requestExpertChange(db, conversation, expertId, new Date());
-  redirect(`/razbor/${lead.id}/eksperty${res.ok ? "?sent=1" : `?error=${encodeURIComponent(res.error)}`}`);
+  const back = String(form.get("return") ?? "");
+  // Только свои страницы — не открытый редирект
+  const base = /^\/ekspert\/\d+\?lead=[0-9a-f-]{36}(&c=[0-9a-f-]{36})?$/i.test(back) ? back : `/razbor/${lead.id}/eksperty`;
+  const sep = base.includes("?") ? "&" : "?";
+  redirect(`${base}${sep}${res.ok ? "sent=1" : `error=${encodeURIComponent(res.error)}`}`);
 }

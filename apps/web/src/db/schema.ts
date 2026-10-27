@@ -69,6 +69,10 @@ export const experts = pgTable("experts", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
   description: text("description").notNull().default(""),
+  /** Подробное описание для профиля эксперта; короткое (description) — на карточке и в мини-профиле. */
+  about: text("about").notNull().default(""),
+  /** Специализации — теги в профиле («Таро, Астрология»), через запятую. */
+  tags: text("tags").notNull().default(""),
   login: text("login").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   online: boolean("online").notNull().default(false),
@@ -90,6 +94,23 @@ export const experts = pgTable("experts", {
   /** Число отзывов на карточке («347 отзывов») — задаётся в админке, новому — случайное от 200 до 500. */
   reviewsShown: integer("reviews_shown").notNull().default(0),
 });
+
+/** Сертификат эксперта — картинка (JPEG, PNG, WebP) с подписью; виден в профиле эксперта. */
+export const expertCertificates = pgTable(
+  "expert_certificates",
+  {
+    id: serial("id").primaryKey(),
+    expertId: integer("expert_id")
+      .notNull()
+      .references(() => experts.id, { onDelete: "cascade" }),
+    title: text("title").notNull().default(""),
+    mime: text("mime").notNull(),
+    data: bytea("data").notNull(),
+    sort: integer("sort").notNull().default(0),
+    createdAt: createdAt(),
+  },
+  (t) => [index("expert_certificates_expert_idx").on(t.expertId, t.sort)],
+);
 
 export const expertPhotos = pgTable("expert_photos", {
   expertId: integer("expert_id")
@@ -212,24 +233,36 @@ export const orders = pgTable("orders", {
 });
 
 /** Чат человека с выбранным экспертом. Один чат на заявку. */
-export const conversations = pgTable("conversations", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  leadId: uuid("lead_id")
-    .notNull()
-    .unique()
-    .references(() => leads.id, { onDelete: "cascade" }),
-  expertId: integer("expert_id")
-    .notNull()
-    .references(() => experts.id),
-  createdAt: createdAt(),
-  lastMessageAt: timestamp("last_message_at", { withTimezone: true }).notNull().defaultNow(),
-  /** Когда эксперт чата последний раз открывал переписку — для счётчика непрочитанных. */
-  expertReadAt: timestamp("expert_read_at", { withTimezone: true }),
-  /** Когда в чат ушёл текст 2 варианта (через 3 минуты после начала чата); null — ещё не ушёл. */
-  fullTextSentAt: timestamp("full_text_sent_at", { withTimezone: true }),
-  /** Клиент попросил позвонить; сбрасывается, когда эксперт или админ начал звонок. */
-  callRequestedAt: timestamp("call_requested_at", { withTimezone: true }),
-});
+/**
+ * Чат человека с экспертом. У заявки может быть несколько чатов — по одному с каждым экспертом:
+ * первый человек начинает сам, следующие появляются, когда его переводят к другому эксперту по заявке.
+ */
+export const conversations = pgTable(
+  "conversations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    leadId: uuid("lead_id")
+      .notNull()
+      .references(() => leads.id, { onDelete: "cascade" }),
+    expertId: integer("expert_id")
+      .notNull()
+      .references(() => experts.id),
+    createdAt: createdAt(),
+    lastMessageAt: timestamp("last_message_at", { withTimezone: true }).notNull().defaultNow(),
+    /** Когда эксперт чата последний раз открывал переписку — для счётчика непрочитанных. */
+    expertReadAt: timestamp("expert_read_at", { withTimezone: true }),
+    /** Когда в чат ушёл текст 2 варианта (через 3 минуты после начала чата); null — ещё не ушёл. */
+    fullTextSentAt: timestamp("full_text_sent_at", { withTimezone: true }),
+    /** Клиент попросил позвонить; сбрасывается, когда эксперт или админ начал звонок. */
+    callRequestedAt: timestamp("call_requested_at", { withTimezone: true }),
+    /** Когда клиент последний раз открывал этот чат — для счётчика непрочитанных в его списке чатов. */
+    clientReadAt: timestamp("client_read_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("conversations_lead_idx").on(t.leadId, t.createdAt),
+    uniqueIndex("conversations_lead_expert_idx").on(t.leadId, t.expertId),
+  ],
+);
 
 export const MESSAGE_AUTHORS = ["client", "expert", "admin", "system"] as const;
 export type MessageAuthor = (typeof MESSAGE_AUTHORS)[number];

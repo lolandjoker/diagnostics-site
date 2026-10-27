@@ -221,7 +221,7 @@ export function CallPanel({
       const current = callRef.current;
       const q = new URLSearchParams({ after: String(lastSignal.current) });
       if (current) q.set("call", current.id);
-      const res = await fetch(`${url}?${q.toString()}`, { cache: "no-store" });
+      const res = await fetch(`${url}${url.includes("?") ? "&" : "?"}${q.toString()}`, { cache: "no-store" });
       if (!res.ok) return;
       const poll = (await res.json()) as CallPoll;
       setRequested(poll.callRequested);

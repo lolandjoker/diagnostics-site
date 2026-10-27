@@ -32,6 +32,8 @@ export default async function AdminChatPage(props: PageProps<"/admin/chats/[id]"
       <ExpertChangeNotice conversationId={conversation.id} />
       <ChatThread
         url={`/admin/api/chat/${conversation.id}`}
+        typingUrl={`/admin/api/chat/${conversation.id}/typing`}
+        typingName={header?.leadName ?? "Клиент"}
         ownAuthors={["admin"]}
         labels={{ placeholder: t["chat.placeholder"], send: t["chat.send"] }}
         call={

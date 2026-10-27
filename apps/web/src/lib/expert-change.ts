@@ -1,7 +1,8 @@
 /**
- * Смена эксперта по заявке клиента. У заявки один чат, поэтому клиент, который уже пишет эксперту,
- * не начинает новый чат, а оставляет заявку на другого. Админ или эксперт переводит — у чата
- * меняется эксперт, переписка остаётся, новый эксперт здоровается сообщением — или отклоняет.
+ * Смена эксперта по заявке клиента. Клиент, у которого уже есть чат, не начинает новый сам, а оставляет
+ * заявку на другого эксперта. Админ или эксперт переводит — у клиента появляется чат с новым экспертом
+ * (или открывается прежний с ним), новый эксперт здоровается, а в старом чате клиенту сообщают о переводе;
+ * все чаты остаются в списке у клиента. Или отклоняет.
  */
 import { and, desc, eq, isNull } from "drizzle-orm";
 import type { Db } from "@/db";
@@ -36,6 +37,11 @@ export async function pendingExpertChange(db: Db, conversationId: string) {
 /** Клиент просит перейти к эксперту toExpertId. Открытая заявка уже есть — меняем в ней эксперта. */
 export async function requestExpertChange(db: Db, conversation: Conversation, toExpertId: number, now: Date): Promise<ChangeResult> {
   if (toExpertId === conversation.expertId) return { ok: false, error: "Это и так ваш эксперт" };
+  const [already] = await db
+    .select({ id: conversations.id })
+    .from(conversations)
+    .where(and(eq(conversations.leadId, conversation.leadId), eq(conversations.expertId, toExpertId)));
+  if (already) return { ok: false, error: "С этим экспертом у вас уже есть чат — откройте его в списке переписок" };
   const [target] = await db
     .select({ id: experts.id })
     .from(experts)
@@ -64,17 +70,42 @@ export async function approveExpertChange(db: Db, requestId: number, now: Date):
     .where(and(eq(expertChangeRequests.id, requestId), eq(expertChangeRequests.status, "pending")))
     .returning();
   if (!req) return { ok: false, error: "Заявка уже обработана" };
-  await db.update(conversations).set({ expertId: req.toExpertId, expertReadAt: null }).where(eq(conversations.id, req.conversationId));
-  const [row] = await db
-    .select({ expertName: experts.name, clientName: leads.name })
+  const [old] = await db
+    .select({ leadId: conversations.leadId, clientName: leads.name })
     .from(conversations)
-    .innerJoin(experts, eq(experts.id, conversations.expertId))
     .innerJoin(leads, eq(leads.id, conversations.leadId))
     .where(eq(conversations.id, req.conversationId));
+  const [toExpert] = await db.select({ name: experts.name }).from(experts).where(eq(experts.id, req.toExpertId));
+  if (!old || !toExpert) return { ok: false, error: "Чат или эксперт не найден" };
+
+  // Чат с новым экспертом: прежний, если уже был, иначе новый. Текст 2 варианта в него не приходит —
+  // он уже был в первом чате (fullTextSentAt сразу).
+  const findChat = async () =>
+    (
+      await db
+        .select({ id: conversations.id })
+        .from(conversations)
+        .where(and(eq(conversations.leadId, old.leadId), eq(conversations.expertId, req.toExpertId)))
+    )[0];
+  let chat = await findChat();
+  if (!chat) {
+    await db
+      .insert(conversations)
+      .values({ leadId: old.leadId, expertId: req.toExpertId, createdAt: now, fullTextSentAt: now })
+      .onConflictDoNothing();
+    chat = await findChat();
+  }
+  if (!chat) return { ok: false, error: "Не удалось открыть чат с новым экспертом" };
+
+  // В старом чате — от его эксперта (сообщение админа клиент видит от эксперта чата)
   await postMessage(db, req.conversationId, {
+    author: "admin",
+    body: `Вас перевели к эксперту ${toExpert.name} — чат с новым экспертом уже в списке ваших переписок.`,
+  });
+  await postMessage(db, chat.id, {
     author: "expert",
     expertId: req.toExpertId,
-    body: `${row?.clientName ? `${row.clientName}, здравствуйте` : "Здравствуйте"}! Теперь с вами работаю я — ${row?.expertName ?? "ваш новый эксперт"}. Переписку я вижу, продолжим здесь.`,
+    body: `${old.clientName ? `${old.clientName}, здравствуйте` : "Здравствуйте"}! Теперь с вами работаю я — ${toExpert.name}. Расскажите, с каким вопросом пришли, — начнём.`,
   });
   return { ok: true };
 }

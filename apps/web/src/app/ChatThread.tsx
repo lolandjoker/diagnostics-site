@@ -6,13 +6,18 @@
  * Фото перед отправкой уменьшается в браузере (до PHOTO_MAX_SIDE по большей стороне).
  */
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import type { MessageView } from "@/lib/chat";
 import { Avatar } from "./Avatar";
 
 const POLL_MS = 3000;
+/** Как часто сообщать «я печатаю», пока человек набирает текст (на той стороне «печатает» держится 5 с). */
+const TYPING_PING_MS = 2500;
+
+/** Добавить параметр к адресу, в котором уже может быть «?c=…». */
+const withParam = (url: string, key: string, value: string) =>
+  `${url}${url.includes("?") ? "&" : "?"}${key}=${encodeURIComponent(value)}`;
 const PHOTO_MAX_SIDE = 1600;
 /** Уже небольшое фото нужного формата отправляем как есть. */
 const PHOTO_KEEP_BYTES = 1024 * 1024;
@@ -31,6 +36,8 @@ export interface ChatPeer {
   /** Рейтинг эксперта, «4,8». */
   rating?: string;
   photo?: string | null;
+  /** Профиль эксперта — по имени в шапке (на узком экране мини-профиля справа нет). */
+  profileHref?: string;
   backHref: string;
   backLabel: string;
 }
@@ -103,7 +110,8 @@ export function ChatThread({
   labels,
   peer,
   call,
-  expertId,
+  typingUrl,
+  typingName,
 }: {
   /** GET ?after= и POST — один адрес. */
   url: string;
@@ -116,11 +124,14 @@ export function ChatThread({
   peer?: ChatPeer;
   /** Звонок (CallPanel): с шапкой — справа в ней, без шапки — полосой над перепиской. */
   call?: ReactNode;
-  /** Эксперт чата при загрузке страницы; сервер ответил другим — клиента перевели, обновляем страницу. */
-  expertId?: number;
+  /** Куда сообщать «я печатаю» (POST); без него — не сообщаем. */
+  typingUrl?: string;
+  /** Кто печатает на той стороне — подпись «… печатает» (клиенту — эксперт, сотрудникам — клиент). */
+  typingName?: string;
 }) {
-  const router = useRouter();
   const [items, setItems] = useState<MessageView[]>([]);
+  const [typing, setTyping] = useState(false);
+  const lastTypingPing = useRef(0);
   const [status, setStatus] = useState<"online" | "busy" | "offline" | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
@@ -129,20 +140,22 @@ export function ChatThread({
   const [zoom, setZoom] = useState<string | null>(null);
   const lastId = useRef(0);
   const scroller = useRef<HTMLDivElement>(null);
+  /** Человек внизу переписки — догрузившееся фото не должно утащить последние сообщения из вида. */
+  const atBottom = useRef(true);
   const fileInput = useRef<HTMLInputElement>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
 
   const poll = useCallback(async () => {
     try {
-      const res = await fetch(`${url}?after=${lastId.current}`, { cache: "no-store" });
+      const res = await fetch(withParam(url, "after", String(lastId.current)), { cache: "no-store" });
       if (!res.ok) return;
       const data = (await res.json()) as {
         messages: MessageView[];
         expertStatus?: "online" | "busy" | "offline";
-        expertId?: number;
+        typing?: boolean;
       };
       if (data.expertStatus) setStatus(data.expertStatus);
-      if (expertId !== undefined && data.expertId !== undefined && data.expertId !== expertId) router.refresh();
+      setTyping(data.typing === true);
       if (data.messages.length > 0) {
         lastId.current = data.messages.at(-1)?.id ?? lastId.current;
         setItems((prev) => {
@@ -153,7 +166,7 @@ export function ChatThread({
     } catch {
       // Нет связи — попробуем при следующем опросе
     }
-  }, [url, expertId, router]);
+  }, [url]);
 
   useEffect(() => {
     void poll();
@@ -164,7 +177,21 @@ export function ChatThread({
   useEffect(() => {
     const el = scroller.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [items.length]);
+  }, [items.length, typing]);
+
+  function keepAtBottom() {
+    const el = scroller.current;
+    if (el && atBottom.current) el.scrollTop = el.scrollHeight;
+  }
+
+  /** Человек набирает текст — раз в TYPING_PING_MS сообщаем той стороне «печатает…». */
+  function pingTyping(value: string) {
+    if (!typingUrl || value.trim() === "") return;
+    const now = Date.now();
+    if (now - lastTypingPing.current < TYPING_PING_MS) return;
+    lastTypingPing.current = now;
+    void fetch(typingUrl, { method: "POST" }).catch(() => {});
+  }
 
   // Предпросмотр фото: освобождаем память, когда фото убрали или отправили
   useEffect(() => {
@@ -259,12 +286,22 @@ export function ChatThread({
             {...(status !== undefined && { online: status !== "offline", busy: status === "busy" })}
           />
           <div className="chat__peer">
-            <b>{peer.name}</b>
+            {peer.profileHref ? (
+              <Link className="chat__peer-name" href={peer.profileHref} title="Открыть профиль эксперта">
+                {peer.name}
+              </Link>
+            ) : (
+              <b>{peer.name}</b>
+            )}
             <span className="chat__meta">
               {peer.rating && <span className="rating">★ {peer.rating}</span>}
-              <span className={`status status--${status ?? "offline"}`}>
-                {status === undefined ? " " : status === "online" ? "в сети" : status === "busy" ? peer.busyLabel : "не в сети"}
-              </span>
+              {typing ? (
+                <span className="status status--typing">печатает…</span>
+              ) : (
+                <span className={`status status--${status ?? "offline"}`}>
+                  {status === undefined ? " " : status === "online" ? "в сети" : status === "busy" ? peer.busyLabel : "не в сети"}
+                </span>
+              )}
             </span>
           </div>
           {call && <div className="chat__head-actions">{call}</div>}
@@ -272,7 +309,15 @@ export function ChatThread({
       )}
       {!peer && call}
 
-      <div className="chat__messages" ref={scroller} aria-live="polite">
+      <div
+        className="chat__messages"
+        ref={scroller}
+        aria-live="polite"
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+        }}
+      >
         {items.map((m, i) => {
           const prev = items[i - 1];
           const newDay = !prev || dayLabel(prev.createdAt) !== dayLabel(m.createdAt);
@@ -311,7 +356,7 @@ export function ChatThread({
                     {first && !own && <div className="msg__author">{m.authorName}</div>}
                     {m.photo && (
                       <button type="button" className="msg__photo" onClick={() => setZoom(m.photo ?? null)}>
-                        <img src={m.photo} alt="Фото" loading="lazy" />
+                        <img src={m.photo} alt="Фото" loading="lazy" onLoad={keepAtBottom} />
                       </button>
                     )}
                     {m.body && <div className="text">{m.body}</div>}
@@ -324,6 +369,16 @@ export function ChatThread({
             </div>
           );
         })}
+        {typing && (
+          <div className="chat__typing" aria-live="polite">
+            <span className="typing-dots" aria-hidden="true">
+              <i />
+              <i />
+              <i />
+            </span>
+            {typingName ? `${typingName} печатает…` : "печатает…"}
+          </div>
+        )}
       </div>
 
       {error && (
@@ -365,7 +420,10 @@ export function ChatThread({
           <textarea
             ref={textarea}
             value={text}
-            onChange={(e) => setText(e.target.value)}
+            onChange={(e) => {
+              setText(e.target.value);
+              pingTyping(e.target.value);
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();

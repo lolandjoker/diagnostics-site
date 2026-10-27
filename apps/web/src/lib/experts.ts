@@ -111,6 +111,8 @@ const publicColumns = {
   deletedAt: experts.deletedAt,
   rating: experts.rating,
   reviewsShown: experts.reviewsShown,
+  about: experts.about,
+  tags: experts.tags,
 };
 
 /** Эксперты без удалённых. */
@@ -196,6 +198,18 @@ export function parseReviewsShown(raw: string): number | null {
   if (!/^\d{1,6}$/.test(s)) return null;
   const n = Number(s);
   return n <= MAX_REVIEWS_SHOWN ? n : null;
+}
+
+export const MAX_TAGS = 8;
+
+/** Теги эксперта из строки «Таро, Астрология» — без пустых и повторов, не больше MAX_TAGS. */
+export function expertTags(raw: string): string[] {
+  const out: string[] = [];
+  for (const t of raw.split(",")) {
+    const tag = t.trim().slice(0, 40);
+    if (tag && !out.some((o) => o.toLowerCase() === tag.toLowerCase())) out.push(tag);
+  }
+  return out.slice(0, MAX_TAGS);
 }
 
 export async function setExpertPassword(db: Db, id: number, password: string): Promise<string | null> {
