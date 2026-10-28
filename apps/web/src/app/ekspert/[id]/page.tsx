@@ -8,6 +8,7 @@ import { expertPhotoUrls, expertStatus, expertTags, formatRating, getExpert, isO
 import { getLead, isUuid } from "@/lib/leads";
 import { REVIEWS_PAGE_SIZE, expertReviews, reviewsCountLabel } from "@/lib/reviews";
 import { getTexts } from "@/lib/texts";
+import { Certificates } from "../../Certificates";
 import { PhotoGallery } from "../../PhotoGallery";
 import { Footer } from "../../Footer";
 import { ReviewsPager } from "../../ReviewsPager";
@@ -113,16 +114,7 @@ export default async function ExpertProfilePage(props: PageProps<"/ekspert/[id]"
         {certificates.length > 0 && (
           <section className="card profile__section">
             <h2>Сертификаты</h2>
-            <ul className="certs">
-              {certificates.map((cert) => (
-                <li key={cert.id}>
-                  <a href={cert.url} target="_blank" rel="noopener noreferrer" className="certs__item">
-                    <img src={cert.url} alt={cert.title || "Сертификат"} loading="lazy" />
-                    {cert.title && <span>{cert.title}</span>}
-                  </a>
-                </li>
-              ))}
-            </ul>
+            <Certificates items={certificates} />
           </section>
         )}
 
