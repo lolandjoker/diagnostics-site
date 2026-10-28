@@ -110,6 +110,7 @@ export function ChatThread({
   labels,
   peer,
   call,
+  notice,
   typingUrl,
   typingName,
 }: {
@@ -124,6 +125,8 @@ export function ChatThread({
   peer?: ChatPeer;
   /** Звонок (CallPanel): с шапкой — справа в ней, без шапки — полосой над перепиской. */
   call?: ReactNode;
+  /** Полоса под шапкой (например, «Получать ответы в Telegram»). */
+  notice?: ReactNode;
   /** Куда сообщать «я печатаю» (POST); без него — не сообщаем. */
   typingUrl?: string;
   /** Кто печатает на той стороне — подпись «… печатает» (клиенту — эксперт, сотрудникам — клиент). */
@@ -310,6 +313,7 @@ export function ChatThread({
         </header>
       )}
       {!peer && call}
+      {notice}
 
       <div
         className="chat__messages"
