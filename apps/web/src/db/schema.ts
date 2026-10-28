@@ -5,6 +5,7 @@
  */
 import { sql } from "drizzle-orm";
 import {
+  bigint,
   boolean,
   customType,
   date,
@@ -169,16 +170,25 @@ export const diagnosticTexts = pgTable(
 );
 
 /** Человек, заполнивший форму. id — случайный, по нему открывается страница разбора. */
-export const leads = pgTable("leads", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  name: text("name").notNull(),
-  birthDate: date("birth_date", { mode: "string" }).notNull(),
-  /** Раньше — время согласия (галочка в форме); галочку убрали, теперь совпадает со временем заявки. */
-  consentAt: timestamp("consent_at", { withTimezone: true }).notNull(),
-  createdAt: createdAt(),
-  /** Доставшийся вариант диагностики; null — вариантов не было. */
-  variationId: integer("variation_id").references(() => variations.id, { onDelete: "set null" }),
-});
+export const leads = pgTable(
+  "leads",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    birthDate: date("birth_date", { mode: "string" }).notNull(),
+    /** Раньше — время согласия (галочка в форме); галочку убрали, теперь совпадает со временем заявки. */
+    consentAt: timestamp("consent_at", { withTimezone: true }).notNull(),
+    createdAt: createdAt(),
+    /** Доставшийся вариант диагностики; null — вариантов не было. */
+    variationId: integer("variation_id").references(() => variations.id, { onDelete: "set null" }),
+    /**
+     * Заявка из приложения в Telegram-боте: id пользователя Telegram. По нему человек снова попадает
+     * в свой чат и получает от бота уведомления об ответах; null — заявка с обычного сайта.
+     */
+    telegramUserId: bigint("telegram_user_id", { mode: "number" }),
+  },
+  (t) => [index("leads_telegram_user_idx").on(t.telegramUserId, t.createdAt)],
+);
 
 /** Не используется: продукты, заказы и доп. блоки разбора убраны с сайта; таблица остаётся (правило схемы). */
 export const products = pgTable("products", {

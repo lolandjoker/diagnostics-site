@@ -98,7 +98,9 @@ jobs:
           # служебный заголовок Next скрыт, заголовки безопасности на месте
           headers=$(curl -fsSI http://127.0.0.1:3000/)
           ! echo "$headers" | grep -qi '^x-powered-by'
-          echo "$headers" | grep -qi '^x-frame-options: DENY'
+          # сайт встраивается только в веб-версию Telegram (приложение бота), админка — никуда
+          echo "$headers" | grep -qi "^content-security-policy: frame-ancestors 'self' https://web.telegram.org"
+          curl -fsSI http://127.0.0.1:3000/admin/login | grep -qi '^x-frame-options: DENY'
           # главная читает тексты из базы — значит, миграции применились к PostgreSQL
           curl -fsS http://127.0.0.1:3000/ | grep -q 'Получить разбор'
           # админка без входа отправляет на страницу входа

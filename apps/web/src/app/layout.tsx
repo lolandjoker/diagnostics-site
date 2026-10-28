@@ -5,6 +5,7 @@ import "@fontsource-variable/manrope";
 import "@fontsource/cormorant-garamond/500.css";
 import "@fontsource/cormorant-garamond/600.css";
 import "./globals.css";
+import { TelegramBridge } from "./TelegramBridge";
 
 export const metadata: Metadata = {
   title: "Бесплатный разбор по дате рождения",
@@ -21,7 +22,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="ru">
-      <body>{children}</body>
+      <body>
+        {children}
+        <TelegramBridge />
+      </body>
     </html>
   );
 }
