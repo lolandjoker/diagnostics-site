@@ -147,7 +147,9 @@ export function ChatThread({
 
   const poll = useCallback(async () => {
     try {
-      const res = await fetch(withParam(url, "after", String(lastId.current)), { cache: "no-store" });
+      // Вкладка свёрнута — сообщения не считаются прочитанными (и клиенту из Telegram придёт уведомление)
+      const next = withParam(url, "after", String(lastId.current));
+      const res = await fetch(document.hidden ? withParam(next, "hidden", "1") : next, { cache: "no-store" });
       if (!res.ok) return;
       const data = (await res.json()) as {
         messages: MessageView[];

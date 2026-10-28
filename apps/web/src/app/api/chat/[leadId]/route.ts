@@ -1,7 +1,8 @@
 /**
  * Чат для человека. Доступ — по id заявки в адресе (случайный, его знает только сам человек).
  * ?c=<id чата> — какой из чатов заявки (без него — текущий).
- * GET ?after=<id> — новые сообщения, статус эксперта, «печатает…»; POST {body} или form-data (body, photo) — отправить.
+ * GET ?after=<id> — новые сообщения, статус эксперта, «печатает…» (&hidden=1 — вкладка свёрнута, чат не
+ * отмечается прочитанным); POST {body} или form-data (body, photo) — отправить.
  */
 import { getDb } from "@/db";
 import {
@@ -33,7 +34,7 @@ export async function GET(req: Request, ctx: RouteContext<"/api/chat/[leadId]">)
   if (!lead || !conversation) return jsonError("Чат не найден", 404);
   const now = new Date();
   await deliverDueFullTexts(db, now, conversation.id);
-  await markClientRead(db, conversation.id, now);
+  if (new URL(req.url).searchParams.get("hidden") !== "1") await markClientRead(db, conversation.id, now);
   const expert = await getExpert(db, conversation.expertId);
   // «Печатает…»: эксперт (или админ) набирает текст — или вот-вот придёт подробный разбор
   const typing =

@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { maskBirthDate } from "@/lib/date-input";
 import { submitLead } from "./actions";
+import { telegramFirstName, telegramInitData } from "./telegramWebApp";
 import type { FormState } from "./actions";
 import { useKeptForm } from "./useKeptForm";
 
@@ -11,11 +12,25 @@ const initial: FormState = { error: null };
 export function LeadForm({ button }: { button: string }) {
   const { state, onSubmit, pending } = useKeptForm(submitLead, initial);
   const [birthDate, setBirthDate] = useState("");
+  const nameRef = useRef<HTMLInputElement>(null);
+  const telegramRef = useRef<HTMLInputElement>(null);
+
+  // В приложении Telegram-бота: имя из профиля Telegram и подписанные данные — сервер запомнит,
+  // чья это заявка (вернуться в чат, уведомления об ответах)
+  useEffect(() => {
+    const initData = telegramInitData();
+    if (!initData) return;
+    if (telegramRef.current) telegramRef.current.value = initData;
+    const name = telegramFirstName(initData);
+    if (nameRef.current && nameRef.current.value === "" && name) nameRef.current.value = name.slice(0, 60);
+  }, []);
+
   return (
     <form onSubmit={onSubmit} className="form form--card">
+      <input ref={telegramRef} type="hidden" name="tg" />
       <label className="field">
         <span>Имя</span>
-        <input name="name" required maxLength={60} autoComplete="given-name" />
+        <input ref={nameRef} name="name" required maxLength={60} autoComplete="given-name" />
       </label>
       <label className="field">
         <span>Дата рождения</span>

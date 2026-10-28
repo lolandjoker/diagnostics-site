@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { getDb } from "@/db";
 import { birthDateToIso, createLead, rememberLead, validateLead } from "@/lib/leads";
+import { telegramConfig, verifyInitData } from "@/lib/telegram";
 import { pickVariation } from "@/lib/variations";
 
 export interface FormState {
@@ -21,8 +22,13 @@ export async function submitLead(_prev: FormState, form: FormData): Promise<Form
   const now = new Date();
   const error = validateLead(input, now);
   if (error) return { error };
+  // Из приложения в Telegram-боте — запоминаем пользователя Telegram: по нему он вернётся в свой чат
+  // и получит уведомления об ответах эксперта
+  const tg = telegramConfig();
+  const tgInitData = str(form.get("tg"));
+  const telegramUser = tg && tgInitData ? verifyInitData(tgInitData, tg.token, now) : null;
   const db = await getDb();
-  const lead = await createLead(db, input, now, await pickVariation(db));
+  const lead = await createLead(db, input, now, await pickVariation(db), telegramUser?.id ?? null);
   await rememberLead(lead.id);
   redirect(`/razbor/${lead.id}`);
 }

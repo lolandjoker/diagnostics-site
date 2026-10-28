@@ -57,12 +57,18 @@ export function validateLead(input: LeadInput, today: Date): string | null {
   return null;
 }
 
-export async function createLead(db: Db, input: LeadInput, now: Date, variationId: number | null = null): Promise<Lead> {
+export async function createLead(
+  db: Db,
+  input: LeadInput,
+  now: Date,
+  variationId: number | null = null,
+  telegramUserId: number | null = null,
+): Promise<Lead> {
   const [lead] = await db
     .insert(leads)
     // consent_at — столбец обязательный и не удаляется (правило схемы); галочки согласия больше нет,
     // пишем время заявки
-    .values({ name: input.name.trim(), birthDate: input.birthDate, consentAt: now, variationId })
+    .values({ name: input.name.trim(), birthDate: input.birthDate, consentAt: now, variationId, telegramUserId })
     .returning();
   return lead as Lead;
 }
