@@ -24,11 +24,6 @@ function Rows({ items, linkBase, showExpert }: { items: InboxItem[]; linkBase: s
               {c.leadName}
               {showExpert && <span className="muted"> → {c.expertName}</span>}
               {c.unread > 0 && <span className="badge">{c.unread}</span>}
-              {c.expertChangeRequested && (
-                <span className="badge badge--change" title="Клиент просит другого эксперта">
-                  🔁 смена эксперта
-                </span>
-              )}
               {c.callRequested && (
                 <span className="badge badge--call" title="Клиент просит позвонить">
                   📞 звонок

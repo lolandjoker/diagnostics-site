@@ -1,15 +1,14 @@
 /**
  * Чат человека с экспертом. Человек входит без регистрации: доступ к чату — по случайному id
- * его заявки в адресе. У заявки может быть несколько чатов — по одному с каждым экспертом (первый
- * человек начинает сам, следующие — когда его переводят к другому эксперту по заявке); «текущий» —
- * с последним сообщением. Пишут: клиент, любой эксперт, админ.
+ * его заявки в адресе. У заявки может быть несколько чатов — по одному с каждым экспертом: написать
+ * можно любому, без заявок; «текущий» — с последним сообщением. Пишут: клиент, любой эксперт, админ.
  * Ответил другой эксперт — клиент видит его имя. Сообщения админа клиент видит от имени эксперта
  * чата (имя и фото); подпись «Администратор» видят только эксперты и админ.
  * К сообщению можно приложить фото (JPEG, PNG или WebP до MAX_CHAT_PHOTO_BYTES).
  */
 import { and, asc, desc, eq, gt, isNull, lte, sql } from "drizzle-orm";
 import type { Db } from "@/db";
-import { conversations, expertChangeRequests, experts, leads, messagePhotos, messages } from "@/db/schema";
+import { conversations, experts, leads, messagePhotos, messages } from "@/db/schema";
 import type { MessageAuthor } from "@/db/schema";
 import { detectImageMime, expertPhotoUrls, expertStatus, getExpert, isOnline, listExperts } from "./experts";
 import type { Lead } from "./leads";
@@ -112,26 +111,34 @@ export async function selectableExperts(db: Db, now: Date) {
 export type StartResult = { ok: true; conversation: Conversation } | { ok: false; error: string };
 
 /**
- * Человек выбрал эксперта: создаётся его первый чат. Текст 2 варианта приходит в него через
- * FULL_TEXT_DELAY_MS (см. deliverDueFullTexts). Чат уже есть — новый не начать (к другому эксперту —
- * по заявке, lib/expert-change.ts), возвращается текущий.
+ * Человек выбрал эксперта: открывается чат с ним (уже был — тот же). Писать можно любому эксперту,
+ * у каждого свой чат в списке переписок. Первый чат — только с экспертом в сети, и в него через
+ * FULL_TEXT_DELAY_MS приходит текст 2 варианта (см. deliverDueFullTexts); в следующие — уже нет.
  */
 export async function startConversation(db: Db, lead: Lead, expertId: number, now: Date): Promise<StartResult> {
-  const existing = await conversationForLead(db, lead.id);
+  const withExpert = async () =>
+    (
+      await db
+        .select()
+        .from(conversations)
+        .where(and(eq(conversations.leadId, lead.id), eq(conversations.expertId, expertId)))
+    )[0];
+  const existing = await withExpert();
   if (existing) return { ok: true, conversation: existing };
 
   const expert = await getExpert(db, expertId);
-  if (!expert || !expert.active) return { ok: false, error: "Эксперт не найден" };
-  if (!isOnline(expert, now)) return { ok: false, error: "Этот эксперт сейчас не в сети — выберите другого" };
+  if (!expert || !expert.active || expert.deletedAt) return { ok: false, error: "Эксперт не найден" };
+  const first = !(await conversationForLead(db, lead.id));
+  if (first && !isOnline(expert, now)) return { ok: false, error: "Этот эксперт сейчас не в сети — выберите другого" };
 
   const [created] = await db
     .insert(conversations)
-    .values({ leadId: lead.id, expertId: expert.id })
+    .values({ leadId: lead.id, expertId: expert.id, ...(first ? {} : { fullTextSentAt: now }) })
     .onConflictDoNothing()
     .returning();
   // Двойной клик: чат уже создан параллельным запросом
   if (!created) {
-    const again = await conversationForLead(db, lead.id);
+    const again = await withExpert();
     return again ? { ok: true, conversation: again } : { ok: false, error: "Не удалось открыть чат" };
   }
   return { ok: true, conversation: created };
@@ -309,6 +316,7 @@ export async function messageViews(
   return out;
 }
 
+/** Сотрудники прочитали чат: его открыл эксперт этого чата или админ. */
 export async function markExpertRead(db: Db, conversationId: string, now: Date): Promise<void> {
   await db.update(conversations).set({ expertReadAt: now }).where(eq(conversations.id, conversationId));
 }
@@ -320,12 +328,10 @@ export interface InboxItem {
   expertName: string;
   lastMessageAt: string;
   lastMessage: string;
-  /** Сообщений клиента, которые эксперт этого чата ещё не открывал. */
+  /** Сообщений клиента, которые ещё не читали ни эксперт этого чата, ни админ. */
   unread: number;
   /** Клиент попросил позвонить, а звонка ещё не было. */
   callRequested: boolean;
-  /** Клиент просит перевести его к другому эксперту. */
-  expertChangeRequested: boolean;
 }
 
 /** Все чаты, свежие сверху. Эксперт видит все и может ответить в любом. */
@@ -339,8 +345,6 @@ export async function inbox(db: Db, limit = 300): Promise<InboxItem[]> {
         and m.author = 'client' and (${conversations.expertReadAt} is null or m.created_at > ${conversations.expertReadAt}))`.mapWith(
         Number,
       ),
-      expertChange: sql<boolean>`exists (select 1 from ${expertChangeRequests} q
-        where q.conversation_id = ${conversations.id} and q.status = 'pending')`,
       lastMessage: sql<string>`coalesce((select case when m.product_id is not null then '[предложение продукта]'
           when m.body = '' and exists (select 1 from ${messagePhotos} p where p.message_id = m.id) then '[фото]'
           else left(m.body, 120) end
@@ -360,7 +364,6 @@ export async function inbox(db: Db, limit = 300): Promise<InboxItem[]> {
     lastMessage: r.lastMessage,
     unread: r.unread,
     callRequested: r.c.callRequestedAt !== null,
-    expertChangeRequested: r.expertChange,
   }));
 }
 

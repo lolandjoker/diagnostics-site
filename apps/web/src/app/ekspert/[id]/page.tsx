@@ -4,7 +4,6 @@ import { getDb } from "@/db";
 import { listCertificates } from "@/lib/certificates";
 import { expertGallery } from "@/lib/gallery";
 import { clientChats } from "@/lib/chat";
-import { latestExpertChange } from "@/lib/expert-change";
 import { expertPhotoUrls, expertStatus, expertTags, formatRating, getExpert, isOnline } from "@/lib/experts";
 import { getLead, isUuid } from "@/lib/leads";
 import { REVIEWS_PAGE_SIZE, expertReviews, reviewsCountLabel } from "@/lib/reviews";
@@ -12,18 +11,18 @@ import { getTexts } from "@/lib/texts";
 import { PhotoGallery } from "../../PhotoGallery";
 import { Footer } from "../../Footer";
 import { ReviewsPager } from "../../ReviewsPager";
-import { chooseExpert, requestExpertChangeAction } from "../../razbor/[id]/eksperty/actions";
+import { chooseExpert } from "../../razbor/[id]/eksperty/actions";
 
 export const dynamic = "force-dynamic";
 
 /**
  * Полный профиль эксперта: фото, рейтинг, специализации, подробное описание, сертификаты, отзывы.
- * ?lead=<заявка>&c=<чат> — человек пришёл из чата: назад — в чат, а внизу — «Открыть чат»,
- * «Хочу к этому эксперту» (заявка) или «Написать» (если чатов ещё нет).
+ * ?lead=<заявка>&c=<чат> — человек пришёл из чата: назад — в чат, а внизу — «Открыть чат»
+ * (с этим экспертом уже переписывался) или «Написать эксперту».
  */
 export default async function ExpertProfilePage(props: PageProps<"/ekspert/[id]">) {
   const { id } = await props.params;
-  const { lead: leadParam, c, sent } = await props.searchParams;
+  const { lead: leadParam, c, error } = await props.searchParams;
   const db = await getDb();
   const expert = /^\d{1,9}$/.test(id) ? await getExpert(db, Number(id)) : null;
   if (!expert || !expert.active || expert.deletedAt) notFound();
@@ -42,9 +41,6 @@ export default async function ExpertProfilePage(props: PageProps<"/ekspert/[id]"
   const r = reviews.get(expert.id);
   const withExpert = chats.find((ch) => ch.expertId === expert.id);
   const fromChat = typeof c === "string" && isUuid(c) ? chats.find((ch) => ch.id === c) : undefined;
-  const current = fromChat ?? chats[0];
-  const change = current ? await latestExpertChange(db, current.id) : null;
-  const pending = change?.status === "pending" && change.toExpertId === expert.id;
   const self = lead ? `/ekspert/${expert.id}?lead=${lead.id}${fromChat ? `&c=${fromChat.id}` : ""}` : "";
 
   return (
@@ -82,30 +78,23 @@ export default async function ExpertProfilePage(props: PageProps<"/ekspert/[id]"
 
             {lead && (
               <div className="profile__action">
-                {sent === "1" && pending && <p className="notice-card notice-card--pending">Заявка отправлена — переведём вас, как только эксперт сможет взять чат.</p>}
+                {typeof error === "string" && (
+                  <p className="form__error" role="alert">
+                    {error}
+                  </p>
+                )}
                 {withExpert ? (
                   <Link className="button" href={`/razbor/${lead.id}/chat?c=${withExpert.id}`}>
                     Открыть чат
                   </Link>
-                ) : current ? (
-                  pending ? (
-                    <button className="button" disabled>
-                      Заявка отправлена
-                    </button>
-                  ) : (
-                    <form action={requestExpertChangeAction}>
-                      <input type="hidden" name="leadId" value={lead.id} />
-                      <input type="hidden" name="expertId" value={expert.id} />
-                      <input type="hidden" name="return" value={self} />
-                      <button className="button">Хочу к этому эксперту</button>
-                    </form>
-                  )
                 ) : (
-                  isOnline(expert, new Date()) && (
+                  // Первый чат — только с экспертом в сети; когда чаты уже есть, написать можно любому
+                  (chats.length > 0 || isOnline(expert, new Date())) && (
                     <form action={chooseExpert}>
                       <input type="hidden" name="leadId" value={lead.id} />
                       <input type="hidden" name="expertId" value={expert.id} />
-                      <button className="button">{t["experts.choose"]}</button>
+                      <input type="hidden" name="return" value={self} />
+                      <button className="button">{chats.length > 0 ? "Написать эксперту" : t["experts.choose"]}</button>
                     </form>
                   )
                 )}
