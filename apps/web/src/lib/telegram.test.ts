@@ -6,7 +6,13 @@ import { createExpert, setExpertOnline } from "./experts";
 import { createLead } from "./leads";
 import {
   INIT_DATA_MAX_AGE_MS,
+  LOGIN_CODE_MS,
+  botReply,
   leadForTelegramUser,
+  leadFromLinkCode,
+  leadFromLoginCode,
+  linkCode,
+  loginCode,
   noticeText,
   notifyClient,
   telegramConfig,
@@ -67,6 +73,65 @@ describe("данные из Telegram", () => {
       "💬 Мария:\n".length + 201,
     );
     expect(noticeText({ kind: "fullText" }, "Мария", "Анна")).toContain("Анна, ваш подробный разбор готов");
+    expect(noticeText({ kind: "call", expertId: 1 }, "Мария", "Анна")).toBe("📞 Мария звонит вам — откройте чат, чтобы ответить.");
+  });
+
+  it("код привязки и код входа: подпись, срок, подделка", () => {
+    const leadId = "0f8b7c1e-2d3a-4b5c-8d9e-0a1b2c3d4e5f";
+    const code = linkCode(TOKEN, leadId);
+    expect(code).toMatch(/^[\w-]{1,64}$/);
+    expect(leadFromLinkCode(TOKEN, code)).toBe(leadId);
+    expect(leadFromLinkCode("1:другой-токен", code)).toBeNull();
+    expect(leadFromLinkCode(TOKEN, code.replace(/.$/, (c) => (c === "0" ? "1" : "0")))).toBeNull();
+    expect(leadFromLinkCode(TOKEN, "")).toBeNull();
+
+    const login = loginCode(TOKEN, leadId, now);
+    expect(leadFromLoginCode(TOKEN, login, now)).toBe(leadId);
+    expect(leadFromLoginCode(TOKEN, login, new Date(now.getTime() + LOGIN_CODE_MS + 1000))).toBeNull();
+    expect(leadFromLoginCode(TOKEN, login.replace(leadId, "0f8b7c1e-2d3a-4b5c-8d9e-0a1b2c3d4e50"), now)).toBeNull();
+    expect(leadFromLoginCode(TOKEN, code, now)).toBeNull();
+  });
+});
+
+describe("бот: привязка заявки с сайта, /start, /stop", () => {
+  const cfg = { token: TOKEN, siteUrl: "https://example.com" };
+  const tg = 555000222;
+
+  it("ссылка с сайта привязывает заявку; бот узнаёт человека и даёт вход на сайт; /stop отвязывает", async () => {
+    const db = await createTestDb();
+    const lead = await createLead(db, { name: "Анна", birthDate: "1990-03-15" }, new Date(), null);
+
+    // Новый человек — приветствие и «Открыть»
+    let reply = await botReply(db, cfg, tg, "/start", now);
+    expect(reply.buttons).toEqual([{ text: "Открыть", webApp: "https://example.com" }]);
+    // Испорченная ссылка — ничего не привязано
+    reply = await botReply(db, cfg, tg, "/start lнеткода", now);
+    expect(reply.text).toContain("Ссылка не подошла");
+    expect(await leadForTelegramUser(db, tg)).toBeNull();
+
+    reply = await botReply(db, cfg, tg, `/start ${linkCode(TOKEN, lead.id)}`, now);
+    expect(reply.text).toContain("Анна, Telegram подключён");
+    expect(await leadForTelegramUser(db, tg)).toBe(lead.id);
+    expect(reply.buttons[0]).toEqual({ text: "Открыть разбор", webApp: `https://example.com/razbor/${lead.id}` });
+    const site = reply.buttons[1];
+    if (!site || !("url" in site)) throw new Error("нет кнопки «Открыть на сайте»");
+    const code = new URL(site.url).searchParams.get("t") ?? "";
+    expect(new URL(site.url).pathname).toBe("/api/telegram/vhod");
+    expect(leadFromLoginCode(TOKEN, code, now)).toBe(lead.id);
+
+    // Потом — свой человек, с кнопкой в чат
+    const expert = await createExpert(db, { name: "Мария", login: "maria-bot", password: "пароль-эксперта" });
+    if (!expert.ok) throw new Error(expert.error);
+    await setExpertOnline(db, expert.id, true, new Date());
+    await startConversation(db, lead, expert.id, new Date());
+    reply = await botReply(db, cfg, tg, "привет", now);
+    expect(reply.text).toContain("Здравствуйте, Анна!");
+    expect(reply.buttons[0]).toEqual({ text: "Открыть чат", webApp: `https://example.com/razbor/${lead.id}/chat` });
+
+    reply = await botReply(db, cfg, tg, "/stop", now);
+    expect(reply.text).toContain("Уведомления отключены");
+    expect(await leadForTelegramUser(db, tg)).toBeNull();
+    expect((await botReply(db, cfg, tg, "/stop", now)).text).toContain("и так не подключены");
   });
 });
 
@@ -118,6 +183,20 @@ describe("уведомления клиенту из бота", () => {
     expect(body.reply_markup.inline_keyboard[0]?.[0]?.web_app.url).toBe(
       `https://example.com/razbor/${lead.id}/chat?c=${chat.id}`,
     );
+  });
+
+  it("эксперт звонит — бот зовёт ответить", async () => {
+    const { lead, chat, expertId } = await chatFor(777000111);
+    await notifyClient(db, chat.id, { kind: "call", expertId });
+    const body = JSON.parse(String((fetchMock.mock.calls[0] as [string, RequestInit])[1].body)) as {
+      text: string;
+      reply_markup: { inline_keyboard: { text: string; web_app: { url: string } }[][] };
+    };
+    expect(body.text).toBe("📞 Мария звонит вам — откройте чат, чтобы ответить.");
+    expect(body.reply_markup.inline_keyboard[0]?.[0]).toEqual({
+      text: "Ответить",
+      web_app: { url: `https://example.com/razbor/${lead.id}/chat?c=${chat.id}` },
+    });
   });
 
   it("клиент сейчас в чате или пришёл не из Telegram — не беспокоим", async () => {

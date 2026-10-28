@@ -5,6 +5,7 @@ import { clientChats, conversationForLead, leadConversation } from "@/lib/chat";
 import { expertPhotoUrls, formatRating, getExpert } from "@/lib/experts";
 import { expertGallery } from "@/lib/gallery";
 import { MAX_LEAD_EDITS, getLead } from "@/lib/leads";
+import { telegramLink } from "@/lib/telegram";
 import { fillTemplate, getTexts } from "@/lib/texts";
 import { CallPanel } from "../../../CallPanel";
 import { ChatThread } from "../../../ChatThread";
@@ -31,11 +32,12 @@ export default async function ClientChatPage(props: PageProps<"/razbor/[id]/chat
     if (await conversationForLead(db, lead.id)) redirect(`/razbor/${lead.id}/chat`);
     redirect(`/razbor/${lead.id}/eksperty`);
   }
-  const [expert, photos, chats, t] = await Promise.all([
+  const [expert, photos, chats, t, telegram] = await Promise.all([
     getExpert(db, conversation.expertId),
     expertPhotoUrls(db),
     clientChats(db, lead.id),
     getTexts(db, ["chat.title", "chat.placeholder", "chat.send", "experts.busy"]),
+    telegramLink(lead),
   ]);
 
   const expertName = expert?.name ?? "Эксперт";
@@ -49,7 +51,7 @@ export default async function ClientChatPage(props: PageProps<"/razbor/[id]/chat
       {/* Заголовок из «Текстов сайта» — для программ чтения с экрана; видимая шапка — с фото эксперта */}
       <h1 className="sr-only">{fillTemplate(t["chat.title"], { expert: expert?.name ?? "" })}</h1>
       <div className="messenger__chats">
-        <ClientChatList leadId={lead.id} currentId={conversation.id} initial={chats} editsLeft={MAX_LEAD_EDITS - lead.edits} />
+        <ClientChatList leadId={lead.id} currentId={conversation.id} initial={chats} editsLeft={MAX_LEAD_EDITS - lead.edits} telegram={telegram} />
       </div>
       <div className="messenger__chat">
         <ChatThread
@@ -68,6 +70,14 @@ export default async function ClientChatPage(props: PageProps<"/razbor/[id]/chat
             backHref: `/razbor/${lead.id}/eksperty`,
             backLabel: "К экспертам",
           }}
+          notice={
+            telegram &&
+            !telegram.connected && (
+              <a className="chat__notice" href={telegram.href} target="_blank" rel="noopener noreferrer">
+                🔔 Получать ответы эксперта в Telegram <span aria-hidden="true">→</span>
+              </a>
+            )
+          }
           call={
             <>
               <Link

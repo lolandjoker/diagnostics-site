@@ -8,6 +8,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { ClientChatItem } from "@/lib/chat";
+import type { TelegramLinkView } from "@/lib/telegram";
 import { Avatar } from "./Avatar";
 
 const POLL_MS = 5000;
@@ -23,6 +24,7 @@ export function ClientChatList({
   currentId,
   initial,
   editsLeft,
+  telegram,
 }: {
   leadId: string;
   /** Открытый сейчас чат — подсвечен; null — список на отдельной странице. */
@@ -30,6 +32,8 @@ export function ClientChatList({
   initial: ClientChatItem[];
   /** Сколько ещё раз можно изменить имя и дату рождения; 0 — кнопки нет. */
   editsLeft: number;
+  /** Уведомления в Telegram: подключены или ссылка, чтобы подключить; null — бот выключен. */
+  telegram: TelegramLinkView | null;
 }) {
   const [items, setItems] = useState(initial);
 
@@ -86,6 +90,18 @@ export function ClientChatList({
         </span>
         <span aria-hidden="true">→</span>
       </Link>
+      {telegram &&
+        (telegram.connected ? (
+          <p className="chats__tg">🔔 Ответы эксперта приходят в Telegram</p>
+        ) : (
+          <a className="chats__more chats__more--ghost" href={telegram.href} target="_blank" rel="noopener noreferrer">
+            <span>
+              🔔 Получать ответы в Telegram
+              <small>Бот напишет, когда эксперт ответит</small>
+            </span>
+            <span aria-hidden="true">→</span>
+          </a>
+        ))}
       {editsLeft > 0 && (
         <Link className="chats__more chats__more--ghost" href={`/razbor/${leadId}/izmenit`}>
           <span>

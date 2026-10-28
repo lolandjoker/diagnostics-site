@@ -17,6 +17,7 @@ import { callSignals, calls, conversations } from "@/db/schema";
 import type { CallStatus } from "@/db/schema";
 import { postMessage } from "./chat";
 import type { Conversation } from "./chat";
+import { notifyClient } from "./telegram";
 
 export type Call = typeof calls.$inferSelect;
 export type CallSide = "client" | "staff";
@@ -207,6 +208,8 @@ export async function startCall(db: Db, conversation: Conversation, by: CallCall
     .returning();
   if (!created) return { ok: false, error: "В этом чате уже идёт звонок" };
   await db.update(conversations).set({ callRequestedAt: null }).where(eq(conversations.id, conversation.id));
+  // Клиенту из Telegram — «эксперт звонит» (не ждём: звонок не должен тормозить из-за Telegram)
+  void notifyClient(db, conversation.id, { kind: "call", expertId: by.caller === "expert" ? by.expertId : null }, now);
   return { ok: true, call: view(created) };
 }
 

@@ -1991,6 +1991,33 @@ td.actions {
   text-decoration: none;
 }
 
+.chats__tg {
+  margin: 0 12px 12px;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  text-align: center;
+}
+
+/* «Получать ответы в Telegram» под шапкой чата — только на телефоне: на компьютере кнопка в списке переписок */
+.chat__notice {
+  display: none;
+  gap: 8px;
+  justify-content: center;
+  padding: 9px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--gold-soft);
+  color: var(--gold);
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+@media (max-width: 860px) {
+  .chat__notice {
+    display: flex;
+  }
+}
+
 .chats__more--ghost {
   margin-top: 0;
   border: 1px solid var(--gold);
