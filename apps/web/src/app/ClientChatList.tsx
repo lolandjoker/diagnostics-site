@@ -22,11 +22,14 @@ export function ClientChatList({
   leadId,
   currentId,
   initial,
+  editsLeft,
 }: {
   leadId: string;
   /** Открытый сейчас чат — подсвечен; null — список на отдельной странице. */
   currentId: string | null;
   initial: ClientChatItem[];
+  /** Сколько ещё раз можно изменить имя и дату рождения; 0 — кнопки нет. */
+  editsLeft: number;
 }) {
   const [items, setItems] = useState(initial);
 
@@ -83,6 +86,15 @@ export function ClientChatList({
         </span>
         <span aria-hidden="true">→</span>
       </Link>
+      {editsLeft > 0 && (
+        <Link className="chats__more chats__more--ghost" href={`/razbor/${leadId}/izmenit`}>
+          <span>
+            Изменить дату рождения
+            <small>Осталось изменений: {editsLeft}</small>
+          </span>
+          <span aria-hidden="true">→</span>
+        </Link>
+      )}
     </nav>
   );
 }

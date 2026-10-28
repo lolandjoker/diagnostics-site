@@ -1991,6 +1991,13 @@ td.actions {
   text-decoration: none;
 }
 
+.chats__more--ghost {
+  margin-top: 0;
+  border: 1px solid var(--gold);
+  background: transparent;
+  color: var(--gold);
+}
+
 .chats__more small {
   display: block;
   margin-top: 2px;
@@ -2520,6 +2527,14 @@ td.actions {
   background: linear-gradient(90deg, rgba(217, 182, 111, 0.5), var(--gold), #fff3d6);
   box-shadow: 0 0 12px rgba(217, 182, 111, 0.6);
   transition: width 0.25s linear;
+}
+
+/* Ссылки над заголовком: назад — слева, «Изменить дату рождения» — справа */
+.page__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  justify-content: space-between;
 }
 
 .back-link {

@@ -4,7 +4,7 @@ import { getDb } from "@/db";
 import { clientChats, conversationForLead, leadConversation } from "@/lib/chat";
 import { expertPhotoUrls, formatRating, getExpert } from "@/lib/experts";
 import { expertGallery } from "@/lib/gallery";
-import { getLead } from "@/lib/leads";
+import { MAX_LEAD_EDITS, getLead } from "@/lib/leads";
 import { fillTemplate, getTexts } from "@/lib/texts";
 import { CallPanel } from "../../../CallPanel";
 import { ChatThread } from "../../../ChatThread";
@@ -49,7 +49,7 @@ export default async function ClientChatPage(props: PageProps<"/razbor/[id]/chat
       {/* Заголовок из «Текстов сайта» — для программ чтения с экрана; видимая шапка — с фото эксперта */}
       <h1 className="sr-only">{fillTemplate(t["chat.title"], { expert: expert?.name ?? "" })}</h1>
       <div className="messenger__chats">
-        <ClientChatList leadId={lead.id} currentId={conversation.id} initial={chats} />
+        <ClientChatList leadId={lead.id} currentId={conversation.id} initial={chats} editsLeft={MAX_LEAD_EDITS - lead.edits} />
       </div>
       <div className="messenger__chat">
         <ChatThread

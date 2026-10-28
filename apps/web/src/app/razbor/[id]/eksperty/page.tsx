@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { getDb } from "@/db";
 import { clientChats, conversationForLead, selectableExperts } from "@/lib/chat";
 import { expertPhotoUrls, formatRating } from "@/lib/experts";
-import { getLead } from "@/lib/leads";
+import { MAX_LEAD_EDITS, getLead } from "@/lib/leads";
 import { REVIEWS_PAGE_SIZE, expertReviews, reviewsCountLabel } from "@/lib/reviews";
 import { getTexts } from "@/lib/texts";
 import { Avatar } from "../../../Avatar";
@@ -40,11 +40,10 @@ export default async function ExpertsPage(props: PageProps<"/razbor/[id]/ekspert
   return (
     <>
       <main className="page">
-        {chat && (
-          <p>
-            <Link href={`/razbor/${lead.id}/chat`}>← Вернуться в чат</Link>
-          </p>
-        )}
+        <p className="page__links">
+          {chat ? <Link href={`/razbor/${lead.id}/chat`}>← Вернуться в чат</Link> : <Link href={`/razbor/${lead.id}`}>← К разбору</Link>}
+          {lead.edits < MAX_LEAD_EDITS && <Link href={`/razbor/${lead.id}/izmenit`}>Изменить дату рождения</Link>}
+        </p>
         <h1>{chat ? "Эксперты" : t["experts.title"]}</h1>
         {chat && (
           <p className="lead text">
