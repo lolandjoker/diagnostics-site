@@ -6,7 +6,6 @@ import { requireExpert } from "@/lib/expert-auth";
 import { getTexts } from "@/lib/texts";
 import { CallPanel } from "../../../../CallPanel";
 import { ChatThread } from "../../../../ChatThread";
-import { ExpertChangeNotice } from "../../../../ExpertChangeNotice";
 
 export default async function ExpertChatPage(props: PageProps<"/expert/chat/[id]">) {
   const expert = await requireExpert();
@@ -36,7 +35,6 @@ export default async function ExpertChatPage(props: PageProps<"/expert/chat/[id]
           Это чат эксперта {header?.expertName}. Если ответите, клиент увидит ваше имя — {expert.name}.
         </p>
       )}
-      <ExpertChangeNotice conversationId={conversation.id} />
       <ChatThread
         url={`/expert/api/chat/${conversation.id}`}
         typingUrl={`/expert/api/chat/${conversation.id}/typing`}

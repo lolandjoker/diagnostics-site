@@ -1,6 +1,7 @@
 /**
  * Чат для эксперта. Читать и писать может любой эксперт; сообщение подписано его именем.
- * Прочитанными сообщения отмечаются, только когда чат открывает эксперт этого чата.
+ * Прочитанными сообщения отмечаются, только когда чат открывает эксперт этого чата (или админ);
+ * &hidden=1 — вкладка свёрнута, не отмечаем.
  */
 import { getDb } from "@/db";
 import { MAX_CHAT_PHOTO_BYTES, deliverDueFullTexts, getConversation, markExpertRead, messageViews, postMessage } from "@/lib/chat";
@@ -17,7 +18,9 @@ export async function GET(req: Request, ctx: RouteContext<"/expert/api/chat/[id]
   const conversation = await getConversation(db, (await ctx.params).id);
   if (!conversation) return jsonError("Чат не найден", 404);
   await deliverDueFullTexts(db, new Date(), conversation.id);
-  if (conversation.expertId === expert.id) await markExpertRead(db, conversation.id, new Date());
+  if (conversation.expertId === expert.id && new URL(req.url).searchParams.get("hidden") !== "1") {
+    await markExpertRead(db, conversation.id, new Date());
+  }
   return Response.json(
     {
       messages: await messageViews(db, conversation, afterParam(req), "staff"),

@@ -2,7 +2,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDb } from "@/db";
 import { clientChats, conversationForLead, selectableExperts } from "@/lib/chat";
-import { latestExpertChange } from "@/lib/expert-change";
 import { expertPhotoUrls, formatRating } from "@/lib/experts";
 import { getLead } from "@/lib/leads";
 import { REVIEWS_PAGE_SIZE, expertReviews, reviewsCountLabel } from "@/lib/reviews";
@@ -10,21 +9,19 @@ import { getTexts } from "@/lib/texts";
 import { Avatar } from "../../../Avatar";
 import { Footer } from "../../../Footer";
 import { ReviewsPager } from "../../../ReviewsPager";
-import { chooseExpert, requestExpertChangeAction } from "./actions";
+import { chooseExpert } from "./actions";
 
 export const dynamic = "force-dynamic";
 
 export default async function ExpertsPage(props: PageProps<"/razbor/[id]/eksperty">) {
   const { id } = await props.params;
-  const { error, sent } = await props.searchParams;
+  const { error } = await props.searchParams;
   const db = await getDb();
   const lead = await getLead(db, id);
   if (!lead) notFound();
-  // Чат уже есть — эксперты только для просмотра; к другому — по заявке
+  // Чат уже есть — написать можно любому эксперту, у каждого свой чат
   const chat = await conversationForLead(db, lead.id);
   const chatWith = new Map((chat ? await clientChats(db, lead.id) : []).map((c) => [c.expertId, c.id]));
-  const change = chat ? await latestExpertChange(db, chat.id) : null;
-  const pendingTo = change?.status === "pending" ? change.toExpertId : null;
 
   const [list, photos, t] = await Promise.all([
     selectableExperts(db, new Date()),
@@ -51,17 +48,7 @@ export default async function ExpertsPage(props: PageProps<"/razbor/[id]/ekspert
         <h1>{chat ? "Эксперты" : t["experts.title"]}</h1>
         {chat && (
           <p className="lead text">
-            У вас уже есть чат с экспертом. Здесь можно посмотреть других экспертов и отзывы о них, а чтобы перейти к
-            другому — оставить заявку: переписка сохранится.
-          </p>
-        )}
-        {chat && change && (sent === "1" || change.status !== "approved") && (
-          <p className={`notice-card notice-card--${change.status}`} role="status">
-            {change.status === "pending"
-              ? `Заявка отправлена: ${sorted.find((e) => e.id === change.toExpertId)?.name ?? "эксперт"}. Мы переведём вас, как только эксперт сможет взять чат.`
-              : change.status === "declined"
-                ? `Заявку на эксперта ${sorted.find((e) => e.id === change.toExpertId)?.name ?? ""} сейчас отклонили — можно выбрать другого.`
-                : "Готово — вы переведены к новому эксперту."}
+            Написать можно любому эксперту — у каждого свой чат, все переписки сохраняются в списке.
           </p>
         )}
         {typeof error === "string" && (
@@ -111,17 +98,11 @@ export default async function ExpertsPage(props: PageProps<"/razbor/[id]/ekspert
                         Открыть чат
                       </Link>
                     </p>
-                  ) : e.id === pendingTo ? (
-                    <p className="card__action">
-                      <button className="button" disabled>
-                        Заявка отправлена
-                      </button>
-                    </p>
                   ) : (
-                    <form action={requestExpertChangeAction} className="card__action">
+                    <form action={chooseExpert} className="card__action">
                       <input type="hidden" name="leadId" value={lead.id} />
                       <input type="hidden" name="expertId" value={e.id} />
-                      <button className="button button--ghost">Хочу к этому эксперту</button>
+                      <button className="button button--ghost">Написать эксперту</button>
                     </form>
                   )
                 ) : (

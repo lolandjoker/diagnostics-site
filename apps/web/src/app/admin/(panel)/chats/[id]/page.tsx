@@ -6,7 +6,6 @@ import { conversationHeader, getConversation } from "@/lib/chat";
 import { getTexts } from "@/lib/texts";
 import { CallPanel } from "../../../../CallPanel";
 import { ChatThread } from "../../../../ChatThread";
-import { ExpertChangeNotice } from "../../../../ExpertChangeNotice";
 
 export default async function AdminChatPage(props: PageProps<"/admin/chats/[id]">) {
   const { id } = await props.params;
@@ -29,7 +28,6 @@ export default async function AdminChatPage(props: PageProps<"/admin/chats/[id]"
         клиент видит от имени эксперта — {header?.expertName}, с его фото. Подпись «{t["chat.admin_name"]}» видите
         только вы и эксперты.
       </p>
-      <ExpertChangeNotice conversationId={conversation.id} />
       <ChatThread
         url={`/admin/api/chat/${conversation.id}`}
         typingUrl={`/admin/api/chat/${conversation.id}/typing`}

@@ -14,7 +14,6 @@ import { requireAdmin } from "@/lib/admin-auth";
 import { addReview, deleteReview, setReviewHidden } from "@/lib/reviews";
 import { addCertificates, deleteCertificate, setCertificateTitle } from "@/lib/certificates";
 import { addGalleryPhotos, deleteGalleryPhoto, deleteMainPhoto, makeMainPhoto } from "@/lib/gallery";
-import { approveExpertChange, declineExpertChange } from "@/lib/expert-change";
 import { requireStaff } from "@/lib/staff-auth";
 import {
   ADMIN_ONLINE_FOREVER,
@@ -253,22 +252,6 @@ export async function addReviewAction(_prev: ActionResult, form: FormData): Prom
   if (!res.ok) return fail(res.error);
   refresh();
   return done("Отзыв добавлен");
-}
-
-// --- Смена эксперта по заявке клиента ---
-
-export async function approveExpertChangeAction(form: FormData): Promise<void> {
-  await requireStaff();
-  const id = int(form, "id");
-  if (id !== null) await approveExpertChange(await getDb(), id, new Date());
-  refresh();
-}
-
-export async function declineExpertChangeAction(form: FormData): Promise<void> {
-  await requireStaff();
-  const id = int(form, "id");
-  if (id !== null) await declineExpertChange(await getDb(), id, new Date());
-  refresh();
 }
 
 // --- Сертификаты эксперта ---

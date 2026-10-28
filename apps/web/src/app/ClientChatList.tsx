@@ -79,7 +79,7 @@ export function ClientChatList({
       <Link className="chats__more" href={`/razbor/${leadId}/eksperty`}>
         <span>
           Познакомиться с другим экспертом
-          <small>Отзывы, рейтинг, заявка на другого эксперта</small>
+          <small>Отзывы, рейтинг — написать можно любому</small>
         </span>
         <span aria-hidden="true">→</span>
       </Link>

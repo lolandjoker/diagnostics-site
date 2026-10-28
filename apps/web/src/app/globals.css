@@ -1319,40 +1319,6 @@ td.actions {
   color: var(--ok);
 }
 
-.badge--change {
-  background: #6b4fd6;
-  color: #fff;
-}
-
-.notice--change {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 16px;
-  align-items: center;
-  justify-content: space-between;
-  border: 1px solid #b9a8f0;
-  background: #f1edff;
-  color: var(--text);
-}
-
-.notice__actions {
-  display: inline-flex;
-  gap: 12px;
-  align-items: center;
-}
-
-.notice-card {
-  margin: 0 0 16px;
-  padding: 12px 16px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--gold-soft);
-}
-
-.notice-card--declined {
-  background: rgba(240, 138, 138, 0.12);
-}
-
 .your-expert {
   margin-right: 12px;
   color: var(--ok);

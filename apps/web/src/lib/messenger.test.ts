@@ -36,13 +36,27 @@ beforeEach(async () => {
 const newLead = (name = "Анна") => createLead(db, { name, birthDate: "1990-03-15" }, new Date(), null);
 
 describe("переписки клиента", () => {
-  it("второй чат самому не начать — возвращается текущий", async () => {
+  it("написать можно любому эксперту: у каждого свой чат, разбор — только в первом", async () => {
     const lead = await newLead();
     const a = await startConversation(db, lead, maria, new Date());
+    // Второй эксперт не в сети — написать ему всё равно можно
+    await setExpertOnline(db, olga, false, new Date());
     const b = await startConversation(db, lead, olga, new Date());
     if (!a.ok || !b.ok) throw new Error("не открылся чат");
-    expect(b.conversation.id).toBe(a.conversation.id);
-    expect(b.conversation.expertId).toBe(maria);
+    expect(b.conversation.id).not.toBe(a.conversation.id);
+    expect(b.conversation.expertId).toBe(olga);
+    expect(a.conversation.fullTextSentAt).toBeNull();
+    expect(b.conversation.fullTextSentAt).not.toBeNull();
+    expect((await clientChats(db, lead.id)).map((c) => c.expertId).sort()).toEqual([maria, olga].sort());
+
+    // К тому же эксперту — тот же чат
+    const again = await startConversation(db, lead, maria, new Date());
+    expect(again.ok && again.conversation.id).toBe(a.conversation.id);
+  });
+
+  it("первый чат — только с экспертом в сети", async () => {
+    await setExpertOnline(db, olga, false, new Date());
+    expect(await startConversation(db, await newLead(), olga, new Date())).toMatchObject({ ok: false });
   });
 
   it("чат открывается только своей заявкой; список чатов с непрочитанными", async () => {
