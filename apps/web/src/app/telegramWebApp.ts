@@ -17,6 +17,15 @@ export function telegramInitData(): string | null {
   }
 }
 
+/**
+ * Человек сейчас не смотрит на страницу: вкладка скрыта, окно не в фокусе (открыто другое окно,
+ * например админка рядом) или приложение в Telegram свёрнуто. Тогда сообщения не отмечаются
+ * прочитанными, и клиенту из Telegram приходит уведомление.
+ */
+export function pageAway(): boolean {
+  return document.hidden || !document.hasFocus() || window.Telegram?.WebApp?.isActive === false;
+}
+
 /** Имя из профиля Telegram — подставить в форму (человек может исправить). */
 export function telegramFirstName(initData: string): string {
   try {

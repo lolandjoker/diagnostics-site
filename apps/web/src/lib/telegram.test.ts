@@ -1,6 +1,7 @@
 import { createHmac } from "node:crypto";
 import { createTestDb } from "@/db";
 import type { Db } from "@/db";
+import { messages } from "@/db/schema";
 import { markClientRead, startConversation } from "./chat";
 import { createExpert, setExpertOnline } from "./experts";
 import { createLead } from "./leads";
@@ -13,6 +14,7 @@ import {
   leadFromLoginCode,
   linkCode,
   loginCode,
+  newMessagesLabel,
   noticeText,
   notifyClient,
   telegramConfig,
@@ -66,12 +68,19 @@ describe("данные из Telegram", () => {
     expect(webhookSecret(TOKEN)).not.toContain(TOKEN);
   });
 
-  it("текст уведомления: имя эксперта и начало сообщения", () => {
-    expect(noticeText({ kind: "message", expertId: 1, body: "Добрый день!" }, "Мария", "Анна")).toBe("💬 Мария:\nДобрый день!");
-    expect(noticeText({ kind: "message", expertId: 1, body: "" }, "Мария", "Анна")).toBe("💬 Мария:\n📷 Фото");
-    expect(noticeText({ kind: "message", expertId: 1, body: "а".repeat(300) }, "Мария", "Анна")).toHaveLength(
-      "💬 Мария:\n".length + 201,
-    );
+  it("текст уведомления: сколько новых сообщений и от какого эксперта, без самого текста", () => {
+    expect(noticeText({ kind: "message", expertId: 1 }, "Вера", "Анна")).toBe("💬 У вас 1 новое сообщение от эксперта Вера");
+    expect(noticeText({ kind: "message", expertId: 1 }, "Вера", "Анна", 3)).toBe("💬 У вас 3 новых сообщения от эксперта Вера");
+    expect([1, 2, 5, 11, 21, 22, 25, 112].map(newMessagesLabel)).toEqual([
+      "1 новое сообщение",
+      "2 новых сообщения",
+      "5 новых сообщений",
+      "11 новых сообщений",
+      "21 новое сообщение",
+      "22 новых сообщения",
+      "25 новых сообщений",
+      "112 новых сообщений",
+    ]);
     expect(noticeText({ kind: "fullText" }, "Мария", "Анна")).toContain("Анна, ваш подробный разбор готов");
     expect(noticeText({ kind: "call", expertId: 1 }, "Мария", "Анна")).toBe("📞 Мария звонит вам — откройте чат, чтобы ответить.");
   });
@@ -142,7 +151,7 @@ describe("уведомления клиенту из бота", () => {
 
   beforeEach(async () => {
     db = await createTestDb();
-    fetchMock = vi.fn(async () => new Response("{}", { status: 200 }));
+    fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true, result: { message_id: 42 } }), { status: 200 }));
   });
 
   afterEach(() => {
@@ -164,25 +173,50 @@ describe("уведомления клиенту из бота", () => {
     return { lead, chat: started.conversation, expertId: expert.id };
   }
 
-  it("ответ эксперта — сообщение от бота с кнопкой в чат", async () => {
+  type Sent = {
+    chat_id: number;
+    message_id?: number;
+    text: string;
+    reply_markup: { inline_keyboard: { text: string; web_app: { url: string } }[][] };
+  };
+  const call = (i: number) => {
+    const [url, init] = fetchMock.mock.calls[i] as [string, RequestInit];
+    return { method: url.split("/").pop(), body: JSON.parse(String(init.body)) as Sent };
+  };
+  const expertSays = (conversationId: string, expertId: number, at = new Date()) =>
+    db.insert(messages).values({ conversationId, author: "expert", expertId, body: "…", createdAt: at });
+
+  it("ответ эксперта — «У вас 1 новое сообщение» с кнопкой «Прочитать»; следующие меняют число", async () => {
     const { lead, chat, expertId } = await chatFor(777000111);
     expect(await leadForTelegramUser(db, 777000111)).toBe(lead.id);
     expect(await leadForTelegramUser(db, 1)).toBeNull();
 
-    await notifyClient(db, chat.id, { kind: "message", expertId, body: "Здравствуйте, Анна!" });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe(`https://api.telegram.org/bot${TOKEN}/sendMessage`);
-    const body = JSON.parse(String(init.body)) as {
-      chat_id: number;
-      text: string;
-      reply_markup: { inline_keyboard: { web_app: { url: string } }[][] };
-    };
-    expect(body.chat_id).toBe(777000111);
-    expect(body.text).toBe("💬 Мария:\nЗдравствуйте, Анна!");
-    expect(body.reply_markup.inline_keyboard[0]?.[0]?.web_app.url).toBe(
-      `https://example.com/razbor/${lead.id}/chat?c=${chat.id}`,
-    );
+    await expertSays(chat.id, expertId);
+    await notifyClient(db, chat.id, { kind: "message", expertId });
+    expect(call(0).method).toBe("sendMessage");
+    expect(call(0).body.chat_id).toBe(777000111);
+    expect(call(0).body.text).toBe("💬 У вас 1 новое сообщение от эксперта Мария");
+    expect(call(0).body.reply_markup.inline_keyboard[0]?.[0]).toEqual({
+      text: "Прочитать",
+      web_app: { url: `https://example.com/razbor/${lead.id}/chat?c=${chat.id}` },
+    });
+
+    // Ещё два сообщения, клиент не читал — то же уведомление, число растёт, нового звука нет
+    await expertSays(chat.id, expertId);
+    await notifyClient(db, chat.id, { kind: "message", expertId });
+    await expertSays(chat.id, expertId);
+    await notifyClient(db, chat.id, { kind: "message", expertId });
+    expect(call(2).method).toBe("editMessageText");
+    expect(call(2).body.message_id).toBe(42);
+    expect(call(2).body.text).toBe("💬 У вас 3 новых сообщения от эксперта Мария");
+
+    // Прочитал и ушёл — следующее сообщение приходит новым уведомлением
+    const read = new Date(Date.now() + 1000);
+    await markClientRead(db, chat.id, read);
+    await expertSays(chat.id, expertId, new Date(read.getTime() + 1000));
+    await notifyClient(db, chat.id, { kind: "message", expertId }, new Date(read.getTime() + 60_000));
+    expect(call(3).method).toBe("sendMessage");
+    expect(call(3).body.text).toBe("💬 У вас 1 новое сообщение от эксперта Мария");
   });
 
   it("эксперт звонит — бот зовёт ответить", async () => {
@@ -202,7 +236,7 @@ describe("уведомления клиенту из бота", () => {
   it("клиент сейчас в чате или пришёл не из Telegram — не беспокоим", async () => {
     const { chat, expertId } = await chatFor(777000111);
     await markClientRead(db, chat.id, new Date());
-    await notifyClient(db, chat.id, { kind: "message", expertId, body: "Вы тут?" });
+    await notifyClient(db, chat.id, { kind: "message", expertId });
     expect(fetchMock).not.toHaveBeenCalled();
 
     vi.unstubAllEnvs();

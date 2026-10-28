@@ -239,7 +239,7 @@ export async function postMessage(db: Db, conversationId: string, input: PostInp
   });
   // Клиенту из Telegram-бота — уведомление об ответе (не ждём: чат не должен тормозить из-за Telegram)
   if (input.author === "expert" || input.author === "admin") {
-    void notifyClient(db, conversationId, { kind: "message", expertId: input.expertId ?? null, body });
+    void notifyClient(db, conversationId, { kind: "message", expertId: input.expertId ?? null });
   }
   return { ok: true, id };
 }

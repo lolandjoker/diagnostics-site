@@ -10,6 +10,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import type { MessageView } from "@/lib/chat";
 import { Avatar } from "./Avatar";
+import { pageAway } from "./telegramWebApp";
 
 const POLL_MS = 3000;
 /** Как часто сообщать «я печатаю», пока человек набирает текст (на той стороне «печатает» держится 5 с). */
@@ -150,9 +151,9 @@ export function ChatThread({
 
   const poll = useCallback(async () => {
     try {
-      // Вкладка свёрнута — сообщения не считаются прочитанными (и клиенту из Telegram придёт уведомление)
+      // Человек не смотрит на чат — сообщения не считаются прочитанными (и клиенту из Telegram придёт уведомление)
       const next = withParam(url, "after", String(lastId.current));
-      const res = await fetch(document.hidden ? withParam(next, "hidden", "1") : next, { cache: "no-store" });
+      const res = await fetch(pageAway() ? withParam(next, "hidden", "1") : next, { cache: "no-store" });
       if (!res.ok) return;
       const data = (await res.json()) as {
         messages: MessageView[];
