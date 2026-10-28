@@ -3,25 +3,40 @@
 /**
  * Сертификаты в профиле эксперта. По нажатию сертификат открывается в окне поверх страницы:
  * закрыть — крестиком, Esc или нажатием мимо картинки; несколько — листаются стрелками и свайпом.
- * Без JavaScript ссылка просто открывает картинку.
+ * Окно — обычный слой, а не <dialog>: встроенный браузер Telegram на старых телефонах <dialog>
+ * не открывает. Слой выносится прямо в <body>: внутри карточки профиля (у неё размытие фона)
+ * position: fixed считается от карточки, а не от экрана. Без JavaScript ссылка просто открывает картинку.
  */
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { CertificateView } from "@/lib/certificates";
 
 export function Certificates({ items }: { items: CertificateView[] }) {
-  const dialog = useRef<HTMLDialogElement>(null);
   const [index, setIndex] = useState<number | null>(null);
   const current = index === null ? null : items[index];
-
-  useEffect(() => {
-    const d = dialog.current;
-    if (!d) return;
-    if (index !== null && !d.open) d.showModal();
-    if (index === null && d.open) d.close();
-  }, [index]);
-
+  const closeButton = useRef<HTMLButtonElement>(null);
   const touchX = useRef<number | null>(null);
+  const many = items.length > 1;
   const step = (delta: number) => setIndex((i) => (i === null ? i : (i + delta + items.length) % items.length));
+
+  // Открыто окно: Esc закрывает, ← → листают, страница под окном не прокручивается
+  const open = index !== null;
+  useEffect(() => {
+    if (!open) return;
+    closeButton.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setIndex(null);
+      if (!many) return;
+      if (e.key === "ArrowLeft") setIndex((i) => (i === null ? i : (i - 1 + items.length) % items.length));
+      if (e.key === "ArrowRight") setIndex((i) => (i === null ? i : (i + 1) % items.length));
+    };
+    document.addEventListener("keydown", onKey);
+    document.body.classList.add("no-scroll");
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.classList.remove("no-scroll");
+    };
+  }, [open, many, items.length]);
 
   return (
     <>
@@ -43,59 +58,54 @@ export function Certificates({ items }: { items: CertificateView[] }) {
         ))}
       </ul>
 
-      <dialog
-        ref={dialog}
-        className="lightbox"
-        aria-label={current?.title || "Сертификат"}
-        onClose={() => setIndex(null)}
-        // Нажатие на затемнение вокруг картинки — закрыть
-        onClick={(e) => {
-          if (e.target === e.currentTarget || (e.target as HTMLElement).classList.contains("lightbox__stage")) setIndex(null);
-        }}
-        // На телефоне — листать свайпом
-        onTouchStart={(e) => {
-          touchX.current = e.touches[0]?.clientX ?? null;
-        }}
-        onTouchEnd={(e) => {
-          const start = touchX.current;
-          const end = e.changedTouches[0]?.clientX;
-          touchX.current = null;
-          if (items.length < 2 || start === null || end === undefined || Math.abs(end - start) < 50) return;
-          step(end < start ? 1 : -1);
-        }}
-        onKeyDown={(e) => {
-          if (items.length < 2) return;
-          if (e.key === "ArrowLeft") step(-1);
-          if (e.key === "ArrowRight") step(1);
-        }}
-      >
-        {current && (
-          <>
-            <div className="lightbox__stage">
+      {current &&
+        createPortal(
+          <div
+            className="certview"
+            role="dialog"
+            aria-modal="true"
+            aria-label={current.title || "Сертификат"}
+            // Нажатие на затемнение вокруг картинки — закрыть
+            onClick={(e) => {
+              if (e.target === e.currentTarget || (e.target as HTMLElement).classList.contains("certview__stage")) setIndex(null);
+            }}
+            // На телефоне — листать свайпом
+            onTouchStart={(e) => {
+              touchX.current = e.touches[0]?.clientX ?? null;
+            }}
+            onTouchEnd={(e) => {
+              const start = touchX.current;
+              const end = e.changedTouches[0]?.clientX;
+              touchX.current = null;
+              if (!many || start === null || end === undefined || Math.abs(end - start) < 50) return;
+              step(end < start ? 1 : -1);
+            }}
+          >
+            <div className="certview__stage">
               <img src={current.url} alt={current.title || "Сертификат"} />
             </div>
-            {(current.title || items.length > 1) && (
-              <p className="lightbox__caption">
+            {(current.title || many) && (
+              <p className="certview__caption">
                 {current.title}
-                {items.length > 1 && <span>{` ${index! + 1} из ${items.length}`}</span>}
+                {many && <span>{` ${index! + 1} из ${items.length}`}</span>}
               </p>
             )}
-            <button type="button" className="lightbox__close" onClick={() => setIndex(null)} aria-label="Закрыть">
+            <button ref={closeButton} type="button" className="certview__close" onClick={() => setIndex(null)} aria-label="Закрыть">
               ×
             </button>
-            {items.length > 1 && (
+            {many && (
               <>
-                <button type="button" className="lightbox__arrow lightbox__arrow--prev" onClick={() => step(-1)} aria-label="Предыдущий сертификат">
+                <button type="button" className="certview__arrow certview__arrow--prev" onClick={() => step(-1)} aria-label="Предыдущий сертификат">
                   ‹
                 </button>
-                <button type="button" className="lightbox__arrow lightbox__arrow--next" onClick={() => step(1)} aria-label="Следующий сертификат">
+                <button type="button" className="certview__arrow certview__arrow--next" onClick={() => step(1)} aria-label="Следующий сертификат">
                   ›
                 </button>
               </>
             )}
-          </>
+          </div>,
+          document.body,
         )}
-      </dialog>
     </>
   );
 }

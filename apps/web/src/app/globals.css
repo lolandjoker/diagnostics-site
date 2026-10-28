@@ -2549,36 +2549,25 @@ td.actions {
 
 /* --- Сертификат в окне поверх страницы --- */
 
-body:has(.lightbox[open]) {
+body.no-scroll {
   overflow: hidden;
 }
 
-.lightbox {
+.certview {
   position: fixed;
   inset: 0;
-  width: auto;
-  max-width: none;
-  height: auto;
-  max-height: none;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: #fff;
-}
-
-.lightbox::backdrop {
-  background: rgba(6, 4, 12, 0.88);
-  backdrop-filter: blur(4px);
-}
-
-.lightbox[open] {
+  z-index: 1000;
   display: flex;
   flex-direction: column;
+  background: rgba(6, 4, 12, 0.92);
+  color: #fff;
   animation: fade-in 0.2s ease-out;
+  /* Горизонтальный свайп листает сертификаты, а не уводит браузер «назад» */
+  touch-action: pan-y pinch-zoom;
+  overscroll-behavior: contain;
 }
 
-.lightbox__stage {
+.certview__stage {
   flex: 1;
   min-height: 0;
   display: flex;
@@ -2587,7 +2576,7 @@ body:has(.lightbox[open]) {
   padding: 56px 16px 8px;
 }
 
-.lightbox__stage img {
+.certview__stage img {
   max-width: min(100%, 1100px);
   max-height: 100%;
   object-fit: contain;
@@ -2595,7 +2584,7 @@ body:has(.lightbox[open]) {
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
 }
 
-.lightbox__caption {
+.certview__caption {
   margin: 0;
   padding: 8px 16px 24px;
   color: var(--text);
@@ -2603,12 +2592,12 @@ body:has(.lightbox[open]) {
   text-align: center;
 }
 
-.lightbox__caption span {
+.certview__caption span {
   color: var(--muted);
 }
 
-.lightbox__close,
-.lightbox__arrow {
+.certview__close,
+.certview__arrow {
   position: absolute;
   display: grid;
   place-items: center;
@@ -2624,26 +2613,26 @@ body:has(.lightbox[open]) {
   cursor: pointer;
 }
 
-.lightbox__close {
+.certview__close {
   top: 12px;
   right: 12px;
 }
 
-.lightbox__arrow {
+.certview__arrow {
   top: 50%;
   transform: translateY(-50%);
 }
 
-.lightbox__arrow--prev {
+.certview__arrow--prev {
   left: 12px;
 }
 
-.lightbox__arrow--next {
+.certview__arrow--next {
   right: 12px;
 }
 
-.lightbox__close:hover,
-.lightbox__arrow:hover {
+.certview__close:hover,
+.certview__arrow:hover {
   border-color: var(--gold);
   color: var(--gold);
 }
