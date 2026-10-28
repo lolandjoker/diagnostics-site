@@ -5,16 +5,16 @@ import { MAX_CERTIFICATES_PER_UPLOAD, listCertificates } from "@/lib/certificate
 import { MAX_GALLERY_PHOTOS, listGallery } from "@/lib/gallery";
 import { MIN_EXPERT_PASSWORD, expertPhotoUrls, formatRating, getExpert } from "@/lib/experts";
 import { ActionForm } from "../../../ActionForm";
+import { BulkCheck, BulkDelete } from "../../../BulkDelete";
 import { initial } from "../../../../Avatar";
 import { OnlineToggle } from "../../../OnlineToggle";
 import { DeleteForm } from "../../../DeleteForm";
 import {
   addCertificateAction,
   addGalleryPhotosAction,
-  deleteCertificateAction,
+  deleteCertificatesAction,
   deleteExpertAction,
-  deleteGalleryPhotoAction,
-  deleteMainPhotoAction,
+  deletePhotosAction,
   makeMainPhotoAction,
   setCertificateTitleAction,
   updateExpertAction,
@@ -109,6 +109,11 @@ export default async function ExpertAdminPage(props: PageProps<"/admin/experts/[
           {MAX_GALLERY_PHOTOS}, каждое JPEG, PNG или WebP до 5 МБ.
         </p>
         {(photo || gallery.length > 0) && (
+          <BulkDelete id="photos-delete" action={deletePhotosAction}>
+            <input type="hidden" name="expert_id" value={expert.id} />
+          </BulkDelete>
+        )}
+        {(photo || gallery.length > 0) && (
           <ul className="certs certs--admin photos--admin">
             {photo && (
               <li>
@@ -118,14 +123,7 @@ export default async function ExpertAdminPage(props: PageProps<"/admin/experts/[
                     <b>Главное</b>
                   </span>
                 </a>
-                <form action={deleteMainPhotoAction} className="inline-delete">
-                  <input type="hidden" name="expert_id" value={expert.id} />
-                  <label className="check">
-                    <input type="checkbox" name="confirm" required />
-                    <span>удалить</span>
-                  </label>
-                  <button className="link-button link-button--danger">Удалить</button>
-                </form>
+                <BulkCheck form="photos-delete" name="main" value="on" />
               </li>
             )}
             {gallery.map((g, i) => (
@@ -138,15 +136,7 @@ export default async function ExpertAdminPage(props: PageProps<"/admin/experts/[
                   <input type="hidden" name="id" value={g.id} />
                   <button className="link-button">Сделать главным</button>
                 </form>
-                <form action={deleteGalleryPhotoAction} className="inline-delete">
-                  <input type="hidden" name="expert_id" value={expert.id} />
-                  <input type="hidden" name="id" value={g.id} />
-                  <label className="check">
-                    <input type="checkbox" name="confirm" required />
-                    <span>удалить</span>
-                  </label>
-                  <button className="link-button link-button--danger">Удалить</button>
-                </form>
+                <BulkCheck form="photos-delete" value={g.id} />
               </li>
             ))}
           </ul>
@@ -170,6 +160,11 @@ export default async function ExpertAdminPage(props: PageProps<"/admin/experts/[
           {MAX_CERTIFICATES_PER_UPLOAD} файлов.
         </p>
         {certificates.length > 0 && (
+          <BulkDelete id="certificates-delete" action={deleteCertificatesAction}>
+            <input type="hidden" name="expert_id" value={expert.id} />
+          </BulkDelete>
+        )}
+        {certificates.length > 0 && (
           <ul className="certs certs--admin">
             {certificates.map((c) => (
               <li key={c.id}>
@@ -182,15 +177,7 @@ export default async function ExpertAdminPage(props: PageProps<"/admin/experts/[
                   <input name="title" defaultValue={c.title} maxLength={120} placeholder="Подпись" aria-label="Подпись сертификата" />
                   <button className="link-button">Сохранить</button>
                 </ActionForm>
-                <form action={deleteCertificateAction} className="inline-delete">
-                  <input type="hidden" name="expert_id" value={expert.id} />
-                  <input type="hidden" name="id" value={c.id} />
-                  <label className="check">
-                    <input type="checkbox" name="confirm" required />
-                    <span>удалить</span>
-                  </label>
-                  <button className="link-button link-button--danger">Удалить</button>
-                </form>
+                <BulkCheck form="certificates-delete" value={c.id} />
               </li>
             ))}
           </ul>

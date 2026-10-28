@@ -11,7 +11,7 @@ import { redirect } from "next/navigation";
 import { getDb } from "@/db";
 import { experts, variations } from "@/db/schema";
 import { requireAdmin } from "@/lib/admin-auth";
-import { addReview, deleteReview, setReviewHidden } from "@/lib/reviews";
+import { addReview, deleteReviews, setReviewBody, setReviewHidden } from "@/lib/reviews";
 import { addCertificates, deleteCertificate, setCertificateTitle } from "@/lib/certificates";
 import { addGalleryPhotos, deleteGalleryPhoto, deleteMainPhoto, makeMainPhoto } from "@/lib/gallery";
 import { requireStaff } from "@/lib/staff-auth";
@@ -45,6 +45,13 @@ const int = (form: FormData, key: string): number | null => {
   const s = str(form, key).trim();
   return /^-?\d{1,9}$/.test(s) ? Number(s) : null;
 };
+
+/** Отмеченные галочками в списке: все значения ids (см. BulkDelete). */
+const ids = (form: FormData): number[] =>
+  form
+    .getAll("ids")
+    .filter((v): v is string => typeof v === "string" && /^\d{1,9}$/.test(v))
+    .map(Number);
 
 /** Выбранные в поле файлы (пустое поле браузер присылает как один пустой файл — его отбрасываем). */
 async function files(form: FormData, key: string): Promise<Buffer[]> {
@@ -228,10 +235,20 @@ export async function setReviewHiddenAction(form: FormData): Promise<void> {
   refresh();
 }
 
-export async function deleteReviewAction(form: FormData): Promise<void> {
+export async function setReviewBodyAction(_prev: ActionResult, form: FormData): Promise<ActionResult> {
   await requireStaff();
   const id = int(form, "id");
-  if (id !== null && form.get("confirm") === "on") await deleteReview(await getDb(), id);
+  if (id === null) return fail("Отзыв не найден");
+  const error = await setReviewBody(await getDb(), id, str(form, "body"));
+  if (error) return fail(error);
+  refresh();
+  return done("Сохранено");
+}
+
+/** Удалить отмеченные отзывы. */
+export async function deleteReviewsAction(form: FormData): Promise<void> {
+  await requireStaff();
+  await deleteReviews(await getDb(), ids(form));
   refresh();
 }
 
@@ -278,11 +295,12 @@ export async function setCertificateTitleAction(_prev: ActionResult, form: FormD
   return done("Подпись сохранена");
 }
 
-export async function deleteCertificateAction(form: FormData): Promise<void> {
+/** Удалить отмеченные сертификаты. */
+export async function deleteCertificatesAction(form: FormData): Promise<void> {
   await requireStaff();
   const expertId = int(form, "expert_id");
-  const id = int(form, "id");
-  if (expertId !== null && id !== null && form.get("confirm") === "on") await deleteCertificate(await getDb(), expertId, id);
+  const db = await getDb();
+  if (expertId !== null) for (const id of ids(form)) await deleteCertificate(db, expertId, id);
   refresh();
 }
 
@@ -307,17 +325,16 @@ export async function makeMainPhotoAction(form: FormData): Promise<void> {
   refresh();
 }
 
-export async function deleteGalleryPhotoAction(form: FormData): Promise<void> {
+/**
+ * Удалить отмеченные фото; main — отмечено и главное. Сначала дополнительные: на место удалённого
+ * главного встанет первое из оставшихся, а не то, что тоже отмечено.
+ */
+export async function deletePhotosAction(form: FormData): Promise<void> {
   await requireStaff();
   const expertId = int(form, "expert_id");
-  const id = int(form, "id");
-  if (expertId !== null && id !== null && form.get("confirm") === "on") await deleteGalleryPhoto(await getDb(), expertId, id);
-  refresh();
-}
-
-export async function deleteMainPhotoAction(form: FormData): Promise<void> {
-  await requireStaff();
-  const expertId = int(form, "expert_id");
-  if (expertId !== null && form.get("confirm") === "on") await deleteMainPhoto(await getDb(), expertId);
+  if (expertId === null) return;
+  const db = await getDb();
+  for (const id of ids(form)) await deleteGalleryPhoto(db, expertId, id);
+  if (form.get("main") === "on") await deleteMainPhoto(db, expertId);
   refresh();
 }

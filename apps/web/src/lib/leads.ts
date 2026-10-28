@@ -1,5 +1,5 @@
 /** Заявки: человек ввёл имя и дату рождения. */
-import { eq } from "drizzle-orm";
+import { and, eq, lt, sql } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { assertValidBirthDate } from "@diag/engine";
 import type { BirthDate } from "@diag/engine";
@@ -73,7 +73,33 @@ export async function createLead(
   return lead as Lead;
 }
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** Столько после заявки краткий разбор «считается»: страница разбора показывает анимацию. */
+export const RESULT_LOADING_MS = 30_000;
+
+/** Имя и дату рождения на странице разбора можно поменять не больше стольких раз. */
+export const MAX_LEAD_EDITS = 3;
+
+/**
+ * Человек поправил имя или дату рождения. Разбор остаётся тем же (вариант не меняется),
+ * подробный разбор, если уже пришёл в чат, повторно не приходит. Попытки кончились — null.
+ */
+export async function editLead(db: Db, id: string, input: LeadInput): Promise<Lead | null> {
+  if (!isUuid(id)) return null;
+  const [lead] = await db
+    .update(leads)
+    .set({ name: input.name.trim(), birthDate: input.birthDate, edits: sql`${leads.edits} + 1` })
+    .where(and(eq(leads.id, id), lt(leads.edits, MAX_LEAD_EDITS)))
+    .returning();
+  return lead ?? null;
+}
+
+/** Дата из базы для поля формы: «1990-03-15» → «15.03.1990». */
+export function isoToBirthDate(iso: string): string {
+  const [y, m, d] = iso.split("-");
+  return `${d}.${m}.${y}`;
+}
+
+const UUID =/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function isUuid(s: string): boolean {
   return UUID.test(s);

@@ -4,7 +4,8 @@ import { listExperts } from "@/lib/experts";
 import { listAllReviews } from "@/lib/reviews";
 import { requireStaff } from "@/lib/staff-auth";
 import { ActionForm } from "../../ActionForm";
-import { addReviewAction, deleteReviewAction, setReviewHiddenAction } from "../../actions";
+import { BulkCheck, BulkDelete } from "../../BulkDelete";
+import { addReviewAction, deleteReviewsAction, setReviewBodyAction, setReviewHiddenAction } from "../../actions";
 import { Stars } from "../../../Stars";
 
 const when = new Intl.DateTimeFormat("ru-RU", {
@@ -32,7 +33,8 @@ export default async function ReviewsPage(props: PageProps<"/admin/reviews">) {
       <h1>Отзывы{current ? ` — ${current.name}` : ""}</h1>
       <p className="muted">
         Клиенты оставляют отзыв в своём чате — один на чат, могут поправить; здесь можно добавить отзыв и без чата.
-        Отзыв сразу виден на карточке эксперта (листается по 5). Скрытый клиентам не показывается; удаление — насовсем.
+        Отзыв сразу виден на карточке эксперта (листается по 5). Текст отзыва можно поправить. Скрытый клиентам
+        не показывается; удаление — насовсем: отметьте отзывы галочками и нажмите «Удалить отмеченные».
         Число отзывов на карточке («347 отзывов») задаётся на странице эксперта.
       </p>
 
@@ -93,59 +95,63 @@ export default async function ReviewsPage(props: PageProps<"/admin/reviews">) {
       {list.length === 0 ? (
         <p className="muted">Отзывов пока нет.</p>
       ) : (
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Когда</th>
-                <th>Эксперт</th>
-                <th>Клиент</th>
-                <th>Оценка</th>
-                <th>Отзыв</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {list.map((r) => (
-                <tr key={r.id} className={r.hidden ? "muted" : ""}>
-                  <td>{when.format(r.createdAt)}</td>
-                  <td>{r.expertName}</td>
-                  <td>
-                    {r.conversationId ? (
-                      <Link href={`${chatBase}/${r.conversationId}`}>{r.authorName}</Link>
-                    ) : (
-                      <>
-                        {r.authorName} <span className="muted">(добавлен вручную)</span>
-                      </>
-                    )}
-                  </td>
-                  <td>
-                    <Stars n={r.stars} />
-                  </td>
-                  <td className="text">
-                    {r.body || <span className="muted">без текста</span>}
-                    {r.hidden && <span className="muted"> (скрыт)</span>}
-                  </td>
-                  <td className="actions">
-                    <form action={setReviewHiddenAction}>
-                      <input type="hidden" name="id" value={r.id} />
-                      <input type="hidden" name="hidden" value={r.hidden ? "false" : "true"} />
-                      <button className="link-button">{r.hidden ? "Показать" : "Скрыть"}</button>
-                    </form>
-                    <form action={deleteReviewAction} className="inline-delete">
-                      <input type="hidden" name="id" value={r.id} />
-                      <label className="check">
-                        <input type="checkbox" name="confirm" required />
-                        <span>удалить</span>
-                      </label>
-                      <button className="link-button link-button--danger">Удалить</button>
-                    </form>
-                  </td>
+        <>
+          <BulkDelete id="reviews-delete" action={deleteReviewsAction} />
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Когда</th>
+                  <th>Эксперт</th>
+                  <th>Клиент</th>
+                  <th>Оценка</th>
+                  <th>Отзыв</th>
+                  <th />
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {list.map((r) => (
+                  <tr key={r.id} className={r.hidden ? "muted" : ""}>
+                    <td>{when.format(r.createdAt)}</td>
+                    <td>{r.expertName}</td>
+                    <td>
+                      {r.conversationId ? (
+                        <Link href={`${chatBase}/${r.conversationId}`}>{r.authorName}</Link>
+                      ) : (
+                        <>
+                          {r.authorName} <span className="muted">(добавлен вручную)</span>
+                        </>
+                      )}
+                    </td>
+                    <td>
+                      <Stars n={r.stars} />
+                    </td>
+                    <td className="text">
+                      {r.body || <span className="muted">без текста</span>}
+                      {r.hidden && <span className="muted"> (скрыт)</span>}
+                      <details className="review-edit">
+                        <summary>изменить текст</summary>
+                        <ActionForm action={setReviewBodyAction}>
+                          <input type="hidden" name="id" value={r.id} />
+                          <textarea name="body" rows={4} maxLength={2000} defaultValue={r.body} aria-label="Текст отзыва" />
+                          <button className="button">Сохранить</button>
+                        </ActionForm>
+                      </details>
+                    </td>
+                    <td className="actions">
+                      <form action={setReviewHiddenAction}>
+                        <input type="hidden" name="id" value={r.id} />
+                        <input type="hidden" name="hidden" value={r.hidden ? "false" : "true"} />
+                        <button className="link-button">{r.hidden ? "Показать" : "Скрыть"}</button>
+                      </form>
+                      <BulkCheck form="reviews-delete" value={r.id} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </>
   );

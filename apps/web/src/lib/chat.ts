@@ -112,7 +112,8 @@ export type StartResult = { ok: true; conversation: Conversation } | { ok: false
 
 /**
  * Человек выбрал эксперта: открывается чат с ним (уже был — тот же). Писать можно любому эксперту,
- * у каждого свой чат в списке переписок. Первый чат — только с экспертом в сети, и в него через
+ * у каждого свой чат в списке переписок. Первый чат — только с экспертом в сети, начинается
+ * сообщением клиента «расскажите подробнее» (текст chat.first_message), и в него через
  * FULL_TEXT_DELAY_MS приходит текст 2 варианта (см. deliverDueFullTexts); в следующие — уже нет.
  */
 export async function startConversation(db: Db, lead: Lead, expertId: number, now: Date): Promise<StartResult> {
@@ -140,6 +141,14 @@ export async function startConversation(db: Db, lead: Lead, expertId: number, no
   if (!created) {
     const again = await withExpert();
     return again ? { ok: true, conversation: again } : { ok: false, error: "Не удалось открыть чат" };
+  }
+  // Первый чат начинается с вопроса клиента о его разборе — эксперт видит, с чего начать
+  if (first) {
+    const { "chat.first_message": body } = await getTexts(db, ["chat.first_message"]);
+    if (body.trim() !== "") {
+      await db.insert(messages).values({ conversationId: created.id, author: "client", body: body.trim(), createdAt: now });
+      await db.update(conversations).set({ lastMessageAt: now }).where(eq(conversations.id, created.id));
+    }
   }
   return { ok: true, conversation: created };
 }

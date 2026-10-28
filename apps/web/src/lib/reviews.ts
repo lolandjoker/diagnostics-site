@@ -1,7 +1,7 @@
 /**
  * Отзывы об экспертах. Клиент оставляет отзыв в своём чате — один на чат, может поправить; отзыв сразу
  * виден на карточке эксперта с именем клиента из заявки (форма об этом предупреждает). Админ и эксперты
- * в разделе «Отзывы» добавляют отзывы (без чата), скрывают и удаляют.
+ * в разделе «Отзывы» добавляют отзывы (без чата), правят текст, скрывают и удаляют.
  * Число отзывов на карточке — не подсчёт, а поле эксперта reviewsShown (lib/experts.ts).
  */
 import { and, desc, eq, inArray } from "drizzle-orm";
@@ -134,8 +134,17 @@ export async function setReviewHidden(db: Db, id: number, hidden: boolean): Prom
   await db.update(reviews).set({ hidden }).where(eq(reviews.id, id));
 }
 
-export async function deleteReview(db: Db, id: number): Promise<void> {
-  await db.delete(reviews).where(eq(reviews.id, id));
+/** Админ поправил текст отзыва. Звёзды, автор и дата остаются прежними. Ошибка — текст для человека. */
+export async function setReviewBody(db: Db, id: number, input: string): Promise<string | null> {
+  const body = input.replace(/\r\n/g, "\n").trim();
+  if (body.length > MAX_REVIEW_LENGTH) return `Отзыв длиннее ${MAX_REVIEW_LENGTH} символов`;
+  await db.update(reviews).set({ body, updatedAt: new Date() }).where(eq(reviews.id, id));
+  return null;
+}
+
+/** Удаление насовсем — одного отзыва или всех отмеченных в списке. */
+export async function deleteReviews(db: Db, ids: number[]): Promise<void> {
+  if (ids.length > 0) await db.delete(reviews).where(inArray(reviews.id, ids));
 }
 
 /** «3 отзыва», «5 отзывов», «1 отзыв». */

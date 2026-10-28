@@ -7,12 +7,13 @@ import { pageNumbers } from "./pagination";
 import { createLead } from "./leads";
 import {
   addReview,
-  deleteReview,
+  deleteReviews,
   expertReviews,
   listAllReviews,
   reviewForConversation,
   reviewsCountLabel,
   saveReview,
+  setReviewBody,
   setReviewHidden,
 } from "./reviews";
 
@@ -67,8 +68,15 @@ describe("отзывы", () => {
     expect(card.count).toBe(6);
     expect(card.latest.map((r) => r.id)).not.toContain(newest!.id);
 
-    await deleteReview(db, newest!.id);
+    const [, second, third] = await listAllReviews(db);
+    expect(await setReviewBody(db, second!.id, "  Новый текст \r\nотзыва ")).toBeNull();
+    expect(await setReviewBody(db, second!.id, "я".repeat(2001))).not.toBeNull();
+    expect((await listAllReviews(db)).find((r) => r.id === second!.id)).toMatchObject({ body: "Новый текст \nотзыва", stars: 5 });
+
+    await deleteReviews(db, [newest!.id]);
     expect(await listAllReviews(db)).toHaveLength(6);
+    await deleteReviews(db, [second!.id, third!.id]);
+    expect(await listAllReviews(db)).toHaveLength(4);
     expect((await expertReviews(db, [])).size).toBe(0);
   });
 

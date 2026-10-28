@@ -1758,6 +1758,31 @@ td.actions {
   align-items: center;
 }
 
+/* Удаление отмеченного: «Отметить все», счётчик, кнопка */
+.bulk {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+  margin: 0 0 12px;
+}
+
+.bulk .button {
+  padding: 8px 16px;
+  font-size: 0.875rem;
+}
+
+.review-edit summary {
+  color: var(--gold);
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.review-edit textarea {
+  width: 100%;
+  margin: 8px 0;
+}
+
 /* --- Чат клиента как в мессенджере: переписки | чат | профиль эксперта --- */
 
 .messenger {
@@ -2353,6 +2378,158 @@ td.actions {
 
 .status--typing {
   color: var(--gold);
+}
+
+/* --- Разбор «считается»: круг с рунами, шаги, прогресс --- */
+
+.loading {
+  min-height: 80dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.loading__orb {
+  width: min(240px, 64vw);
+  height: auto;
+  margin-bottom: 28px;
+  color: var(--gold);
+  overflow: visible;
+  filter: drop-shadow(0 0 22px rgba(217, 182, 111, 0.35));
+}
+
+.loading__ring {
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+}
+
+.loading__ring--outer {
+  animation: spin 60s linear infinite;
+}
+
+.loading__ring--middle {
+  animation: spin 24s linear infinite reverse;
+}
+
+.loading__ring--orbit {
+  animation: spin 7s linear infinite;
+}
+
+.loading__core {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: core-pulse 2.6s ease-in-out infinite;
+}
+
+.loading__star {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: star-turn 5.2s ease-in-out infinite;
+}
+
+@keyframes core-pulse {
+  0%,
+  100% {
+    transform: scale(0.85);
+    opacity: 0.75;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
+}
+
+@keyframes star-turn {
+  0%,
+  100% {
+    transform: rotate(0deg) scale(1);
+  }
+  50% {
+    transform: rotate(45deg) scale(1.25);
+  }
+}
+
+.loading__steps {
+  margin: 4px 0 24px;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+  color: var(--muted);
+}
+
+.loading__steps li {
+  position: relative;
+  padding: 4px 0 4px 28px;
+  opacity: 0.45;
+  transition:
+    opacity 0.4s,
+    color 0.4s;
+}
+
+.loading__steps li::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  margin-top: -5px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+}
+
+.loading__steps li.is-active {
+  opacity: 1;
+  color: var(--text);
+}
+
+.loading__steps li.is-active::before {
+  border-color: var(--gold);
+  background: var(--gold);
+  box-shadow: 0 0 10px var(--gold);
+  animation: core-pulse 1.3s ease-in-out infinite;
+}
+
+.loading__steps li.is-done {
+  opacity: 0.8;
+}
+
+.loading__steps li.is-done::before {
+  content: "✓";
+  width: auto;
+  height: auto;
+  margin-top: -0.8em;
+  border: 0;
+  color: var(--gold);
+  font-size: 0.875rem;
+}
+
+.loading__bar {
+  width: min(320px, 100%);
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--line);
+}
+
+.loading__bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(217, 182, 111, 0.5), var(--gold), #fff3d6);
+  box-shadow: 0 0 12px rgba(217, 182, 111, 0.6);
+  transition: width 0.25s linear;
+}
+
+.back-link {
+  margin: 0 0 20px;
+  font-size: 0.875rem;
+  text-align: left;
+}
+
+.back-link a {
+  color: var(--muted);
 }
 
 /* Без анимаций для тех, кто отключил их в системе */
