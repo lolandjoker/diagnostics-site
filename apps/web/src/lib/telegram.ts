@@ -12,9 +12,9 @@
  * Без TELEGRAM_BOT_TOKEN и SITE_DOMAIN в .env всё это выключено, сайт работает как обычно.
  */
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, sql } from "drizzle-orm";
 import type { Db } from "@/db";
-import { conversations, experts, leads } from "@/db/schema";
+import { conversations, experts, leads, messages } from "@/db/schema";
 
 export interface TelegramConfig {
   token: string;
@@ -122,20 +122,33 @@ export function botUsername(cfg: TelegramConfig): Promise<string | null> {
 /** Кнопка под сообщением бота: webApp — страница сайта внутри Telegram, url — в браузере. */
 export type BotButton = { text: string; webApp: string } | { text: string; url: string };
 
-/** Сообщение от бота; кнопки — каждая на своей строке. */
-export function sendMessage(cfg: TelegramConfig, chatId: number, text: string, buttons: BotButton[] = []) {
-  return botApi(cfg.token, "sendMessage", {
+/** Кнопки под сообщением — каждая на своей строке. */
+const keyboard = (buttons: BotButton[]) =>
+  buttons.length === 0
+    ? {}
+    : {
+        reply_markup: {
+          inline_keyboard: buttons.map((b) => [
+            "webApp" in b ? { text: b.text, web_app: { url: b.webApp } } : { text: b.text, url: b.url },
+          ]),
+        },
+      };
+
+/** Сообщение от бота. Возвращает его номер в чате (чтобы потом поправить) или null, если не ушло. */
+export async function sendMessage(cfg: TelegramConfig, chatId: number, text: string, buttons: BotButton[] = []): Promise<number | null> {
+  const sent = await botCall(cfg.token, "sendMessage", {
     chat_id: chatId,
     text,
     link_preview_options: { is_disabled: true },
-    ...(buttons.length > 0 && {
-      reply_markup: {
-        inline_keyboard: buttons.map((b) => [
-          "webApp" in b ? { text: b.text, web_app: { url: b.webApp } } : { text: b.text, url: b.url },
-        ]),
-      },
-    }),
+    ...keyboard(buttons),
   });
+  const id = (sent as { message_id?: unknown } | null)?.message_id;
+  return typeof id === "number" ? id : null;
+}
+
+/** Поправить отправленное сообщение бота — без нового звука и всплывающего уведомления. */
+function editMessage(cfg: TelegramConfig, chatId: number, messageId: number, text: string, buttons: BotButton[]) {
+  return botApi(cfg.token, "editMessageText", { chat_id: chatId, message_id: messageId, text, ...keyboard(buttons) });
 }
 
 const sign = (token: string, purpose: string, value: string) =>
@@ -196,26 +209,41 @@ export async function unlinkTelegramUser(db: Db, telegramUserId: number): Promis
   return rows.length;
 }
 
-/** Клиент открывал чат совсем недавно — значит, смотрит его сейчас, уведомление не нужно. */
-export const CLIENT_ACTIVE_MS = 15_000;
-const PREVIEW_LENGTH = 200;
+/** Клиент смотрел чат совсем недавно (чат опрашивается раз в 3 секунды) — значит, видит его сейчас, уведомление не нужно. */
+export const CLIENT_ACTIVE_MS = 10_000;
 
 export type ClientNotice =
-  | { kind: "message"; expertId: number | null; body: string }
+  | { kind: "message"; expertId: number | null }
   | { kind: "call"; expertId: number | null }
   | { kind: "fullText" };
 
-export function noticeText(notice: ClientNotice, expertName: string, clientName: string): string {
+/** «1 новое сообщение», «3 новых сообщения», «5 новых сообщений». */
+export function newMessagesLabel(n: number): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return `${n} новое сообщение`;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${n} новых сообщения`;
+  return `${n} новых сообщений`;
+}
+
+/** Текст уведомления; unread — сколько сообщений эксперта клиент ещё не прочитал. Сам текст сообщения в Telegram не попадает. */
+export function noticeText(notice: ClientNotice, expertName: string, clientName: string, unread = 1): string {
   if (notice.kind === "fullText") return `✨ ${clientName}, ваш подробный разбор готов — откройте чат, чтобы прочитать.`;
   if (notice.kind === "call") return `📞 ${expertName} звонит вам — откройте чат, чтобы ответить.`;
-  const body = notice.body.trim();
-  const preview = body.length > PREVIEW_LENGTH ? `${body.slice(0, PREVIEW_LENGTH).trimEnd()}…` : body;
-  return `💬 ${expertName}:\n${preview || "📷 Фото"}`;
+  return `💬 У вас ${newMessagesLabel(Math.max(1, unread))} от эксперта ${expertName}`;
 }
 
 /**
- * Уведомить клиента в Telegram о новом сообщении в чате. Только для заявок из приложения в боте;
- * ошибки не мешают самому чату (сообщение уже сохранено).
+ * Последнее уведомление о сообщениях в каждом чате. Пока клиент его не прочитал, следующие сообщения
+ * не шлют новое уведомление, а меняют число в нём: «У вас 3 новых сообщения». В памяти: после
+ * перезапуска сайта первое сообщение просто придёт новым уведомлением.
+ */
+const lastNotice = new Map<string, { chatId: number; messageId: number; sentAt: number }>();
+
+/**
+ * Уведомить клиента в Telegram о новом в чате: сообщения эксперта, звонок, подробный разбор.
+ * Только для заявок, привязанных к Telegram; клиент смотрит чат прямо сейчас — не беспокоим.
+ * Ошибки не мешают самому чату (сообщение уже сохранено).
  */
 export async function notifyClient(db: Db, conversationId: string, notice: ClientNotice, now = new Date()): Promise<void> {
   const cfg = telegramConfig();
@@ -237,12 +265,31 @@ export async function notifyClient(db: Db, conversationId: string, notice: Clien
     // Сообщение и звонок админа клиент видит от эксперта чата
     const expertId = notice.kind === "fullText" ? row.expertId : (notice.expertId ?? row.expertId);
     const [expert] = await db.select({ name: experts.name }).from(experts).where(eq(experts.id, expertId));
-    await sendMessage(cfg, row.telegramUserId, noticeText(notice, expert?.name ?? "Эксперт", row.clientName), [
-      {
-        text: notice.kind === "call" ? "Ответить" : "Открыть чат",
-        webApp: `${cfg.siteUrl}/razbor/${row.leadId}/chat?c=${conversationId}`,
-      },
-    ]);
+    const buttons: BotButton[] = [
+      { text: notice.kind === "call" ? "Ответить" : "Прочитать", webApp: `${cfg.siteUrl}/razbor/${row.leadId}/chat?c=${conversationId}` },
+    ];
+    if (notice.kind !== "message") {
+      await sendMessage(cfg, row.telegramUserId, noticeText(notice, expert?.name ?? "Эксперт", row.clientName), buttons);
+      return;
+    }
+
+    const [unread] = await db
+      .select({ n: sql<number>`count(*)`.mapWith(Number) })
+      .from(messages)
+      .where(
+        and(
+          eq(messages.conversationId, conversationId),
+          inArray(messages.author, ["expert", "admin"]),
+          row.clientReadAt ? gt(messages.createdAt, row.clientReadAt) : undefined,
+        ),
+      );
+    const text = noticeText(notice, expert?.name ?? "Эксперт", row.clientName, unread?.n ?? 1);
+    // Прошлое уведомление ещё не прочитано — меняем в нём число, а не шлём новое
+    const prev = lastNotice.get(conversationId);
+    const unseen = prev && prev.chatId === row.telegramUserId && (!row.clientReadAt || row.clientReadAt.getTime() < prev.sentAt);
+    if (prev && unseen && (await editMessage(cfg, prev.chatId, prev.messageId, text, buttons))) return;
+    const messageId = await sendMessage(cfg, row.telegramUserId, text, buttons);
+    if (messageId !== null) lastNotice.set(conversationId, { chatId: row.telegramUserId, messageId, sentAt: now.getTime() });
   } catch (err) {
     console.warn(`Уведомление в Telegram: ${err instanceof Error ? err.message : String(err)}`);
   }

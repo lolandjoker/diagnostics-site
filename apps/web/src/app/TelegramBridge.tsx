@@ -16,6 +16,8 @@ interface TelegramWebApp {
   expand(): void;
   setHeaderColor(color: string): void;
   setBackgroundColor(color: string): void;
+  /** Приложение на экране; false — свёрнуто или закрыто другим окном Telegram (Bot API 8.0+). */
+  isActive?: boolean;
 }
 
 declare global {
