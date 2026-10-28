@@ -1,0 +1,1 @@
+ALTER TABLE "leads" ADD COLUMN "edits" integer DEFAULT 0 NOT NULL;

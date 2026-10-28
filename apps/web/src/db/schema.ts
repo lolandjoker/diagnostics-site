@@ -186,6 +186,8 @@ export const leads = pgTable(
      * в свой чат и получает от бота уведомления об ответах; null — заявка с обычного сайта.
      */
     telegramUserId: bigint("telegram_user_id", { mode: "number" }),
+    /** Сколько раз человек менял имя и дату рождения на странице разбора (не больше MAX_LEAD_EDITS). */
+    edits: integer("edits").notNull().default(0),
   },
   (t) => [index("leads_telegram_user_idx").on(t.telegramUserId, t.createdAt)],
 );

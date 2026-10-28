@@ -65,8 +65,8 @@ export default async function ClientChatPage(props: PageProps<"/razbor/[id]/chat
             busyLabel: t["experts.busy"],
             ...(expert && { rating: formatRating(expert.rating) }),
             profileHref,
-            backHref: `/razbor/${lead.id}`,
-            backLabel: "К разбору",
+            backHref: `/razbor/${lead.id}/eksperty`,
+            backLabel: "К экспертам",
           }}
           call={
             <>

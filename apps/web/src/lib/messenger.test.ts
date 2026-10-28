@@ -1,5 +1,7 @@
+import { eq } from "drizzle-orm";
 import { createTestDb } from "@/db";
 import type { Db } from "@/db";
+import { conversations, messages } from "@/db/schema";
 import { addCertificate, deleteCertificate, getCertificate, listCertificates } from "./certificates";
 import {
   FULL_TEXT_DELAY_MS,
@@ -13,7 +15,7 @@ import {
   startConversation,
 } from "./chat";
 import { createExpert, expertTags, setExpertOnline } from "./experts";
-import { createLead } from "./leads";
+import { MAX_LEAD_EDITS, createLead, editLead } from "./leads";
 import { TYPING_TTL_MS, clearTyping, isTyping, setTyping } from "./typing";
 
 let db: Db;
@@ -52,6 +54,33 @@ describe("переписки клиента", () => {
     // К тому же эксперту — тот же чат
     const again = await startConversation(db, lead, maria, new Date());
     expect(again.ok && again.conversation.id).toBe(a.conversation.id);
+
+    // Первый чат начинается с вопроса клиента о разборе — один раз; в следующих чатах его нет
+    const bodies = async (id: string) =>
+      (await db.select().from(messages).where(eq(messages.conversationId, id))).map((m) => `${m.author}: ${m.body}`);
+    expect(await bodies(a.conversation.id)).toEqual(["client: Здравствуйте, расскажите подробней про мою диагностику."]);
+    expect(await bodies(b.conversation.id)).toEqual([]);
+  });
+
+  it("имя и дату можно изменить MAX_LEAD_EDITS раза; подробный разбор второй раз не приходит", async () => {
+    const lead = await newLead();
+    const started = await startConversation(db, lead, maria, new Date());
+    if (!started.ok) throw new Error(started.error);
+    await db.update(conversations).set({ fullTextSentAt: new Date() }).where(eq(conversations.id, started.conversation.id));
+    for (let i = 1; i <= MAX_LEAD_EDITS; i++) {
+      expect(await editLead(db, lead.id, { name: ` Анна ${i} `, birthDate: "1991-04-16" })).toMatchObject({
+        name: `Анна ${i}`,
+        birthDate: "1991-04-16",
+        edits: i,
+        variationId: lead.variationId,
+      });
+    }
+    expect(await editLead(db, lead.id, { name: "Ещё", birthDate: "1991-04-16" })).toBeNull();
+    expect(await editLead(db, "не-id", { name: "Ещё", birthDate: "1991-04-16" })).toBeNull();
+    const [c] = await clientChats(db, lead.id);
+    expect(c?.id).toBe(started.conversation.id);
+    const [conv] = await db.select().from(conversations).where(eq(conversations.id, started.conversation.id));
+    expect(conv?.fullTextSentAt).not.toBeNull();
   });
 
   it("первый чат — только с экспертом в сети", async () => {

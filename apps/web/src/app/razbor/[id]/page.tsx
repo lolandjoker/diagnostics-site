@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDb } from "@/db";
-import { conversationForLead } from "@/lib/chat";
-import { getLead } from "@/lib/leads";
+import { MAX_LEAD_EDITS, RESULT_LOADING_MS, getLead } from "@/lib/leads";
 import { fillTemplate, getTexts } from "@/lib/texts";
 import { variationFor } from "@/lib/variations";
 import { Footer } from "../../Footer";
+import { ResultLoading } from "../../ResultLoading";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +14,9 @@ export default async function ResultPage(props: PageProps<"/razbor/[id]">) {
   const db = await getDb();
   const lead = await getLead(db, id);
   if (!lead) notFound();
+  // Сразу после заявки разбор «считается» — анимация, потом страница обновится сама
+  const loadingLeft = lead.createdAt.getTime() + RESULT_LOADING_MS - Date.now();
+  if (loadingLeft > 0) return <ResultLoading leftMs={loadingLeft} totalMs={RESULT_LOADING_MS} />;
 
   const t = await getTexts(db, [
     "result.title",
@@ -23,7 +26,8 @@ export default async function ResultPage(props: PageProps<"/razbor/[id]">) {
     "result.expert_button",
   ]);
   const vars = { name: lead.name };
-  const [variation, chat] = await Promise.all([variationFor(db, lead.variationId), conversationForLead(db, lead.id)]);
+  const variation = await variationFor(db, lead.variationId);
+  const editsLeft = MAX_LEAD_EDITS - lead.edits;
 
   return (
     <>
@@ -41,15 +45,21 @@ export default async function ResultPage(props: PageProps<"/razbor/[id]">) {
           <h2>{t["result.expert_title"]}</h2>
           {t["result.expert_text"] && <p className="text">{fillTemplate(t["result.expert_text"], vars)}</p>}
           <p className="card__action">
-            <Link className="button" href={chat ? `/razbor/${lead.id}/chat` : `/razbor/${lead.id}/eksperty`}>
+            {/* Сначала — список экспертов: человек сам выбирает, кому написать */}
+            <Link className="button" href={`/razbor/${lead.id}/eksperty`}>
               {t["result.expert_button"]}
             </Link>
           </p>
         </section>
 
-        {/* Список экспертов: написать можно любому, у каждого свой чат */}
         <p className="again">
-          <Link href={`/razbor/${lead.id}/eksperty`}>Посмотреть всех экспертов и отзывы</Link>
+          {editsLeft > 0 ? (
+            <Link className="button button--ghost" href={`/razbor/${lead.id}/izmenit`}>
+              Изменить дату рождения
+            </Link>
+          ) : (
+            "Имя и дату рождения больше изменить нельзя"
+          )}
         </p>
       </main>
       <Footer />
