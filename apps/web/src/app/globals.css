@@ -346,14 +346,34 @@ textarea:focus-visible {
   text-align: left;
 }
 
-/* В списке экспертов — заметной плашкой под заголовком */
-.price-tag--banner {
-  margin: 0 0 20px;
-  padding: 12px 16px;
-  border: 1px solid rgba(217, 182, 111, 0.4);
-  border-radius: 14px;
-  background: rgba(217, 182, 111, 0.08);
-  text-align: left;
+/* Справа от кнопки «Написать»: кнопка и цена — в одну строку */
+form:has(> .price-inline) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  align-items: center;
+}
+
+.price-inline {
+  white-space: nowrap;
+}
+
+/* Телефон: цена в две строки справа от кнопки, кнопка компактнее — помещаются в одну строку */
+@media (max-width: 480px) {
+  form:has(> .price-inline) {
+    flex-wrap: nowrap;
+    gap: 12px;
+  }
+
+  form:has(> .price-inline) .button {
+    padding: 12px 18px;
+    font-size: 0.9375rem;
+  }
+
+  .price-inline {
+    display: grid;
+    line-height: 1.25;
+  }
 }
 
 .price-tag__old {
@@ -364,6 +384,7 @@ textarea:focus-visible {
 
 .price-tag__free {
   color: var(--gold);
+  font-weight: 700;
   font-size: 1.0625rem;
   letter-spacing: 0.02em;
 }
