@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { maskBirthDate } from "@/lib/date-input";
 import { submitLead, updateLead } from "./actions";
@@ -59,6 +60,14 @@ export function LeadForm({ button, edit }: { button: string; edit?: { leadId: st
       <button className="button" disabled={pending}>
         {pending ? (edit ? "Сохраняем…" : "Считаем…") : button}
       </button>
+      {!edit && (
+        <p className="form__consent">
+          Нажимая «{button}», вы соглашаетесь с{" "}
+          <Link href="/privacy" target="_blank">
+            политикой обработки персональных данных
+          </Link>
+        </p>
+      )}
     </form>
   );
 }

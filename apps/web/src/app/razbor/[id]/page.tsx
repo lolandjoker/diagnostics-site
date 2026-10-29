@@ -4,6 +4,7 @@ import { getDb } from "@/db";
 import { MAX_LEAD_EDITS, RESULT_LOADING_MS, getLead } from "@/lib/leads";
 import { birthPortrait } from "@/lib/portrait";
 import { fillTemplate, getTexts } from "@/lib/texts";
+import { typograph } from "@/lib/typograph";
 import { variationFor } from "@/lib/variations";
 import { Footer } from "../../Footer";
 import { Portrait } from "../../Portrait";
@@ -35,19 +36,19 @@ export default async function ResultPage(props: PageProps<"/razbor/[id]">) {
     <>
       <main className="page">
         <h1>{fillTemplate(t["result.title"], vars)}</h1>
-        {t["result.intro"] && <p className="lead text">{fillTemplate(t["result.intro"], vars)}</p>}
+        {t["result.intro"] && <p className="lead text">{typograph(fillTemplate(t["result.intro"], vars))}</p>}
 
         <Portrait portrait={birthPortrait(lead.name, lead.birthDate)} birthIso={lead.birthDate} />
 
         {variation?.shortText && (
           <section className="card">
-            <p className="text">{fillTemplate(variation.shortText, vars)}</p>
+            <p className="text">{typograph(fillTemplate(variation.shortText, vars))}</p>
           </section>
         )}
 
         <section className="card card--accent">
           <h2>{t["result.expert_title"]}</h2>
-          {t["result.expert_text"] && <p className="text">{fillTemplate(t["result.expert_text"], vars)}</p>}
+          {t["result.expert_text"] && <p className="text">{typograph(fillTemplate(t["result.expert_text"], vars))}</p>}
           <p className="card__action">
             {/* Сначала — список экспертов: человек сам выбирает, кому написать */}
             <Link className="button" href={`/razbor/${lead.id}/eksperty`}>

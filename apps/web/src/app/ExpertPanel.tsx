@@ -3,6 +3,7 @@ import { expertStatus, expertTags, formatRating } from "@/lib/experts";
 import type { PublicExpert } from "@/lib/experts";
 import { reviewsCountLabel } from "@/lib/reviews";
 import type { ReviewsCount } from "@/lib/reviews";
+import { typograph } from "@/lib/typograph";
 import { PhotoGallery } from "./PhotoGallery";
 
 /** Мини-профиль эксперта справа от чата: фото (листаются), рейтинг, специализации, начало описания, ссылка на профиль. */
@@ -22,7 +23,7 @@ export function ExpertPanel({
 }) {
   const status = expertStatus(expert, new Date());
   const tags = expertTags(expert.tags);
-  const text = expert.about || expert.description;
+  const text = typograph(expert.about || expert.description);
   return (
     <aside className="expert-panel" aria-label={`Эксперт ${expert.name}`}>
       <PhotoGallery photos={photos} name={expert.name} className="expert-panel__photo" />
