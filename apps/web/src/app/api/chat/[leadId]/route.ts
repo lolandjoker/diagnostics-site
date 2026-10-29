@@ -1,8 +1,9 @@
 /**
  * Чат для человека. Доступ — по id заявки в адресе (случайный, его знает только сам человек).
  * ?c=<id чата> — какой из чатов заявки (без него — текущий).
- * GET ?after=<id> — новые сообщения, статус эксперта, «печатает…» (&hidden=1 — вкладка свёрнута, чат не
- * отмечается прочитанным); POST {body} или form-data (body, photo) — отправить.
+ * GET ?after=<id> — новые сообщения, статус эксперта, «печатает…», readUpTo — до какого момента эксперт
+ * прочитал чат (✓✓ у сообщений клиента) (&hidden=1 — вкладка свёрнута, чат не отмечается прочитанным);
+ * POST {body} или form-data (body, photo) — отправить.
  */
 import { getDb } from "@/db";
 import {
@@ -45,6 +46,7 @@ export async function GET(req: Request, ctx: RouteContext<"/api/chat/[leadId]">)
       messages: await messageViews(db, conversation, afterParam(req), "client"),
       expertStatus: expert ? expertStatus(expert, now) : "offline",
       typing,
+      readUpTo: conversation.expertReadAt?.toISOString() ?? null,
     },
     { headers: noStore },
   );

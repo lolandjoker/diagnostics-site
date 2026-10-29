@@ -1010,6 +1010,27 @@ td.actions {
   text-align: right;
 }
 
+/* «обычно отвечает за 5 минут» */
+.reply-time {
+  display: block;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+/* ✓ отправлено, ✓✓ прочитано — у своих сообщений */
+.msg__read {
+  margin-left: 4px;
+  letter-spacing: -0.15em;
+}
+
+.msg__read--seen {
+  color: var(--gold);
+}
+
+.admin .msg__read--seen {
+  color: #1f7a8c;
+}
+
 .msg:has(.msg__photo) {
   width: min(300px, 78%);
 }

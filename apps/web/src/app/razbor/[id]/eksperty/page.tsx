@@ -4,6 +4,7 @@ import { getDb } from "@/db";
 import { clientChats, conversationForLead, selectableExperts } from "@/lib/chat";
 import { expertPhotoUrls, formatRating } from "@/lib/experts";
 import { MAX_LEAD_EDITS, getLead } from "@/lib/leads";
+import { replyTimeLabel, replyTimes } from "@/lib/reply-time";
 import { REVIEWS_PAGE_SIZE, expertReviews, reviewsCount, reviewsCountLabel } from "@/lib/reviews";
 import { ReviewsNote } from "../../../ReviewsNote";
 import { getTexts } from "@/lib/texts";
@@ -37,10 +38,8 @@ export default async function ExpertsPage(props: PageProps<"/razbor/[id]/ekspert
   const order = { online: 0, busy: 1, offline: 2 } as const;
   const sorted = [...list].sort((a, b) => order[a.status] - order[b.status]);
   const anyOnline = sorted.some((e) => e.isOnline);
-  const reviews = await expertReviews(
-    db,
-    sorted.map((e) => e.id),
-  );
+  const ids = sorted.map((e) => e.id);
+  const [reviews, replies] = await Promise.all([expertReviews(db, ids), replyTimes(db, ids, new Date())]);
 
   return (
     <>
@@ -84,6 +83,7 @@ export default async function ExpertsPage(props: PageProps<"/razbor/[id]/ekspert
                     <span className={`status status--${e.status}`}>
                       {e.status === "online" ? "в сети" : e.status === "busy" ? t["experts.busy"] : "не в сети"}
                     </span>
+                    {replies.has(e.id) && <span className="reply-time">{replyTimeLabel(replies.get(e.id)!)}</span>}
                   </div>
                 </div>
                 {e.description && <p className="text">{typograph(e.description)}</p>}

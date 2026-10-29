@@ -25,6 +25,8 @@ export async function GET(req: Request, ctx: RouteContext<"/expert/api/chat/[id]
     {
       messages: await messageViews(db, conversation, afterParam(req), "staff"),
       typing: isTyping(conversation.id, "client", new Date()),
+      // ✓✓ у своих сообщений — клиент открывал чат после них
+      readUpTo: conversation.clientReadAt?.toISOString() ?? null,
     },
     { headers: noStore },
   );
