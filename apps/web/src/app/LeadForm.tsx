@@ -6,6 +6,7 @@ import { maskBirthDate } from "@/lib/date-input";
 import { submitLead, updateLead } from "./actions";
 import { telegramFirstName, telegramInitData } from "./telegramWebApp";
 import type { FormState } from "./actions";
+import { track } from "./Track";
 import { useKeptForm } from "./useKeptForm";
 
 const initial: FormState = { error: null };
@@ -16,6 +17,7 @@ export function LeadForm({ button, edit }: { button: string; edit?: { leadId: st
   const [birthDate, setBirthDate] = useState(edit?.birthDate ?? "");
   const nameRef = useRef<HTMLInputElement>(null);
   const telegramRef = useRef<HTMLInputElement>(null);
+  const started = useRef(false);
 
   // В приложении Telegram-бота: имя из профиля Telegram и подписанные данные — сервер запомнит,
   // чья это заявка (вернуться в чат, уведомления об ответах)
@@ -29,7 +31,16 @@ export function LeadForm({ button, edit }: { button: string; edit?: { leadId: st
   }, [edit]);
 
   return (
-    <form onSubmit={onSubmit} className="form form--card">
+    <form
+      onSubmit={onSubmit}
+      className="form form--card"
+      // Воронка: человек начал заполнять форму (один раз)
+      onFocus={() => {
+        if (edit || started.current) return;
+        started.current = true;
+        track("form_start");
+      }}
+    >
       <input ref={telegramRef} type="hidden" name="tg" />
       {edit && <input type="hidden" name="leadId" value={edit.leadId} />}
       <label className="field">

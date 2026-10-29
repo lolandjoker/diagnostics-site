@@ -434,3 +434,23 @@ export const callSignals = pgTable(
   },
   (t) => [index("call_signals_call_idx").on(t.callId, t.id)],
 );
+
+/**
+ * Воронка: шаги, которые человек прошёл на сайте (lib/funnel.ts). До заявки — по анонимному id браузера
+ * (cookie vid, без личных данных), после — по заявке. Каждый шаг считается один раз: на браузер или на заявку.
+ */
+export const funnelEvents = pgTable(
+  "funnel_events",
+  {
+    id: serial("id").primaryKey(),
+    visitorId: text("visitor_id").notNull(),
+    leadId: uuid("lead_id").references(() => leads.id, { onDelete: "cascade" }),
+    step: text("step").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex("funnel_events_visitor_step_idx").on(t.visitorId, t.step).where(sql`${t.leadId} is null`),
+    uniqueIndex("funnel_events_lead_step_idx").on(t.leadId, t.step).where(sql`${t.leadId} is not null`),
+    index("funnel_events_step_created_idx").on(t.step, t.createdAt),
+  ],
+);

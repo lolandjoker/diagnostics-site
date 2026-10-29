@@ -1298,6 +1298,85 @@ td.actions {
   font-size: 0.8125rem;
 }
 
+/* --- Воронка в «Сводке» --- */
+
+.funnel {
+  display: grid;
+  gap: 6px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.funnel__step {
+  display: grid;
+  grid-template-columns: minmax(180px, 260px) minmax(0, 1fr) 56px 48px 64px;
+  gap: 12px;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 10px;
+}
+
+.funnel__step--worst {
+  background: rgba(180, 35, 24, 0.07);
+}
+
+.funnel__label {
+  display: grid;
+  line-height: 1.3;
+}
+
+.funnel__label .muted {
+  font-size: 0.75rem;
+}
+
+.funnel__bar {
+  height: 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(127, 127, 127, 0.12);
+}
+
+.funnel__bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--gold);
+}
+
+.funnel__step--worst .funnel__bar span {
+  background: var(--error);
+}
+
+.funnel__count {
+  text-align: right;
+}
+
+.funnel__pct,
+.funnel__conv {
+  font-size: 0.8125rem;
+  text-align: right;
+}
+
+.funnel__step--worst .funnel__conv {
+  color: var(--error);
+  font-weight: 700;
+}
+
+@media (max-width: 700px) {
+  .funnel__step {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+
+  .funnel__label {
+    grid-column: 1 / -1;
+  }
+
+  .funnel__pct {
+    display: none;
+  }
+}
+
 .badge {
   display: inline-block;
   min-width: 20px;
