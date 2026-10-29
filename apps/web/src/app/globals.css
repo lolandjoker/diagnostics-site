@@ -151,14 +151,135 @@ h3 {
   text-align: center;
 }
 
-.mark {
-  display: block;
-  width: 72px;
-  height: 72px;
-  margin: 0 auto 28px;
+/* --- Название: знак (зодиакальный круг, полумесяц, звезда) и надпись --- */
+
+.brand {
+  display: inline-flex;
+  gap: 12px;
+  align-items: center;
   color: var(--gold);
-  filter: drop-shadow(0 0 18px rgba(217, 182, 111, 0.45));
-  animation: spin 120s linear infinite;
+  text-decoration: none;
+}
+
+.brand__mark {
+  flex: none;
+  overflow: visible;
+  filter: drop-shadow(0 0 14px rgba(217, 182, 111, 0.4));
+}
+
+/* Круг медленно поворачивается, луна и звезда стоят на месте */
+.brand__wheel {
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+  animation: spin 160s linear infinite;
+}
+
+.brand__star {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: twinkle-star 4.5s ease-in-out infinite;
+}
+
+@keyframes twinkle-star {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.55;
+    transform: scale(0.8);
+  }
+}
+
+.brand__text {
+  display: grid;
+}
+
+.brand__name {
+  background: linear-gradient(180deg, #f6e4b6 15%, #d9b66f 55%, #b8873f 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  line-height: 1;
+}
+
+/* На главной — крупно над формой */
+.brand--hero {
+  flex-direction: column;
+  gap: 16px;
+  margin: 0 auto 30px;
+}
+
+.brand--hero .brand__mark {
+  width: 84px;
+  height: 84px;
+}
+
+.brand--hero .brand__name {
+  font-size: 2.75rem;
+  text-shadow: 0 0 40px rgba(217, 182, 111, 0.25);
+}
+
+.brand__tagline {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 400px) {
+  .brand__tagline {
+    letter-spacing: 0.18em;
+  }
+}
+
+/* В шапке остальных страниц */
+.site-header {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 18px 16px 0;
+}
+
+.brand--bar .brand__mark {
+  width: 34px;
+  height: 34px;
+}
+
+.brand--bar .brand__name {
+  font-size: 1.5rem;
+}
+
+.brand--bar:hover .brand__mark {
+  filter: drop-shadow(0 0 18px rgba(217, 182, 111, 0.65));
+}
+
+.site-header + .page,
+.site-header + * .page {
+  padding-top: 28px;
+}
+
+.footer__brand {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-family: var(--font-display);
+  font-size: 1rem;
+  letter-spacing: 0.04em;
+}
+
+.footer__mark {
+  width: 20px;
+  height: 20px;
+  color: var(--gold);
+  opacity: 0.8;
 }
 
 @keyframes spin {
