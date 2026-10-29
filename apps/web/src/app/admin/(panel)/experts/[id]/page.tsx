@@ -87,7 +87,7 @@ export default async function ExpertAdminPage(props: PageProps<"/admin/experts/[
             <input name="rating" inputMode="decimal" defaultValue={formatRating(expert.rating)} required />
           </label>
           <label className="field field--short">
-            <span>Отзывов на карточке</span>
+            <span>Отзывов с других площадок</span>
             <input name="reviews_shown" type="number" min={0} max={100000} defaultValue={expert.reviewsShown} required />
           </label>
           <label className="check">

@@ -1613,6 +1613,11 @@ td.actions {
   border-top: 1px solid var(--line);
 }
 
+.reviews__note {
+  margin: 12px 0 0;
+  font-size: 0.8125rem;
+}
+
 .reviews summary {
   color: var(--gold);
   cursor: pointer;

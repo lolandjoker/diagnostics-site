@@ -2,6 +2,7 @@ import Link from "next/link";
 import { expertStatus, expertTags, formatRating } from "@/lib/experts";
 import type { PublicExpert } from "@/lib/experts";
 import { reviewsCountLabel } from "@/lib/reviews";
+import type { ReviewsCount } from "@/lib/reviews";
 import { typograph } from "@/lib/typograph";
 import { PhotoGallery } from "./PhotoGallery";
 
@@ -11,12 +12,14 @@ export function ExpertPanel({
   photos,
   busyLabel,
   profileHref,
+  reviews,
 }: {
   expert: PublicExpert;
   /** Главное фото и дополнительные — по порядку. */
   photos: string[];
   busyLabel: string;
   profileHref: string;
+  reviews: ReviewsCount;
 }) {
   const status = expertStatus(expert, new Date());
   const tags = expertTags(expert.tags);
@@ -31,7 +34,7 @@ export function ExpertPanel({
         </span>
         <div className="expert__rating">
           <span className="rating">★ {formatRating(expert.rating)}</span>
-          {expert.reviewsShown > 0 && <span className="muted">{reviewsCountLabel(expert.reviewsShown)}</span>}
+          {reviews.total > 0 && <span className="muted">{reviewsCountLabel(reviews.total)}</span>}
         </div>
         {tags.length > 0 && (
           <ul className="tags">

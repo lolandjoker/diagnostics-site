@@ -156,7 +156,6 @@ export async function createExpert(db: Db, input: { name: string; login: string;
       login,
       passwordHash: await hashPassword(input.password),
       rating: newExpertRating(),
-      reviewsShown: newExpertReviewsShown(),
     })
     .returning({ id: experts.id });
   return { ok: true, id: (e as { id: number }).id };
@@ -183,11 +182,6 @@ export function parseRating(raw: string): number | null {
   if (!/^\d(\.\d)?$/.test(s)) return null;
   const tenths = Math.round(Number(s) * 10);
   return tenths >= MIN_RATING && tenths <= MAX_RATING ? tenths : null;
-}
-
-/** Число отзывов на карточке нового эксперта — случайное от 200 до 500; потом меняется в админке. */
-export function newExpertReviewsShown(): number {
-  return randomInt(200, 501);
 }
 
 export const MAX_REVIEWS_SHOWN = 100_000;

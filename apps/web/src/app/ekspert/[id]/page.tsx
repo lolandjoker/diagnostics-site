@@ -6,7 +6,8 @@ import { expertGallery } from "@/lib/gallery";
 import { clientChats } from "@/lib/chat";
 import { expertPhotoUrls, expertStatus, expertTags, formatRating, getExpert, isOnline } from "@/lib/experts";
 import { getLead, isUuid } from "@/lib/leads";
-import { REVIEWS_PAGE_SIZE, expertReviews, reviewsCountLabel } from "@/lib/reviews";
+import { REVIEWS_PAGE_SIZE, expertReviews, reviewsCount, reviewsCountLabel } from "@/lib/reviews";
+import { ReviewsNote } from "../../ReviewsNote";
 import { getTexts } from "@/lib/texts";
 import { typograph } from "@/lib/typograph";
 import { Certificates } from "../../Certificates";
@@ -41,6 +42,7 @@ export default async function ExpertProfilePage(props: PageProps<"/ekspert/[id]"
   const status = expertStatus(expert, new Date());
   const tags = expertTags(expert.tags);
   const r = reviews.get(expert.id);
+  const count = reviewsCount(expert.reviewsShown, r?.count ?? 0);
   const withExpert = chats.find((ch) => ch.expertId === expert.id);
   const fromChat = typeof c === "string" && isUuid(c) ? chats.find((ch) => ch.id === c) : undefined;
   const self = lead ? `/ekspert/${expert.id}?lead=${lead.id}${fromChat ? `&c=${fromChat.id}` : ""}` : "";
@@ -67,7 +69,7 @@ export default async function ExpertProfilePage(props: PageProps<"/ekspert/[id]"
             </span>
             <div className="expert__rating profile__rating">
               <span className="rating">★ {formatRating(expert.rating)}</span>
-              {expert.reviewsShown > 0 && <span className="muted">{reviewsCountLabel(expert.reviewsShown)}</span>}
+              {count.total > 0 && <span className="muted">{reviewsCountLabel(count.total)}</span>}
             </div>
             {tags.length > 0 && (
               <ul className="tags">
@@ -119,10 +121,11 @@ export default async function ExpertProfilePage(props: PageProps<"/ekspert/[id]"
           </section>
         )}
 
-        {r && (
+        {count.total > 0 && (
           <section className="card profile__section reviews reviews--open">
             <h2>Отзывы</h2>
-            <ReviewsPager reviews={r.latest} pageSize={REVIEWS_PAGE_SIZE} />
+            {r && <ReviewsPager reviews={r.latest} pageSize={REVIEWS_PAGE_SIZE} />}
+            <ReviewsNote count={count} />
           </section>
         )}
       </main>
