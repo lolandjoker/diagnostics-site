@@ -174,7 +174,7 @@ export async function updateExpertAction(_prev: ActionResult, form: FormData): P
   const rating = parseRating(str(form, "rating"));
   if (rating === null) return fail("Рейтинг — число от 1,0 до 5,0, например 4,8");
   const reviewsShown = parseReviewsShown(str(form, "reviews_shown"));
-  if (reviewsShown === null) return fail("Число отзывов на карточке — целое от 0 до 100 000");
+  if (reviewsShown === null) return fail("Отзывов с других площадок — целое от 0 до 100 000");
 
   const password = str(form, "password");
   if (password !== "") {

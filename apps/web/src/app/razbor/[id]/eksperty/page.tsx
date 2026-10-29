@@ -4,7 +4,8 @@ import { getDb } from "@/db";
 import { clientChats, conversationForLead, selectableExperts } from "@/lib/chat";
 import { expertPhotoUrls, formatRating } from "@/lib/experts";
 import { MAX_LEAD_EDITS, getLead } from "@/lib/leads";
-import { REVIEWS_PAGE_SIZE, expertReviews, reviewsCountLabel } from "@/lib/reviews";
+import { REVIEWS_PAGE_SIZE, expertReviews, reviewsCount, reviewsCountLabel } from "@/lib/reviews";
+import { ReviewsNote } from "../../../ReviewsNote";
 import { getTexts } from "@/lib/texts";
 import { Avatar } from "../../../Avatar";
 import { Footer } from "../../../Footer";
@@ -60,6 +61,7 @@ export default async function ExpertsPage(props: PageProps<"/razbor/[id]/ekspert
           {sorted.map((e) => {
             const photo = photos.get(e.id);
             const r = reviews.get(e.id);
+            const count = reviewsCount(e.reviewsShown, r?.count ?? 0);
             return (
               <article key={e.id} className={`card expert ${e.isOnline ? "" : "expert--offline"}`}>
                 <div className="expert__head">
@@ -72,7 +74,7 @@ export default async function ExpertsPage(props: PageProps<"/razbor/[id]/ekspert
                     </h2>
                     <div className="expert__rating">
                       <span className="rating">★ {formatRating(e.rating)}</span>
-                      {e.reviewsShown > 0 && <span className="muted">{reviewsCountLabel(e.reviewsShown)}</span>}
+                      {count.total > 0 && <span className="muted">{reviewsCountLabel(count.total)}</span>}
                     </div>
                     <span className={`status status--${e.status}`}>
                       {e.status === "online" ? "в сети" : e.status === "busy" ? t["experts.busy"] : "не в сети"}
@@ -83,10 +85,11 @@ export default async function ExpertsPage(props: PageProps<"/razbor/[id]/ekspert
                 <p className="expert__profile-link">
                   <Link href={`/ekspert/${e.id}?lead=${lead.id}`}>Профиль, сертификаты и все отзывы →</Link>
                 </p>
-                {r && (
+                {count.total > 0 && (
                   <details className="reviews">
                     <summary>Отзывы</summary>
-                    <ReviewsPager reviews={r.latest} pageSize={REVIEWS_PAGE_SIZE} />
+                    {r && <ReviewsPager reviews={r.latest} pageSize={REVIEWS_PAGE_SIZE} />}
+                    <ReviewsNote count={count} />
                   </details>
                 )}
                 {chat ? (

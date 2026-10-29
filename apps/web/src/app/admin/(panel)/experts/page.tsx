@@ -1,12 +1,18 @@
 import Link from "next/link";
 import { getDb } from "@/db";
 import { MIN_EXPERT_PASSWORD, formatRating, listExperts } from "@/lib/experts";
+import { expertReviews } from "@/lib/reviews";
 import { ActionForm } from "../../ActionForm";
 import { OnlineToggle } from "../../OnlineToggle";
 import { createExpertAction } from "../../actions";
 
 export default async function ExpertsAdminPage() {
-  const list = await listExperts(await getDb());
+  const db = await getDb();
+  const list = await listExperts(db);
+  const onSite = await expertReviews(
+    db,
+    list.map((e) => e.id),
+  );
   return (
     <>
       <h1>Эксперты</h1>
@@ -38,7 +44,10 @@ export default async function ExpertsAdminPage() {
                   </td>
                   <td>{e.login}</td>
                   <td>
-                    ★ {formatRating(e.rating)} · <Link href={`/admin/reviews?expert=${e.id}`}>{e.reviewsShown} отз.</Link>
+                    ★ {formatRating(e.rating)} ·{" "}
+                    <Link href={`/admin/reviews?expert=${e.id}`} title="с других площадок + на сайте">
+                      {e.reviewsShown} + {onSite.get(e.id)?.count ?? 0} отз.
+                    </Link>
                   </td>
                   <td>
                     <OnlineToggle expert={e} />

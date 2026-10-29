@@ -6,6 +6,7 @@ import { expertPhotoUrls, formatRating, getExpert } from "@/lib/experts";
 import { expertGallery } from "@/lib/gallery";
 import { MAX_LEAD_EDITS, getLead } from "@/lib/leads";
 import { telegramLink } from "@/lib/telegram";
+import { expertReviews, reviewsCount } from "@/lib/reviews";
 import { fillTemplate, getTexts } from "@/lib/texts";
 import { CallPanel } from "../../../CallPanel";
 import { ChatThread } from "../../../ChatThread";
@@ -42,7 +43,9 @@ export default async function ClientChatPage(props: PageProps<"/razbor/[id]/chat
 
   const expertName = expert?.name ?? "Эксперт";
   const expertPhoto = expert ? (photos.get(expert.id) ?? null) : null;
-  const gallery = expert ? await expertGallery(db, expert.id, expertPhoto) : [];
+  const [gallery, reviews] = expert
+    ? await Promise.all([expertGallery(db, expert.id, expertPhoto), expertReviews(db, [expert.id])])
+    : [[], new Map()];
   const q = `?c=${conversation.id}`;
   const profileHref = `/ekspert/${conversation.expertId}?lead=${lead.id}&c=${conversation.id}`;
 
@@ -117,7 +120,13 @@ export default async function ClientChatPage(props: PageProps<"/razbor/[id]/chat
       </div>
       {expert && (
         <div className="messenger__profile">
-          <ExpertPanel expert={expert} photos={gallery} busyLabel={t["experts.busy"]} profileHref={profileHref} />
+          <ExpertPanel
+            expert={expert}
+            photos={gallery}
+            busyLabel={t["experts.busy"]}
+            profileHref={profileHref}
+            reviews={reviewsCount(expert.reviewsShown, reviews.get(expert.id)?.count ?? 0)}
+          />
         </div>
       )}
     </main>
