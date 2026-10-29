@@ -19,6 +19,11 @@ export function ReviewsPager({ reviews, pageSize }: { reviews: PublicReview[]; p
           <li key={rev.id} className="review">
             <div className="review__head">
               <b>{rev.authorName}</b>
+              {rev.verified && (
+                <span className="verified" title="Мы переписывались с этим человеком и убедились, что отзыв оставил живой клиент">
+                  ✓ Проверенный пользователь
+                </span>
+              )}
               <Stars n={rev.stars} />
               <time className="muted" dateTime={rev.createdAt}>
                 {date.format(new Date(rev.createdAt))}

@@ -17,6 +17,7 @@ import {
   saveReview,
   setReviewBody,
   setReviewHidden,
+  setReviewVerified,
 } from "./reviews";
 
 let db: Db;
@@ -92,6 +93,23 @@ describe("отзывы", () => {
     expect(card.count).toBe(19);
     expect(reviewsCount(300, card.count)).toEqual({ total: 319, elsewhere: 300 });
     expect(reviewsCount(0, 5)).toEqual({ total: 5, elsewhere: 0 });
+  });
+
+  it("«проверенный пользователь» — только у отзыва из чата, ставит и снимает сотрудник", async () => {
+    await saveReview(db, await chat("Клиент"), { stars: 5, body: "из чата" }, new Date());
+    expect(await addReview(db, { expertId, authorName: "Ирина", stars: 5, body: "вручную", createdAt: new Date() })).toEqual({ ok: true });
+    const all = await listAllReviews(db);
+    const fromChat = all.find((r) => r.body === "из чата")!;
+    const manual = all.find((r) => r.body === "вручную")!;
+
+    expect(await setReviewVerified(db, fromChat.id, true, new Date())).toBe(true);
+    expect(await setReviewVerified(db, manual.id, true, new Date())).toBe(false);
+    const card = (await expertReviews(db, [expertId])).get(expertId)!;
+    expect(card.latest.find((r) => r.body === "из чата")?.verified).toBe(true);
+    expect(card.latest.find((r) => r.body === "вручную")?.verified).toBe(false);
+
+    await setReviewVerified(db, fromChat.id, false, new Date());
+    expect((await expertReviews(db, [expertId])).get(expertId)!.latest.every((r) => !r.verified)).toBe(true);
   });
 
   it("отзыв из админки: без чата, с заданными именем и датой; фильтр по эксперту", async () => {

@@ -11,7 +11,7 @@ import { redirect } from "next/navigation";
 import { getDb } from "@/db";
 import { experts, variations } from "@/db/schema";
 import { requireAdmin } from "@/lib/admin-auth";
-import { addReview, deleteReviews, setReviewBody, setReviewHidden } from "@/lib/reviews";
+import { addReview, deleteReviews, setReviewBody, setReviewHidden, setReviewVerified } from "@/lib/reviews";
 import { addCertificates, deleteCertificate, setCertificateTitle } from "@/lib/certificates";
 import { addGalleryPhotos, deleteGalleryPhoto, deleteMainPhoto, makeMainPhoto } from "@/lib/gallery";
 import { requireStaff } from "@/lib/staff-auth";
@@ -232,6 +232,14 @@ export async function setReviewHiddenAction(form: FormData): Promise<void> {
   await requireStaff();
   const id = int(form, "id");
   if (id !== null) await setReviewHidden(await getDb(), id, form.get("hidden") === "true");
+  refresh();
+}
+
+/** «Проверенный пользователь» — сотрудник по переписке убедился, что автор живой человек. */
+export async function setReviewVerifiedAction(form: FormData): Promise<void> {
+  await requireStaff();
+  const id = int(form, "id");
+  if (id !== null) await setReviewVerified(await getDb(), id, form.get("verified") === "true", new Date());
   refresh();
 }
 
