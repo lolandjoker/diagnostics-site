@@ -95,6 +95,7 @@ export function ReviewButton({ url, expertName, clientName }: { url: string; exp
         <span className="review-icon">
           <Star filled={saved} />
         </span>
+        <span className="chat__icon-label">Отзыв</span>
       </button>
 
       {open && (

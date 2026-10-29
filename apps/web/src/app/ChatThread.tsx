@@ -112,6 +112,7 @@ export function ChatThread({
   peer,
   call,
   notice,
+  suggestions = [],
   typingUrl,
   typingName,
 }: {
@@ -128,6 +129,8 @@ export function ChatThread({
   call?: ReactNode;
   /** Полоса под шапкой (например, «Получать ответы в Telegram»). */
   notice?: ReactNode;
+  /** Подсказки-вопросы: видны, пока человек ничего не написал в этом чате; нажал — вопрос отправлен. */
+  suggestions?: string[];
   /** Куда сообщать «я печатаю» (POST); без него — не сообщаем. */
   typingUrl?: string;
   /** Кто печатает на той стороне — подпись «… печатает» (клиенту — эксперт, сотрудникам — клиент). */
@@ -394,6 +397,15 @@ export function ChatThread({
         </p>
       )}
 
+      {suggestions.length > 0 && !items.some(isOwn) && (
+        <div className="chat__suggestions" aria-label="Можно спросить">
+          {suggestions.map((s) => (
+            <button key={s} type="button" className="chat__suggestion" disabled={sending} onClick={() => void send({ body: s })}>
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
       <form className="chat__form" onSubmit={onSubmit}>
         {photo && (
           <div className="chat__attach">
