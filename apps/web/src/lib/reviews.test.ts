@@ -6,11 +6,13 @@ import { createExpert, formatRating, getExpert, parseRating, parseReviewsShown, 
 import { pageNumbers } from "./pagination";
 import { createLead } from "./leads";
 import {
+  MAX_REVIEWS_ON_CARD,
   addReview,
   deleteReviews,
   expertReviews,
   listAllReviews,
   reviewForConversation,
+  reviewsCount,
   reviewsCountLabel,
   saveReview,
   setReviewBody,
@@ -80,6 +82,18 @@ describe("отзывы", () => {
     expect((await expertReviews(db, [])).size).toBe(0);
   });
 
+  it("на карточке — последние MAX_REVIEWS_ON_CARD, число — все видимые плюс с других площадок", async () => {
+    for (let i = 0; i < 19; i++) {
+      await saveReview(db, await chat(`Клиент ${i}`), { stars: 5, body: `отзыв ${i}` }, new Date(Date.now() + i * 1000));
+    }
+    const card = (await expertReviews(db, [expertId])).get(expertId)!;
+    expect(card.latest).toHaveLength(MAX_REVIEWS_ON_CARD);
+    expect(card.latest[0]?.body).toBe("отзыв 18");
+    expect(card.count).toBe(19);
+    expect(reviewsCount(300, card.count)).toEqual({ total: 319, elsewhere: 300 });
+    expect(reviewsCount(0, 5)).toEqual({ total: 5, elsewhere: 0 });
+  });
+
   it("отзыв из админки: без чата, с заданными именем и датой; фильтр по эксперту", async () => {
     const other = await createExpert(db, { name: "Ольга", login: "olga", password: "пароль-эксперта" });
     if (!other.ok) throw new Error(other.error);
@@ -122,15 +136,14 @@ describe("отзывы", () => {
 });
 
 describe("рейтинг", () => {
-  it("новому эксперту — рейтинг от 4,6 до 4,9 и от 200 до 500 отзывов на карточке", async () => {
+  it("новому эксперту — рейтинг от 4,6 до 4,9 и 0 отзывов с других площадок", async () => {
     for (let i = 0; i < 12; i++) {
       const res = await createExpert(db, { name: `Э${i}`, login: `expert${i}`, password: "пароль-эксперта" });
       if (!res.ok) throw new Error(res.error);
       const e = (await getExpert(db, res.id))!;
       expect(e.rating).toBeGreaterThanOrEqual(46);
       expect(e.rating).toBeLessThanOrEqual(49);
-      expect(e.reviewsShown).toBeGreaterThanOrEqual(200);
-      expect(e.reviewsShown).toBeLessThanOrEqual(500);
+      expect(e.reviewsShown).toBe(0);
     }
     expect(parseReviewsShown("347")).toBe(347);
     expect(parseReviewsShown("0")).toBe(0);

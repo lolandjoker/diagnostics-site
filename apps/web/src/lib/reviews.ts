@@ -2,7 +2,8 @@
  * Отзывы об экспертах. Клиент оставляет отзыв в своём чате — один на чат, может поправить; отзыв сразу
  * виден на карточке эксперта с именем клиента из заявки (форма об этом предупреждает). Админ и эксперты
  * в разделе «Отзывы» добавляют отзывы (без чата), правят текст, скрывают и удаляют.
- * Число отзывов на карточке — не подсчёт, а поле эксперта reviewsShown (lib/experts.ts).
+ * Число отзывов на карточке — отзывы с сайта плюс отзывы эксперта с других площадок (поле reviewsShown,
+ * задаёт админ). В профиле так и подписано: «из них N — с других площадок».
  */
 import { and, desc, eq, inArray } from "drizzle-orm";
 import type { Db } from "@/db";
@@ -14,8 +15,8 @@ export type Review = typeof reviews.$inferSelect;
 export const MAX_REVIEW_LENGTH = 2000;
 /** Отзывов на странице в списке на карточке эксперта. */
 export const REVIEWS_PAGE_SIZE = 5;
-/** Сколько последних отзывов отдавать на карточку (листаются по REVIEWS_PAGE_SIZE). */
-export const MAX_REVIEWS_ON_CARD = 200;
+/** Сколько последних отзывов показывать на карточке (листаются по REVIEWS_PAGE_SIZE). */
+export const MAX_REVIEWS_ON_CARD = 15;
 
 export async function reviewForConversation(db: Db, conversationId: string): Promise<Review | null> {
   const [r] = await db.select().from(reviews).where(eq(reviews.conversationId, conversationId));
@@ -145,6 +146,16 @@ export async function setReviewBody(db: Db, id: number, input: string): Promise<
 /** Удаление насовсем — одного отзыва или всех отмеченных в списке. */
 export async function deleteReviews(db: Db, ids: number[]): Promise<void> {
   if (ids.length > 0) await db.delete(reviews).where(inArray(reviews.id, ids));
+}
+
+/** Отзывы эксперта для карточки: всего (с сайта + с других площадок) и сколько из них с других площадок. */
+export interface ReviewsCount {
+  total: number;
+  elsewhere: number;
+}
+
+export function reviewsCount(elsewhere: number, onSite: number): ReviewsCount {
+  return { total: elsewhere + onSite, elsewhere };
 }
 
 /** «3 отзыва», «5 отзывов», «1 отзыв». */
