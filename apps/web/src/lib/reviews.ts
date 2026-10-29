@@ -2,10 +2,12 @@
  * Отзывы об экспертах. Клиент оставляет отзыв в своём чате — один на чат, может поправить; отзыв сразу
  * виден на карточке эксперта с именем клиента из заявки (форма об этом предупреждает). Админ и эксперты
  * в разделе «Отзывы» добавляют отзывы (без чата), правят текст, скрывают и удаляют.
+ * Отзыв из чата сотрудник может отметить «Проверенный пользователь» — когда по переписке убедился,
+ * что пишет живой человек; у отзывов, добавленных в админке, такой отметки быть не может.
  * Число отзывов на карточке — отзывы с сайта плюс отзывы эксперта с других площадок (поле reviewsShown,
  * задаёт админ). В профиле так и подписано: «из них N — с других площадок».
  */
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull } from "drizzle-orm";
 import type { Db } from "@/db";
 import { experts, leads, reviews } from "@/db/schema";
 import type { Conversation } from "./chat";
@@ -57,6 +59,8 @@ export interface PublicReview {
   stars: number;
   body: string;
   createdAt: string;
+  /** Автор проверен по переписке — «Проверенный пользователь». */
+  verified: boolean;
 }
 
 /** Видимые отзывы для карточек экспертов: эксперт → число видимых и последние MAX_REVIEWS_ON_CARD, свежие сверху. */
@@ -71,6 +75,7 @@ export async function expertReviews(db: Db, expertIds: number[]): Promise<Map<nu
       stars: reviews.stars,
       body: reviews.body,
       createdAt: reviews.createdAt,
+      verifiedAt: reviews.verifiedAt,
     })
     .from(reviews)
     .where(and(inArray(reviews.expertId, expertIds), eq(reviews.hidden, false)))
@@ -79,7 +84,14 @@ export async function expertReviews(db: Db, expertIds: number[]): Promise<Map<nu
     const e = out.get(r.expertId) ?? { count: 0, latest: [] };
     e.count += 1;
     if (e.latest.length < MAX_REVIEWS_ON_CARD) {
-      e.latest.push({ id: r.id, authorName: r.authorName, stars: r.stars, body: r.body, createdAt: r.createdAt.toISOString() });
+      e.latest.push({
+        id: r.id,
+        authorName: r.authorName,
+        stars: r.stars,
+        body: r.body,
+        createdAt: r.createdAt.toISOString(),
+        verified: r.verifiedAt !== null,
+      });
     }
     out.set(r.expertId, e);
   }
@@ -100,6 +112,7 @@ export function listAllReviews(db: Db, expertId?: number) {
       hidden: reviews.hidden,
       createdAt: reviews.createdAt,
       updatedAt: reviews.updatedAt,
+      verifiedAt: reviews.verifiedAt,
     })
     .from(reviews)
     .innerJoin(experts, eq(experts.id, reviews.expertId))
@@ -129,6 +142,16 @@ export async function addReview(db: Db, input: AddReviewInput): Promise<SaveRevi
     updatedAt: input.createdAt,
   });
   return { ok: true };
+}
+
+/** Отметить автора проверенным (или снять отметку). Только отзыв из чата; false — такого нет. */
+export async function setReviewVerified(db: Db, id: number, verified: boolean, now: Date): Promise<boolean> {
+  const rows = await db
+    .update(reviews)
+    .set({ verifiedAt: verified ? now : null })
+    .where(and(eq(reviews.id, id), isNotNull(reviews.conversationId)))
+    .returning({ id: reviews.id });
+  return rows.length > 0;
 }
 
 export async function setReviewHidden(db: Db, id: number, hidden: boolean): Promise<void> {

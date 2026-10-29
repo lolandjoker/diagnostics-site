@@ -5,7 +5,13 @@ import { listAllReviews } from "@/lib/reviews";
 import { requireStaff } from "@/lib/staff-auth";
 import { ActionForm } from "../../ActionForm";
 import { BulkCheck, BulkDelete } from "../../BulkDelete";
-import { addReviewAction, deleteReviewsAction, setReviewBodyAction, setReviewHiddenAction } from "../../actions";
+import {
+  addReviewAction,
+  deleteReviewsAction,
+  setReviewBodyAction,
+  setReviewHiddenAction,
+  setReviewVerifiedAction,
+} from "../../actions";
 import { Stars } from "../../../Stars";
 
 const when = new Intl.DateTimeFormat("ru-RU", {
@@ -35,6 +41,8 @@ export default async function ReviewsPage(props: PageProps<"/admin/reviews">) {
         Клиенты оставляют отзыв в своём чате — один на чат, могут поправить; здесь можно добавить отзыв и без чата.
         Отзыв сразу виден на карточке эксперта (листается по 5). Текст отзыва можно поправить. Скрытый клиентам
         не показывается; удаление — насовсем: отметьте отзывы галочками и нажмите «Удалить отмеченные».
+        Отзыв из чата можно отметить «Проверенный пользователь», когда по переписке вы убедились, что пишет живой
+        человек, а не бот, — отметка видна клиентам. У отзывов, добавленных вручную, её нет: проверять некого.
         Число отзывов на карточке («347 отзывов») задаётся на странице эксперта.
       </p>
 
@@ -116,7 +124,10 @@ export default async function ReviewsPage(props: PageProps<"/admin/reviews">) {
                     <td>{r.expertName}</td>
                     <td>
                       {r.conversationId ? (
-                        <Link href={`${chatBase}/${r.conversationId}`}>{r.authorName}</Link>
+                        <>
+                          <Link href={`${chatBase}/${r.conversationId}`}>{r.authorName}</Link>
+                          {r.verifiedAt && <span className="verified"> ✓ проверен</span>}
+                        </>
                       ) : (
                         <>
                           {r.authorName} <span className="muted">(добавлен вручную)</span>
@@ -139,6 +150,15 @@ export default async function ReviewsPage(props: PageProps<"/admin/reviews">) {
                       </details>
                     </td>
                     <td className="actions">
+                      {r.conversationId && (
+                        <form action={setReviewVerifiedAction}>
+                          <input type="hidden" name="id" value={r.id} />
+                          <input type="hidden" name="verified" value={r.verifiedAt ? "false" : "true"} />
+                          <button className="link-button" title="По переписке ясно, что пишет живой человек, а не бот">
+                            {r.verifiedAt ? "Снять «проверен»" : "Проверенный"}
+                          </button>
+                        </form>
+                      )}
                       <form action={setReviewHiddenAction}>
                         <input type="hidden" name="id" value={r.id} />
                         <input type="hidden" name="hidden" value={r.hidden ? "false" : "true"} />

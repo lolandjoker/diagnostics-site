@@ -351,6 +351,11 @@ export const reviews = pgTable(
     hidden: boolean("hidden").notNull().default(false),
     createdAt: createdAt(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    /**
+     * Сотрудник по переписке убедился, что автор — живой человек, а не бот: на карточке отметка
+     * «Проверенный пользователь». Только у отзывов из чата (у добавленных в админке проверять некого).
+     */
+    verifiedAt: timestamp("verified_at", { withTimezone: true }),
   },
   (t) => [index("reviews_expert_idx").on(t.expertId, t.createdAt)],
 );

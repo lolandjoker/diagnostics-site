@@ -10,6 +10,7 @@ import { getTexts } from "@/lib/texts";
 import { typograph } from "@/lib/typograph";
 import { Avatar } from "../../../Avatar";
 import { Footer } from "../../../Footer";
+import { PriceTag } from "../../../PriceTag";
 import { ReviewsPager } from "../../../ReviewsPager";
 import { Track } from "../../../Track";
 import { chooseExpert } from "./actions";
@@ -49,6 +50,8 @@ export default async function ExpertsPage(props: PageProps<"/razbor/[id]/ekspert
         </p>
         <Track step="experts" leadId={lead.id} />
         <h1>{chat ? "Эксперты" : t["experts.title"]}</h1>
+        {/* Акция: консультация эксперта сейчас бесплатно (включается в «Текстах сайта» → «Цена») */}
+        <PriceTag db={db} className="price-tag--banner" />
         {chat && (
           <p className="lead text">
             Написать можно любому эксперту — у каждого свой чат, все переписки сохраняются в списке.
