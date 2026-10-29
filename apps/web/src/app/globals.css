@@ -2414,7 +2414,121 @@ td.actions {
   color: var(--gold);
 }
 
-/* --- Разбор «считается»: круг с рунами, шаги, прогресс --- */
+/* --- Шапка разбора: знаки и числа из даты рождения --- */
+
+.portrait {
+  margin: 0 0 20px;
+  padding: 20px;
+  border: 1px solid rgba(217, 182, 111, 0.35);
+  border-radius: var(--radius);
+  background:
+    radial-gradient(ellipse 80% 70% at 15% 0%, rgba(217, 182, 111, 0.14), transparent 70%),
+    var(--card);
+}
+
+.portrait__date {
+  margin: 0 0 14px;
+  color: var(--muted);
+  font-size: 0.875rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.portrait__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.portrait__item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+/* Знак Солнца — главное: на всю ширину, значок слева */
+.portrait__item--main {
+  grid-column: 1 / -1;
+  flex-direction: row;
+  gap: 16px;
+  align-items: center;
+  border-color: rgba(217, 182, 111, 0.4);
+}
+
+.portrait__item--main .portrait__glyph {
+  font-size: 3rem;
+}
+
+.portrait__value.portrait__value--main {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 1.75rem;
+  line-height: 1.2;
+}
+
+.portrait__icon {
+  width: 36px;
+  height: 40px;
+  color: var(--gold);
+}
+
+/* Значок или число сверху у каждой плитки — одной высоты, чтобы подписи стояли в ряд */
+.portrait__glyph,
+.portrait__number {
+  display: flex;
+  align-items: center;
+  height: 40px;
+  color: var(--gold);
+  font-family: var(--font-display);
+  font-size: 2.25rem;
+  font-variant-numeric: lining-nums;
+  line-height: 1;
+}
+
+@media (min-width: 700px) {
+  .portrait__grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.portrait__glyph--small {
+  font-size: 1.75rem;
+}
+
+.portrait__label {
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+.portrait__value {
+  font-size: 1.0625rem;
+}
+
+.portrait__hint {
+  color: var(--muted);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+
+.portrait__note {
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+/* --- Разбор «считается»: круг со знаками зодиака, шаги, прогресс --- */
+
+.loading__glyph {
+  font-family: "Segoe UI Symbol", "Noto Sans Symbols", "DejaVu Sans", sans-serif;
+  font-size: 9px;
+}
 
 .loading {
   min-height: 80dvh;
