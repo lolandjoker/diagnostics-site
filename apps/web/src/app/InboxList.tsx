@@ -1,6 +1,10 @@
 "use client";
 
-/** Список чатов, обновляется раз в 5 секунд. Для эксперта делится на «мои» и «коллег». */
+/**
+ * Список чатов для админа и экспертов — слева в мессенджере (StaffMessenger), обновляется раз в 5 секунд.
+ * Поиск по имени клиента или эксперта; вкладки «Все» / «Мои» (у эксперта) / «Непрочитанные».
+ * currentId — открытый сейчас чат, подсвечен.
+ */
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { InboxItem } from "@/lib/chat";
@@ -10,39 +14,26 @@ const POLL_MS = 5000;
 function when(iso: string): string {
   const d = new Date(iso);
   const today = new Date().toDateString() === d.toDateString();
-  return d.toLocaleString("ru-RU", today ? { hour: "2-digit", minute: "2-digit" } : { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleString("ru-RU", today ? { hour: "2-digit", minute: "2-digit" } : { day: "2-digit", month: "2-digit" });
 }
 
-function Rows({ items, linkBase, showExpert }: { items: InboxItem[]; linkBase: string; showExpert: boolean }) {
-  if (items.length === 0) return <p className="muted">Пока пусто.</p>;
-  return (
-    <ul className="inbox">
-      {items.map((c) => (
-        <li key={c.id} className={c.unread > 0 ? "inbox__item inbox__item--unread" : "inbox__item"}>
-          <Link href={`${linkBase}/${c.id}`}>
-            <span className="inbox__who">
-              {c.leadName}
-              {showExpert && <span className="muted"> → {c.expertName}</span>}
-              {c.unread > 0 && <span className="badge">{c.unread}</span>}
-              {c.callRequested && (
-                <span className="badge badge--call" title="Клиент просит позвонить">
-                  📞 звонок
-                </span>
-              )}
-            </span>
-            <span className="inbox__last">{c.lastMessage || "—"}</span>
-            <time className="muted" dateTime={c.lastMessageAt}>
-              {when(c.lastMessageAt)}
-            </time>
-          </Link>
-        </li>
-      ))}
-    </ul>
-  );
-}
+type Tab = "all" | "mine" | "unread";
 
-export function InboxList({ url, linkBase, meId }: { url: string; linkBase: string; meId?: number }) {
+export function InboxList({
+  url,
+  linkBase,
+  meId,
+  currentId,
+}: {
+  url: string;
+  linkBase: string;
+  /** Эксперт: его id — вкладка «Мои» и число непрочитанных в заголовке вкладки браузера. */
+  meId?: number;
+  currentId?: string;
+}) {
   const [items, setItems] = useState<InboxItem[] | null>(null);
+  const [query, setQuery] = useState("");
+  const [tab, setTab] = useState<Tab>(meId === undefined ? "all" : "mine");
 
   useEffect(() => {
     let alive = true;
@@ -68,15 +59,86 @@ export function InboxList({ url, linkBase, meId }: { url: string; linkBase: stri
     document.title = unread > 0 ? `(${unread}) Панель эксперта` : "Панель эксперта";
   }, [items, meId]);
 
-  if (!items) return <p className="muted">Загрузка…</p>;
-  if (meId === undefined) return <Rows items={items} linkBase={linkBase} showExpert />;
+  const q = query.trim().toLowerCase();
+  const shown = (items ?? []).filter(
+    (c) =>
+      (tab !== "mine" || c.expertId === meId) &&
+      (tab !== "unread" || c.unread > 0 || c.callRequested) &&
+      (q === "" || c.leadName.toLowerCase().includes(q) || c.expertName.toLowerCase().includes(q)),
+  );
+  const unreadTotal = (items ?? []).filter((c) => c.unread > 0 || c.callRequested).length;
+  const tabs: { key: Tab; label: string }[] = [
+    ...(meId === undefined ? [] : [{ key: "mine" as const, label: "Мои" }]),
+    { key: "all", label: "Все" },
+    { key: "unread", label: unreadTotal > 0 ? `Непрочитанные · ${unreadTotal}` : "Непрочитанные" },
+  ];
+
   return (
-    <>
-      <h2>Мои чаты</h2>
-      <Rows items={items.filter((c) => c.expertId === meId)} linkBase={linkBase} showExpert={false} />
-      <h2>Чаты коллег</h2>
-      <p className="muted">Ответить можно в любом — клиент увидит ваше имя.</p>
-      <Rows items={items.filter((c) => c.expertId !== meId)} linkBase={linkBase} showExpert />
-    </>
+    <nav className="inbox" aria-label="Чаты">
+      <div className="inbox__tools">
+        <input
+          className="inbox__search"
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Поиск по имени"
+          aria-label="Поиск по имени клиента или эксперта"
+        />
+        <div className="inbox__tabs" role="tablist">
+          {tabs.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              role="tab"
+              aria-selected={tab === t.key}
+              className={tab === t.key ? "is-current" : undefined}
+              onClick={() => setTab(t.key)}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {!items ? (
+        <p className="muted inbox__empty">Загрузка…</p>
+      ) : shown.length === 0 ? (
+        <p className="muted inbox__empty">{q ? "Никого не нашли" : "Пока пусто"}</p>
+      ) : (
+        <ul className="inbox__list">
+          {shown.map((c) => (
+            <li key={c.id}>
+              <Link
+                href={`${linkBase}/${c.id}`}
+                className={[
+                  "inbox__item",
+                  c.unread > 0 && "inbox__item--unread",
+                  c.id === currentId && "is-current",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+                aria-current={c.id === currentId ? "page" : undefined}
+              >
+                <span className="inbox__who">
+                  {c.leadName}
+                  {(meId === undefined || c.expertId !== meId) && <span className="muted"> → {c.expertName}</span>}
+                </span>
+                <time className="muted" dateTime={c.lastMessageAt}>
+                  {when(c.lastMessageAt)}
+                </time>
+                <span className="inbox__last">{c.lastMessage || "—"}</span>
+                <span className="inbox__badges">
+                  {c.callRequested && (
+                    <span className="badge badge--call" title="Клиент просит позвонить">
+                      📞
+                    </span>
+                  )}
+                  {c.unread > 0 && <span className="badge">{c.unread}</span>}
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </nav>
   );
 }

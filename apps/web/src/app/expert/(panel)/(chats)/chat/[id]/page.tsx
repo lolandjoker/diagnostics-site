@@ -1,11 +1,11 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDb } from "@/db";
 import { conversationHeader, getConversation } from "@/lib/chat";
 import { requireExpert } from "@/lib/expert-auth";
 import { getTexts } from "@/lib/texts";
-import { CallPanel } from "../../../../CallPanel";
-import { ChatThread } from "../../../../ChatThread";
+import { CallPanel } from "../../../../../CallPanel";
+import { ChatThread } from "../../../../../ChatThread";
+import { StaffChatHead } from "../../../../../StaffMessenger";
 
 export default async function ExpertChatPage(props: PageProps<"/expert/chat/[id]">) {
   const expert = await requireExpert();
@@ -22,20 +22,24 @@ export default async function ExpertChatPage(props: PageProps<"/expert/chat/[id]
 
   return (
     <>
-      <p>
-        <Link href="/expert">← Все чаты</Link>
-      </p>
-      <h1>{header?.leadName}</h1>
-      <p className="muted">
-        Дата рождения: {birth}. Эксперт чата: {header?.expertName}
-        {mine ? " (вы)" : ""}.
-      </p>
-      {!mine && (
-        <p className="notice notice--error">
-          Это чат эксперта {header?.expertName}. Если ответите, клиент увидит ваше имя — {expert.name}.
-        </p>
-      )}
+      <StaffChatHead
+        name={header?.leadName ?? "Клиент"}
+        meta={
+          <>
+            Дата рождения: {birth} · Эксперт чата: {header?.expertName}
+            {mine ? " (вы)" : ""}
+          </>
+        }
+        note={
+          !mine && (
+            <p className="notice notice--error staff-chat__note">
+              Это чат эксперта {header?.expertName}. Если ответите, клиент увидит ваше имя — {expert.name}.
+            </p>
+          )
+        }
+      />
       <ChatThread
+        key={conversation.id}
         url={`/expert/api/chat/${conversation.id}`}
         typingUrl={`/expert/api/chat/${conversation.id}/typing`}
         typingName={header?.leadName ?? "Клиент"}

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getDb } from "@/db";
 import { isAdmin } from "@/lib/admin-auth";
@@ -6,6 +5,7 @@ import { conversationHeader, getConversation } from "@/lib/chat";
 import { getTexts } from "@/lib/texts";
 import { CallPanel } from "../../../../CallPanel";
 import { ChatThread } from "../../../../ChatThread";
+import { StaffChatHead } from "../../../../StaffMessenger";
 
 export default async function AdminChatPage(props: PageProps<"/admin/chats/[id]">) {
   const { id } = await props.params;
@@ -19,16 +19,22 @@ export default async function AdminChatPage(props: PageProps<"/admin/chats/[id]"
   ]);
   return (
     <>
-      <p>
-        <Link href="/admin/chats">← Все чаты</Link>
-      </p>
-      <h1>{header?.leadName}</h1>
-      <p className="muted">
-        Дата рождения: {header?.birthDate.split("-").reverse().join(".")}. Эксперт: {header?.expertName}. Ваши сообщения
-        клиент видит от имени эксперта — {header?.expertName}, с его фото. Подпись «{t["chat.admin_name"]}» видите
-        только вы и эксперты.
-      </p>
+      <StaffChatHead
+        name={header?.leadName ?? "Клиент"}
+        meta={
+          <>
+            Дата рождения: {header?.birthDate.split("-").reverse().join(".")} · Эксперт: {header?.expertName}
+          </>
+        }
+        note={
+          <p className="muted staff-chat__note">
+            Ваши сообщения клиент видит от имени эксперта — {header?.expertName}, с его фото. Подпись «{t["chat.admin_name"]}»
+            видите только вы и эксперты.
+          </p>
+        }
+      />
       <ChatThread
+        key={conversation.id}
         url={`/admin/api/chat/${conversation.id}`}
         typingUrl={`/admin/api/chat/${conversation.id}/typing`}
         typingName={header?.leadName ?? "Клиент"}
