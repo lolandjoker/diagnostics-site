@@ -5,11 +5,14 @@ import "@fontsource-variable/manrope";
 import "@fontsource/cormorant-garamond/500.css";
 import "@fontsource/cormorant-garamond/600.css";
 import "./globals.css";
+import { BRAND } from "./Brand";
+import { SiteHeader } from "./SiteHeader";
 import { TelegramBridge } from "./TelegramBridge";
 
 export const metadata: Metadata = {
-  title: "Бесплатный разбор по дате рождения",
-  description: "Натальная карта, матрица судьбы и персональный гороскоп по дате рождения.",
+  title: { default: `${BRAND} — разбор по дате рождения`, template: `%s · ${BRAND}` },
+  description: "Таромба: бесплатный разбор по дате рождения — знак, стихия, числа — и чат с экспертами по астрологии, таро и нумерологии.",
+  applicationName: BRAND,
   robots: { index: false, follow: false },
 };
 
@@ -23,6 +26,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="ru">
       <body>
+        <SiteHeader />
         {children}
         <TelegramBridge />
       </body>
