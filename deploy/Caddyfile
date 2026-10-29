@@ -14,3 +14,10 @@
 
 	reverse_proxy web:3000
 }
+
+# Прежние адреса сайта (OLD_SITE_DOMAIN в .env, через запятую с www) — насовсем на новый домен,
+# с тем же путём: старые ссылки, закладки и кнопки в Telegram продолжают работать.
+# Не задано — заглушка http://old.localhost: ни на что не отвечает и сертификат не запрашивает.
+{$OLD_SITE_DOMAIN} {
+	redir https://{$SITE_DOMAIN}{uri} permanent
+}

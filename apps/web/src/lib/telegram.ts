@@ -18,7 +18,7 @@ import { conversations, experts, leads, messages } from "@/db/schema";
 
 export interface TelegramConfig {
   token: string;
-  /** Адрес сайта без косой черты в конце: https://diagnostics-free.com */
+  /** Адрес сайта без косой черты в конце: https://taromba.com */
   siteUrl: string;
 }
 
