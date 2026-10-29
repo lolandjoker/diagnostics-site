@@ -485,6 +485,7 @@ export function CallPanel({
         title={requested ? "Звонок заказан — эксперт позвонит вам здесь, в чате" : "Заказать звонок"}
       >
         <PhoneIcon />
+        <span className="chat__icon-label">{requested ? "Звонок заказан" : "Звонок"}</span>
       </button>
 
       {(incoming || (mine && call)) && (

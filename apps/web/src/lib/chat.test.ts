@@ -37,7 +37,6 @@ import {
 } from "./experts";
 import { createLead } from "./leads";
 import { answerCall, startCall } from "./calls";
-import { saveTexts } from "./texts";
 import {
   NO_METHOD,
   deleteVariation,
@@ -56,8 +55,6 @@ let db: Db;
 
 beforeEach(async () => {
   db = await createTestDb();
-  // Без автоматического первого сообщения клиента — здесь считаем сообщения по одному (оно — в messenger.test)
-  await saveTexts(db, { "chat.first_message": "" });
 });
 
 async function newVariation(title: string, method = NO_METHOD, active = true) {

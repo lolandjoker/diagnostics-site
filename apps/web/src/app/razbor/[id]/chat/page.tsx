@@ -37,7 +37,7 @@ export default async function ClientChatPage(props: PageProps<"/razbor/[id]/chat
     getExpert(db, conversation.expertId),
     expertPhotoUrls(db),
     clientChats(db, lead.id),
-    getTexts(db, ["chat.title", "chat.placeholder", "chat.send", "experts.busy"]),
+    getTexts(db, ["chat.title", "chat.placeholder", "chat.send", "experts.busy", "chat.suggestions"]),
     telegramLink(lead),
   ]);
 
@@ -63,6 +63,11 @@ export default async function ClientChatPage(props: PageProps<"/razbor/[id]/chat
           typingUrl={`/api/chat/${lead.id}/typing${q}`}
           typingName={expertName}
           ownAuthors={["client"]}
+          suggestions={t["chat.suggestions"]
+            .split("\n")
+            .map((s) => s.trim())
+            .filter(Boolean)
+            .slice(0, 4)}
           labels={{ placeholder: t["chat.placeholder"], send: t["chat.send"] }}
           peer={{
             name: expertName,
@@ -106,6 +111,7 @@ export default async function ClientChatPage(props: PageProps<"/razbor/[id]/chat
                   <circle cx="17" cy="9" r="2.5" />
                   <path d="M15.5 14.3c2.6-.4 4.5 1.2 5 4.2" strokeLinecap="round" />
                 </svg>
+                <span className="chat__icon-label">Эксперты</span>
               </Link>
               <ReviewButton url={`/api/chat/${lead.id}/review${q}`} expertName={expertName} clientName={lead.name} />
               <CallPanel

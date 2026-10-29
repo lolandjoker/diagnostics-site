@@ -55,11 +55,10 @@ describe("переписки клиента", () => {
     const again = await startConversation(db, lead, maria, new Date());
     expect(again.ok && again.conversation.id).toBe(a.conversation.id);
 
-    // Первый чат начинается с вопроса клиента о разборе — один раз; в следующих чатах его нет
-    const bodies = async (id: string) =>
-      (await db.select().from(messages).where(eq(messages.conversationId, id))).map((m) => `${m.author}: ${m.body}`);
-    expect(await bodies(a.conversation.id)).toEqual(["client: Здравствуйте, расскажите подробней про мою диагностику."]);
-    expect(await bodies(b.conversation.id)).toEqual([]);
+    // За клиента ничего не пишем — чаты открываются пустыми (в чате — подсказки-вопросы)
+    const count = async (id: string) => (await db.select().from(messages).where(eq(messages.conversationId, id))).length;
+    expect(await count(a.conversation.id)).toBe(0);
+    expect(await count(b.conversation.id)).toBe(0);
   });
 
   it("имя и дату можно изменить MAX_LEAD_EDITS раза; подробный разбор второй раз не приходит", async () => {
