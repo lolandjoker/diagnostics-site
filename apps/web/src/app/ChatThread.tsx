@@ -64,6 +64,16 @@ async function preparePhoto(file: File): Promise<Blob> {
   }
 }
 
+/** У своих сообщений: ✓ — отправлено, ✓✓ — прочитано. */
+function ReadMark({ read }: { read: boolean }) {
+  return (
+    <span className={read ? "msg__read msg__read--seen" : "msg__read"} title={read ? "Прочитано" : "Отправлено"}>
+      <span aria-hidden="true">{read ? "✓✓" : "✓"}</span>
+      <span className="sr-only">{read ? "прочитано" : "отправлено"}</span>
+    </span>
+  );
+}
+
 const time = (iso: string) => new Date(iso).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
 
 function dayLabel(iso: string): string {
@@ -140,6 +150,8 @@ export function ChatThread({
   const [typing, setTyping] = useState(false);
   const lastTypingPing = useRef(0);
   const [status, setStatus] = useState<"online" | "busy" | "offline" | undefined>(undefined);
+  /** До какого момента та сторона прочитала чат: свои сообщения раньше — ✓✓, позже — ✓. */
+  const [readUpTo, setReadUpTo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [text, setText] = useState("");
@@ -162,8 +174,10 @@ export function ChatThread({
         messages: MessageView[];
         expertStatus?: "online" | "busy" | "offline";
         typing?: boolean;
+        readUpTo?: string | null;
       };
       if (data.expertStatus) setStatus(data.expertStatus);
+      if (data.readUpTo !== undefined) setReadUpTo(data.readUpTo);
       setTyping(data.typing === true);
       if (data.messages.length > 0) {
         lastId.current = data.messages.at(-1)?.id ?? lastId.current;
@@ -372,6 +386,7 @@ export function ChatThread({
                     {m.body && <div className="text">{m.body}</div>}
                     <time className="msg__time" dateTime={m.createdAt}>
                       {time(m.createdAt)}
+                      {isOwn(m) && <ReadMark read={readUpTo !== null && m.createdAt <= readUpTo} />}
                     </time>
                   </div>
                 </div>

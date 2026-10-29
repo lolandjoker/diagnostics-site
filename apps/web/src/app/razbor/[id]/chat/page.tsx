@@ -6,6 +6,7 @@ import { expertPhotoUrls, formatRating, getExpert } from "@/lib/experts";
 import { expertGallery } from "@/lib/gallery";
 import { MAX_LEAD_EDITS, getLead } from "@/lib/leads";
 import { telegramLink } from "@/lib/telegram";
+import { replyTimeLabel, replyTimes } from "@/lib/reply-time";
 import { expertReviews, reviewsCount } from "@/lib/reviews";
 import { fillTemplate, getTexts } from "@/lib/texts";
 import { CallPanel } from "../../../CallPanel";
@@ -43,9 +44,15 @@ export default async function ClientChatPage(props: PageProps<"/razbor/[id]/chat
 
   const expertName = expert?.name ?? "Эксперт";
   const expertPhoto = expert ? (photos.get(expert.id) ?? null) : null;
-  const [gallery, reviews] = expert
-    ? await Promise.all([expertGallery(db, expert.id, expertPhoto), expertReviews(db, [expert.id])])
-    : [[], new Map()];
+  const [gallery, reviews, replies] = expert
+    ? await Promise.all([
+        expertGallery(db, expert.id, expertPhoto),
+        expertReviews(db, [expert.id]),
+        replyTimes(db, [expert.id], new Date()),
+      ])
+    : [[], new Map(), new Map<number, number>()];
+  const replySeconds = replies.get(conversation.expertId);
+  const replyTime = replySeconds === undefined ? undefined : replyTimeLabel(replySeconds);
   const q = `?c=${conversation.id}`;
   const profileHref = `/ekspert/${conversation.expertId}?lead=${lead.id}&c=${conversation.id}`;
 
@@ -132,6 +139,7 @@ export default async function ClientChatPage(props: PageProps<"/razbor/[id]/chat
             busyLabel={t["experts.busy"]}
             profileHref={profileHref}
             reviews={reviewsCount(expert.reviewsShown, reviews.get(expert.id)?.count ?? 0)}
+            {...(replyTime && { replyTime })}
           />
         </div>
       )}

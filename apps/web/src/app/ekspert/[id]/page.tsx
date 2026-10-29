@@ -6,6 +6,7 @@ import { expertGallery } from "@/lib/gallery";
 import { clientChats } from "@/lib/chat";
 import { expertPhotoUrls, expertStatus, expertTags, formatRating, getExpert, isOnline } from "@/lib/experts";
 import { getLead, isUuid } from "@/lib/leads";
+import { replyTimeLabel, replyTimes } from "@/lib/reply-time";
 import { REVIEWS_PAGE_SIZE, expertReviews, reviewsCount, reviewsCountLabel } from "@/lib/reviews";
 import { ReviewsNote } from "../../ReviewsNote";
 import { getTexts } from "@/lib/texts";
@@ -32,13 +33,14 @@ export default async function ExpertProfilePage(props: PageProps<"/ekspert/[id]"
   if (!expert || !expert.active || expert.deletedAt) notFound();
 
   const lead = typeof leadParam === "string" ? await getLead(db, leadParam) : null;
-  const [photos, certificates, reviews, chats, t, price] = await Promise.all([
+  const [photos, certificates, reviews, chats, t, price, replies] = await Promise.all([
     expertPhotoUrls(db),
     listCertificates(db, expert.id),
     expertReviews(db, [expert.id]),
     lead ? clientChats(db, lead.id) : Promise.resolve([]),
     getTexts(db, ["experts.busy", "experts.choose"]),
     getPrice(db),
+    replyTimes(db, [expert.id], new Date()),
   ]);
   const gallery = await expertGallery(db, expert.id, photos.get(expert.id) ?? null);
   const status = expertStatus(expert, new Date());
@@ -69,6 +71,7 @@ export default async function ExpertProfilePage(props: PageProps<"/ekspert/[id]"
             <span className={`status status--${status}`}>
               {status === "online" ? "в сети" : status === "busy" ? t["experts.busy"] : "не в сети"}
             </span>
+            {replies.has(expert.id) && <span className="reply-time">{replyTimeLabel(replies.get(expert.id)!)}</span>}
             <div className="expert__rating profile__rating">
               <span className="rating">★ {formatRating(expert.rating)}</span>
               {count.total > 0 && <span className="muted">{reviewsCountLabel(count.total)}</span>}

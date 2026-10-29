@@ -13,6 +13,7 @@ export function ExpertPanel({
   busyLabel,
   profileHref,
   reviews,
+  replyTime,
 }: {
   expert: PublicExpert;
   /** Главное фото и дополнительные — по порядку. */
@@ -20,6 +21,7 @@ export function ExpertPanel({
   busyLabel: string;
   profileHref: string;
   reviews: ReviewsCount;
+  replyTime?: string;
 }) {
   const status = expertStatus(expert, new Date());
   const tags = expertTags(expert.tags);
@@ -32,6 +34,7 @@ export function ExpertPanel({
         <span className={`status status--${status}`}>
           {status === "online" ? "в сети" : status === "busy" ? busyLabel : "не в сети"}
         </span>
+        {replyTime && <span className="reply-time">{replyTime}</span>}
         <div className="expert__rating">
           <span className="rating">★ {formatRating(expert.rating)}</span>
           {reviews.total > 0 && <span className="muted">{reviewsCountLabel(reviews.total)}</span>}
