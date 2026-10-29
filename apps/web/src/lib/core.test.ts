@@ -20,6 +20,14 @@ describe("тексты", () => {
     expect((await getTexts(db, ["home.title"]))["home.title"]).toBe("Ещё раз");
   });
 
+  it("цена: по умолчанию показана, 5000 ₽; сумма — только целое число; выключается", async () => {
+    expect(await getTexts(db, ["price.show", "price.amount"])).toEqual({ "price.show": "1", "price.amount": "5000" });
+    expect(await saveTexts(db, { "price.amount": "5 000" })).toMatch("целое число");
+    expect(await saveTexts(db, { "price.amount": "" })).toMatch("целое число");
+    expect(await saveTexts(db, { "price.amount": "7000", "price.show": "" })).toBeNull();
+    expect(await getTexts(db, ["price.show", "price.amount"])).toEqual({ "price.show": "", "price.amount": "7000" });
+  });
+
   it("подстановки", () => {
     expect(fillTemplate("{name}, ваш разбор: {x}", { name: "Анна" })).toBe("Анна, ваш разбор: {x}");
   });

@@ -29,6 +29,16 @@ export default async function TextsPage() {
             {defs.map((def) => {
               const value = values[def.key as keyof typeof values];
               const long = def.group === "Документы" || value.length > 80 || value.includes("\n");
+              if (def.toggle) {
+                // Снятая галочка в форму не попадает — тогда уходит скрытое пустое значение
+                return (
+                  <label key={def.key} className="check">
+                    <input type="checkbox" name={def.key} value="1" defaultChecked={value === "1"} />
+                    <input type="hidden" name={def.key} value="" />
+                    <span>{def.label}</span>
+                  </label>
+                );
+              }
               return (
                 <label key={def.key} className="field">
                   <span>
@@ -37,6 +47,8 @@ export default async function TextsPage() {
                   </span>
                   {def.url ? (
                     <input name={def.key} type="url" defaultValue={value} placeholder="https://" />
+                  ) : def.number ? (
+                    <input name={def.key} inputMode="numeric" pattern="\d+" defaultValue={value} required />
                   ) : long ? (
                     <textarea name={def.key} defaultValue={value} rows={def.group === "Документы" ? 12 : 4} />
                   ) : (

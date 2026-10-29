@@ -16,6 +16,10 @@ export interface TextDef {
   url?: boolean;
   /** Подсказка админу: какие подстановки работают в этом тексте. */
   hint?: string;
+  /** Галочка «да/нет»: в базе «1» или пусто. */
+  toggle?: boolean;
+  /** Целое число (например, цена в рублях). */
+  number?: boolean;
 }
 
 export const TEXT_DEFS = [
@@ -73,6 +77,17 @@ export const TEXT_DEFS = [
     label: "Подпись подробного разбора в чате",
     default: "Подробный разбор",
   },
+  // Цена: обычная цена консультации эксперта зачёркнута, рядом — «Бесплатно» (PriceTag)
+  {
+    key: "price.show",
+    group: "Цена",
+    label: "Показывать зачёркнутую цену у формы на главной и у кнопки «Написать эксперту»",
+    default: "1",
+    toggle: true,
+  },
+  { key: "price.amount", group: "Цена", label: "Обычная цена консультации эксперта, ₽", default: "5000", number: true },
+  { key: "price.label", group: "Цена", label: "Подпись перед ценой", default: "Консультация эксперта:" },
+  { key: "price.free", group: "Цена", label: "Вместо цены", default: "Бесплатно" },
   // Документы и подвал
   { key: "legal.offer", group: "Документы", label: "Публичная оферта", default: "Текст оферты пока не заполнен." },
   {
@@ -129,6 +144,7 @@ export async function saveTexts(db: Db, values: Partial<Record<TextKey, string>>
       return `«${def.label}»: ссылка должна начинаться с https://`;
     }
     if (value.length > 50_000) return `«${def.label}»: текст слишком длинный`;
+    if (def.number && !/^\d{1,9}$/.test(value)) return `«${def.label}»: укажите целое число`;
   }
   for (const [key, value] of entries) {
     await db

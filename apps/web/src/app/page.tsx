@@ -5,6 +5,7 @@ import { getLead, rememberedLeadId } from "@/lib/leads";
 import { getTexts } from "@/lib/texts";
 import { Footer } from "./Footer";
 import { LeadForm } from "./LeadForm";
+import { PriceTag } from "./PriceTag";
 import { Track } from "./Track";
 
 export const dynamic = "force-dynamic";
@@ -36,7 +37,7 @@ export default async function HomePage(props: PageProps<"/">) {
         </svg>
         <h1>{t["home.title"]}</h1>
         {t["home.subtitle"] && <p className="lead text">{t["home.subtitle"]}</p>}
-        <LeadForm button={t["home.button"]} />
+        <LeadForm button={t["home.button"]} price={<PriceTag db={db} />} />
         <Track step="home" />
       </main>
       <Footer />

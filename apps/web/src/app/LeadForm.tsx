@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { maskBirthDate } from "@/lib/date-input";
 import { submitLead, updateLead } from "./actions";
 import { telegramFirstName, telegramInitData } from "./telegramWebApp";
@@ -12,7 +13,16 @@ import { useKeptForm } from "./useKeptForm";
 const initial: FormState = { error: null };
 
 /** edit — та же форма на странице «Изменить данные»: поля заполнены, сохраняется в ту же заявку. */
-export function LeadForm({ button, edit }: { button: string; edit?: { leadId: string; name: string; birthDate: string } }) {
+export function LeadForm({
+  button,
+  edit,
+  price,
+}: {
+  button: string;
+  edit?: { leadId: string; name: string; birthDate: string };
+  /** Зачёркнутая цена у кнопки (PriceTag). */
+  price?: ReactNode;
+}) {
   const { state, onSubmit, pending } = useKeptForm(edit ? updateLead : submitLead, initial);
   const [birthDate, setBirthDate] = useState(edit?.birthDate ?? "");
   const nameRef = useRef<HTMLInputElement>(null);
@@ -68,6 +78,7 @@ export function LeadForm({ button, edit }: { button: string; edit?: { leadId: st
           {state.error}
         </p>
       )}
+      {price}
       <button className="button" disabled={pending}>
         {pending ? (edit ? "Сохраняем…" : "Считаем…") : button}
       </button>
