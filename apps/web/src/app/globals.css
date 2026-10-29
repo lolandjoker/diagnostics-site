@@ -333,6 +333,31 @@ textarea:focus-visible {
   color: var(--error);
 }
 
+/* «Консультация эксперта: ~~5 000 ₽~~ Бесплатно» */
+.price-tag {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9375rem;
+  text-align: center;
+}
+
+.card .price-tag {
+  margin: 14px 0 12px;
+  text-align: left;
+}
+
+.price-tag__old {
+  color: var(--muted);
+  text-decoration-color: rgba(240, 138, 138, 0.85);
+  text-decoration-thickness: 2px;
+}
+
+.price-tag__free {
+  color: var(--gold);
+  font-size: 1.0625rem;
+  letter-spacing: 0.02em;
+}
+
 .form__consent {
   margin: 0;
   color: var(--muted);

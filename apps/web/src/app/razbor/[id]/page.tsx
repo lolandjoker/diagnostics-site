@@ -8,6 +8,7 @@ import { typograph } from "@/lib/typograph";
 import { variationFor } from "@/lib/variations";
 import { Footer } from "../../Footer";
 import { Portrait } from "../../Portrait";
+import { PriceTag } from "../../PriceTag";
 import { Track } from "../../Track";
 import { ResultLoading } from "../../ResultLoading";
 
@@ -51,6 +52,7 @@ export default async function ResultPage(props: PageProps<"/razbor/[id]">) {
         <section className="card card--accent">
           <h2>{t["result.expert_title"]}</h2>
           {t["result.expert_text"] && <p className="text">{typograph(fillTemplate(t["result.expert_text"], vars))}</p>}
+          <PriceTag db={db} />
           <p className="card__action">
             {/* Сначала — список экспертов: человек сам выбирает, кому написать */}
             <Link className="button" href={`/razbor/${lead.id}/eksperty`}>
