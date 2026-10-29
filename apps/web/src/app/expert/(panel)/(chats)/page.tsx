@@ -1,16 +1,14 @@
-import { requireExpert } from "@/lib/expert-auth";
-import { InboxList } from "../../InboxList";
+import { StaffChatEmpty } from "../../../StaffMessenger";
 
-export default async function ExpertInboxPage() {
-  const expert = await requireExpert();
+export default function ExpertInboxPage() {
   return (
-    <>
-      <h1>Чаты</h1>
-      <p className="muted">
+    <StaffChatEmpty>
+      <p>Выберите чат слева.</p>
+      <p>
         Новые клиенты могут выбрать вас, пока вы «в сети» или «занят» (занятому пишут, но ждут ответа позже).
         Статус держится, пока вы его не смените, — даже если панель закрыта. Уходите — нажмите «Не в сети».
       </p>
-      <InboxList url="/expert/api/inbox" linkBase="/expert/chat" meId={expert.id} />
-    </>
+      <p>Во вкладке «Все» — чаты коллег: ответить можно в любом, клиент увидит ваше имя.</p>
+    </StaffChatEmpty>
   );
 }
