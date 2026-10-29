@@ -3,16 +3,22 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+/** Шаги — то, что потом действительно показано в шапке разбора (lib/portrait.ts). */
 const STEPS = [
   "Считываем дату рождения",
-  "Рассчитываем число судьбы",
-  "Сверяем положение планет",
-  "Читаем энергетику имени",
+  "Находим Солнце и Луну в день рождения",
+  "Определяем знак и стихию",
+  "Рассчитываем число жизненного пути",
   "Составляем ваш разбор",
 ];
 
+/** Знаки зодиака по кругу — текстом, не эмодзи (U+FE0E). */
+const ZODIAC = ["♈", "♉", "♊", "♋", "♌", "♍", "♎", "♏", "♐", "♑", "♒", "♓"].map((g) => `${g}\uFE0E`);
+/** После 100 % — короткая пауза, чтобы человек увидел все шаги выполненными. */
+const DONE_PAUSE_MS = 600;
+
 /**
- * Разбор «считается»: круг с рунами и звёздами, шаги расчёта и полоса прогресса. leftMs — сколько
+ * Разбор «считается»: круг со знаками зодиака, шаги расчёта и полоса прогресса. leftMs — сколько
  * ещё ждать (страница могла открыться не сразу после заявки); по окончании страница обновляется
  * и сервер отдаёт готовый разбор.
  */
@@ -23,15 +29,22 @@ export function ResultLoading({ leftMs, totalMs }: { leftMs: number; totalMs: nu
   useEffect(() => {
     const start = Date.now();
     const tick = setInterval(() => setElapsed(Math.min(totalMs, totalMs - leftMs + Date.now() - start)), 250);
-    const done = setTimeout(() => router.refresh(), leftMs);
+    let refresh: ReturnType<typeof setTimeout> | undefined;
+    // Полоса доходит до 100 %, все шаги отмечены — и только потом готовый разбор
+    const done = setTimeout(() => {
+      setElapsed(totalMs);
+      refresh = setTimeout(() => router.refresh(), DONE_PAUSE_MS);
+    }, leftMs);
     return () => {
       clearInterval(tick);
       clearTimeout(done);
+      clearTimeout(refresh);
     };
   }, [leftMs, totalMs, router]);
 
   const progress = elapsed / totalMs;
-  const step = Math.min(STEPS.length - 1, Math.floor(progress * STEPS.length));
+  // Шаги равной длины; на 100 % выполнены все
+  const step = progress >= 1 ? STEPS.length : Math.min(STEPS.length - 1, Math.floor(progress * STEPS.length));
 
   return (
     <main className="page page--narrow loading">
@@ -49,14 +62,26 @@ export function ResultLoading({ leftMs, totalMs }: { leftMs: number; totalMs: nu
           {Array.from({ length: 12 }, (_, i) => (
             <g key={i} transform={`rotate(${i * 30} 100 100)`}>
               <path d="M100 8v10" stroke="currentColor" strokeWidth="1.2" />
-              <path d={RUNES[i % RUNES.length]} stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" />
+              <text x="100" y="31" className="loading__glyph" textAnchor="middle" fill="currentColor">
+                {ZODIAC[i]}
+              </text>
             </g>
           ))}
         </g>
         <g className="loading__ring loading__ring--middle">
           <circle cx="100" cy="100" r="64" stroke="currentColor" strokeWidth="1" strokeDasharray="2 7" opacity="0.7" />
-          <path d="M100 36 155.4 132H44.6Z" stroke="currentColor" strokeWidth="0.8" opacity="0.45" />
-          <path d="M100 164 44.6 68h110.8Z" stroke="currentColor" strokeWidth="0.8" opacity="0.45" />
+          {/* Как в натальной карте: внутренний круг и деление на 12 домов */}
+          <circle cx="100" cy="100" r="40" stroke="currentColor" strokeWidth="0.8" opacity="0.45" />
+          {Array.from({ length: 12 }, (_, i) => (
+            <path
+              key={i}
+              d="M100 36v24"
+              transform={`rotate(${i * 30 + 15} 100 100)`}
+              stroke="currentColor"
+              strokeWidth="0.6"
+              opacity="0.4"
+            />
+          ))}
         </g>
         <g className="loading__ring loading__ring--orbit">
           <circle cx="100" cy="18" r="3" fill="currentColor" />
@@ -86,13 +111,3 @@ export function ResultLoading({ leftMs, totalMs }: { leftMs: number; totalMs: nu
     </main>
   );
 }
-
-/** Знаки по кругу — простые руны линиями, чтобы не зависеть от шрифтов. */
-const RUNES = [
-  "M97 26v12M97 28l6 3M97 32l6 3", // феху
-  "M100 26v12M100 26l4 6-4 6", // турисаз
-  "M97 38V26l6 6v6", // уруз
-  "M100 26v12M96 30l8 4", // науд
-  "M96 26l8 12M104 26l-8 12", // гебо
-  "M97 26v12M103 26v12M97 32h6", // хагалаз
-];

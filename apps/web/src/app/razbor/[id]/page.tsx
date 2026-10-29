@@ -2,9 +2,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDb } from "@/db";
 import { MAX_LEAD_EDITS, RESULT_LOADING_MS, getLead } from "@/lib/leads";
+import { birthPortrait } from "@/lib/portrait";
 import { fillTemplate, getTexts } from "@/lib/texts";
 import { variationFor } from "@/lib/variations";
 import { Footer } from "../../Footer";
+import { Portrait } from "../../Portrait";
 import { ResultLoading } from "../../ResultLoading";
 
 export const dynamic = "force-dynamic";
@@ -34,6 +36,8 @@ export default async function ResultPage(props: PageProps<"/razbor/[id]">) {
       <main className="page">
         <h1>{fillTemplate(t["result.title"], vars)}</h1>
         {t["result.intro"] && <p className="lead text">{fillTemplate(t["result.intro"], vars)}</p>}
+
+        <Portrait portrait={birthPortrait(lead.name, lead.birthDate)} birthIso={lead.birthDate} />
 
         {variation?.shortText && (
           <section className="card">
