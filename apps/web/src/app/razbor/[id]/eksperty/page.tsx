@@ -10,7 +10,7 @@ import { getTexts } from "@/lib/texts";
 import { typograph } from "@/lib/typograph";
 import { Avatar } from "../../../Avatar";
 import { Footer } from "../../../Footer";
-import { PriceTag } from "../../../PriceTag";
+import { PriceInline, getPrice } from "../../../PriceTag";
 import { ReviewsPager } from "../../../ReviewsPager";
 import { Track } from "../../../Track";
 import { chooseExpert } from "./actions";
@@ -27,10 +27,11 @@ export default async function ExpertsPage(props: PageProps<"/razbor/[id]/ekspert
   const chat = await conversationForLead(db, lead.id);
   const chatWith = new Map((chat ? await clientChats(db, lead.id) : []).map((c) => [c.expertId, c.id]));
 
-  const [list, photos, t] = await Promise.all([
+  const [list, photos, t, price] = await Promise.all([
     selectableExperts(db, new Date()),
     expertPhotoUrls(db),
     getTexts(db, ["experts.title", "experts.none_online", "experts.choose", "experts.busy"]),
+    getPrice(db),
   ]);
   // Сначала свободные, потом занятые, в конце — не в сети
   const order = { online: 0, busy: 1, offline: 2 } as const;
@@ -50,8 +51,6 @@ export default async function ExpertsPage(props: PageProps<"/razbor/[id]/ekspert
         </p>
         <Track step="experts" leadId={lead.id} />
         <h1>{chat ? "Эксперты" : t["experts.title"]}</h1>
-        {/* Акция: консультация эксперта сейчас бесплатно (включается в «Текстах сайта» → «Цена») */}
-        <PriceTag db={db} className="price-tag--banner" />
         {chat && (
           <p className="lead text">
             Написать можно любому эксперту — у каждого свой чат, все переписки сохраняются в списке.
@@ -111,6 +110,7 @@ export default async function ExpertsPage(props: PageProps<"/razbor/[id]/ekspert
                       <input type="hidden" name="leadId" value={lead.id} />
                       <input type="hidden" name="expertId" value={e.id} />
                       <button className="button button--ghost">Написать эксперту</button>
+                      <PriceInline price={price} />
                     </form>
                   )
                 ) : (
@@ -119,6 +119,7 @@ export default async function ExpertsPage(props: PageProps<"/razbor/[id]/ekspert
                       <input type="hidden" name="leadId" value={lead.id} />
                       <input type="hidden" name="expertId" value={e.id} />
                       <button className="button">{t["experts.choose"]}</button>
+                      <PriceInline price={price} />
                     </form>
                   )
                 )}

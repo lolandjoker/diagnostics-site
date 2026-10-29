@@ -12,6 +12,7 @@ import { getTexts } from "@/lib/texts";
 import { typograph } from "@/lib/typograph";
 import { Certificates } from "../../Certificates";
 import { PhotoGallery } from "../../PhotoGallery";
+import { PriceInline, getPrice } from "../../PriceTag";
 import { Footer } from "../../Footer";
 import { ReviewsPager } from "../../ReviewsPager";
 import { chooseExpert } from "../../razbor/[id]/eksperty/actions";
@@ -31,12 +32,13 @@ export default async function ExpertProfilePage(props: PageProps<"/ekspert/[id]"
   if (!expert || !expert.active || expert.deletedAt) notFound();
 
   const lead = typeof leadParam === "string" ? await getLead(db, leadParam) : null;
-  const [photos, certificates, reviews, chats, t] = await Promise.all([
+  const [photos, certificates, reviews, chats, t, price] = await Promise.all([
     expertPhotoUrls(db),
     listCertificates(db, expert.id),
     expertReviews(db, [expert.id]),
     lead ? clientChats(db, lead.id) : Promise.resolve([]),
     getTexts(db, ["experts.busy", "experts.choose"]),
+    getPrice(db),
   ]);
   const gallery = await expertGallery(db, expert.id, photos.get(expert.id) ?? null);
   const status = expertStatus(expert, new Date());
@@ -99,6 +101,7 @@ export default async function ExpertProfilePage(props: PageProps<"/ekspert/[id]"
                       <input type="hidden" name="expertId" value={expert.id} />
                       <input type="hidden" name="return" value={self} />
                       <button className="button">{chats.length > 0 ? "Написать эксперту" : t["experts.choose"]}</button>
+                      <PriceInline price={price} />
                     </form>
                   )
                 )}
