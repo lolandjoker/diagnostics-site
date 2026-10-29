@@ -6,6 +6,7 @@ import { expertPhotoUrls, formatRating } from "@/lib/experts";
 import { MAX_LEAD_EDITS, getLead } from "@/lib/leads";
 import { REVIEWS_PAGE_SIZE, expertReviews, reviewsCountLabel } from "@/lib/reviews";
 import { getTexts } from "@/lib/texts";
+import { typograph } from "@/lib/typograph";
 import { Avatar } from "../../../Avatar";
 import { Footer } from "../../../Footer";
 import { ReviewsPager } from "../../../ReviewsPager";
@@ -79,7 +80,7 @@ export default async function ExpertsPage(props: PageProps<"/razbor/[id]/ekspert
                     </span>
                   </div>
                 </div>
-                {e.description && <p className="text">{e.description}</p>}
+                {e.description && <p className="text">{typograph(e.description)}</p>}
                 <p className="expert__profile-link">
                   <Link href={`/ekspert/${e.id}?lead=${lead.id}`}>Профиль, сертификаты и все отзывы →</Link>
                 </p>

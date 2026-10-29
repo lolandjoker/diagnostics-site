@@ -8,6 +8,7 @@ import { expertPhotoUrls, expertStatus, expertTags, formatRating, getExpert, isO
 import { getLead, isUuid } from "@/lib/leads";
 import { REVIEWS_PAGE_SIZE, expertReviews, reviewsCountLabel } from "@/lib/reviews";
 import { getTexts } from "@/lib/texts";
+import { typograph } from "@/lib/typograph";
 import { Certificates } from "../../Certificates";
 import { PhotoGallery } from "../../PhotoGallery";
 import { Footer } from "../../Footer";
@@ -75,7 +76,7 @@ export default async function ExpertProfilePage(props: PageProps<"/ekspert/[id]"
                 ))}
               </ul>
             )}
-            {expert.description && <p className="text profile__lead">{expert.description}</p>}
+            {expert.description && <p className="text profile__lead">{typograph(expert.description)}</p>}
 
             {lead && (
               <div className="profile__action">
@@ -107,7 +108,7 @@ export default async function ExpertProfilePage(props: PageProps<"/ekspert/[id]"
         {expert.about && (
           <section className="card profile__section">
             <h2>О себе</h2>
-            <p className="text">{expert.about}</p>
+            <p className="text">{typograph(expert.about)}</p>
           </section>
         )}
 
