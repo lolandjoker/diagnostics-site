@@ -11,6 +11,7 @@ import { typograph } from "@/lib/typograph";
 import { Avatar } from "../../../Avatar";
 import { Footer } from "../../../Footer";
 import { ReviewsPager } from "../../../ReviewsPager";
+import { Track } from "../../../Track";
 import { chooseExpert } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -46,6 +47,7 @@ export default async function ExpertsPage(props: PageProps<"/razbor/[id]/ekspert
           {chat ? <Link href={`/razbor/${lead.id}/chat`}>← Вернуться в чат</Link> : <Link href={`/razbor/${lead.id}`}>← К разбору</Link>}
           {lead.edits < MAX_LEAD_EDITS && <Link href={`/razbor/${lead.id}/izmenit`}>Изменить дату рождения</Link>}
         </p>
+        <Track step="experts" leadId={lead.id} />
         <h1>{chat ? "Эксперты" : t["experts.title"]}</h1>
         {chat && (
           <p className="lead text">

@@ -8,6 +8,7 @@ import { typograph } from "@/lib/typograph";
 import { variationFor } from "@/lib/variations";
 import { Footer } from "../../Footer";
 import { Portrait } from "../../Portrait";
+import { Track } from "../../Track";
 import { ResultLoading } from "../../ResultLoading";
 
 export const dynamic = "force-dynamic";
@@ -39,6 +40,7 @@ export default async function ResultPage(props: PageProps<"/razbor/[id]">) {
         {t["result.intro"] && <p className="lead text">{typograph(fillTemplate(t["result.intro"], vars))}</p>}
 
         <Portrait portrait={birthPortrait(lead.name, lead.birthDate)} birthIso={lead.birthDate} />
+        <Track step="result" leadId={lead.id} />
 
         {variation?.shortText && (
           <section className="card">
