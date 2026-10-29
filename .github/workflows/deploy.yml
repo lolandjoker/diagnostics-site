@@ -21,7 +21,7 @@ permissions:
 
 env:
   HOST: 195.133.81.137
-  DOMAIN: diagnostics-free.com
+  DOMAIN: taromba.com
   # Отпечаток ключа сервера: защищает от подмены сервера (проверен владельцем 19.10.2026)
   HOST_FINGERPRINT: SHA256:PR3DMvNa51VVboCsO6tRFKEFDrxjxylXQ+BxW5Bjfbk
 

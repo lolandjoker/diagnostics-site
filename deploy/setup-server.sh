@@ -16,7 +16,7 @@
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 
-DOMAIN="${1:?укажите домен: setup-server.sh diagnostics-free.com}"
+DOMAIN="${1:?укажите домен: setup-server.sh taromba.com}"
 REPO_URL="https://github.com/lolandjoker/diagnostics-site.git"
 BASE=/opt/diagnostics
 WARNINGS=()

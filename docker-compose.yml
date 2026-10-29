@@ -14,6 +14,8 @@ services:
       - "443:443/udp"
     environment:
       SITE_DOMAIN: ${SITE_DOMAIN:?укажите SITE_DOMAIN в .env}
+      # Прежние домены — переадресация на SITE_DOMAIN (см. deploy/Caddyfile)
+      OLD_SITE_DOMAIN: ${OLD_SITE_DOMAIN:-http://old.localhost}
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
