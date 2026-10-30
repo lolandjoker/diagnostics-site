@@ -17,6 +17,7 @@ import {
   deletePhotosAction,
   makeMainPhotoAction,
   setCertificateTitleAction,
+  setExpertArchivedAction,
   updateExpertAction,
 } from "../../../actions";
 
@@ -38,6 +39,20 @@ export default async function ExpertAdminPage(props: PageProps<"/admin/experts/[
         Логин: <b>{expert.login}</b>.
       </p>
       <OnlineToggle expert={expert} />
+      <form action={setExpertArchivedAction} className="expert-archive">
+        <input type="hidden" name="id" value={expert.id} />
+        <input type="hidden" name="archived" value={expert.archivedAt ? "false" : "true"} />
+        {expert.archivedAt ? (
+          <>
+            <b>В архиве</b> — клиенты не видят ни эксперта, ни его чатов. <button className="link-button">Достать из архива</button>
+          </>
+        ) : (
+          <>
+            <button className="link-button">Перенести в архив</button>{" "}
+            <span className="muted">— скрыть от клиентов вместе с чатами; вернуть можно в любой момент</span>
+          </>
+        )}
+      </form>
       <p>
         <Link href={`/admin/reviews?expert=${expert.id}`}>Отзывы эксперта — посмотреть, добавить, удалить</Link>
         {" · "}

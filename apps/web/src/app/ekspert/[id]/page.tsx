@@ -30,7 +30,7 @@ export default async function ExpertProfilePage(props: PageProps<"/ekspert/[id]"
   const { lead: leadParam, c, error } = await props.searchParams;
   const db = await getDb();
   const expert = /^\d{1,9}$/.test(id) ? await getExpert(db, Number(id)) : null;
-  if (!expert || !expert.active || expert.deletedAt) notFound();
+  if (!expert || !expert.active || expert.deletedAt || expert.archivedAt) notFound();
 
   const lead = typeof leadParam === "string" ? await getLead(db, leadParam) : null;
   const [photos, certificates, reviews, chats, t, price, replies] = await Promise.all([
