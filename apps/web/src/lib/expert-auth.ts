@@ -32,7 +32,7 @@ export async function currentExpert(): Promise<PublicExpert | null> {
   const db = await getDb();
   const expert = await getExpertWithSecret(db, { id });
   const now = new Date();
-  if (!expert || !expert.active || !verifyExpertToken(token, expert, now.getTime(), secret)) return null;
+  if (!expert || !expert.active || expert.archivedAt || !verifyExpertToken(token, expert, now.getTime(), secret)) return null;
 
   // Не пишем в базу на каждый опрос чата: отметки раз в 30 секунд достаточно
   if (!expert.lastSeenAt || now.getTime() - expert.lastSeenAt.getTime() > 30_000) {

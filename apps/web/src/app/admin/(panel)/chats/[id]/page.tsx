@@ -27,10 +27,17 @@ export default async function AdminChatPage(props: PageProps<"/admin/chats/[id]"
           </>
         }
         note={
-          <p className="muted staff-chat__note">
-            Ваши сообщения клиент видит от имени эксперта — {header?.expertName}, с его фото. Подпись «{t["chat.admin_name"]}»
-            (у операторов — «Оператор: имя») видите только вы и эксперты.
-          </p>
+          header?.expertArchived ? (
+            <p className="notice notice--error staff-chat__note">
+              Эксперт {header.expertName} в архиве — клиент этот чат сейчас не видит и уведомлений не получает. Сообщения
+              сохранятся и появятся у него, когда эксперта достанут из архива.
+            </p>
+          ) : (
+            <p className="muted staff-chat__note">
+              Ваши сообщения клиент видит от имени эксперта — {header?.expertName}, с его фото. Подпись «
+              {t["chat.admin_name"]}» (у операторов — «Оператор: имя») видите только вы и эксперты.
+            </p>
+          )
         }
       />
       <ChatThread

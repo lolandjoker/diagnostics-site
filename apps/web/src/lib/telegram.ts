@@ -256,11 +256,14 @@ export async function notifyClient(db: Db, conversationId: string, notice: Clien
         telegramUserId: leads.telegramUserId,
         expertId: conversations.expertId,
         clientReadAt: conversations.clientReadAt,
+        archivedAt: experts.archivedAt,
       })
       .from(conversations)
       .innerJoin(leads, eq(leads.id, conversations.leadId))
+      .innerJoin(experts, eq(experts.id, conversations.expertId))
       .where(eq(conversations.id, conversationId));
-    if (!row?.telegramUserId) return;
+    // Чат с экспертом из архива клиент не видит — и не зовём в него
+    if (!row?.telegramUserId || row.archivedAt) return;
     if (row.clientReadAt && now.getTime() - row.clientReadAt.getTime() < CLIENT_ACTIVE_MS) return;
     // Сообщение и звонок админа клиент видит от эксперта чата
     const expertId = notice.kind === "fullText" ? row.expertId : (notice.expertId ?? row.expertId);

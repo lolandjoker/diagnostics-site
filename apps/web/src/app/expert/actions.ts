@@ -29,7 +29,7 @@ export async function expertLogin(_prev: ActionResult, form: FormData): Promise<
   const password = String(form.get("password") ?? "");
   const db = await getDb();
   const expert = login ? await getExpertWithSecret(db, { login }) : null;
-  if (!expert || !expert.active || !(await verifyPassword(password, expert.passwordHash))) {
+  if (!expert || !expert.active || expert.archivedAt || !(await verifyPassword(password, expert.passwordHash))) {
     recordLoginFail(ip, now);
     return { ok: false, message: "Неверный логин или пароль" };
   }

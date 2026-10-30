@@ -31,7 +31,12 @@ export default async function ExpertChatPage(props: PageProps<"/expert/chat/[id]
           </>
         }
         note={
-          !mine && (
+          header?.expertArchived ? (
+            <p className="notice notice--error staff-chat__note">
+              Эксперт {header.expertName} в архиве — клиент этот чат сейчас не видит и уведомлений не получает. Сообщения
+              сохранятся и появятся у него, когда эксперта достанут из архива.
+            </p>
+          ) : !mine && (
             <p className="notice notice--error staff-chat__note">
               Это чат эксперта {header?.expertName}. Если ответите, клиент увидит ваше имя — {expert.name}.
             </p>

@@ -109,6 +109,7 @@ const publicColumns = {
   sort: experts.sort,
   createdAt: experts.createdAt,
   deletedAt: experts.deletedAt,
+  archivedAt: experts.archivedAt,
   rating: experts.rating,
   reviewsShown: experts.reviewsShown,
   about: experts.about,
@@ -234,6 +235,17 @@ export async function deleteExpert(db: Db, id: number, now: Date): Promise<boole
     })
     .where(eq(experts.id, id));
   return true;
+}
+
+/**
+ * В архив / из архива. В архиве эксперт скрыт от клиентов полностью (см. experts.archivedAt) и снят
+ * с «в сети»; из архива возвращается не в сети — включить его можно как обычно.
+ */
+export async function setExpertArchived(db: Db, id: number, archived: boolean, now: Date): Promise<void> {
+  await db
+    .update(experts)
+    .set(archived ? { archivedAt: now, online: false, busy: false, onlineUntil: null } : { archivedAt: null })
+    .where(and(eq(experts.id, id), isNull(experts.deletedAt)));
 }
 
 /** Отметка «эксперт на месте» — при каждом обращении к панели. */

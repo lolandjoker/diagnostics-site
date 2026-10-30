@@ -27,26 +27,37 @@ export const FULL_TEXT_TYPING_MS = 20_000;
 /** Фото в чате. Браузер перед отправкой уменьшает снимок, так что обычно выходит меньше 1 МБ. */
 export const MAX_CHAT_PHOTO_BYTES = 5 * 1024 * 1024;
 
-/** Текущий чат заявки — где последнее сообщение (после перевода — чат с новым экспертом); null — чата нет. */
+/** Чаты с экспертами из архива клиент не видит — ни в списке, ни по ссылке. */
+const visibleToClient = and(
+  eq(experts.id, conversations.expertId),
+  isNull(experts.archivedAt),
+);
+
+/**
+ * Текущий чат заявки — где последнее сообщение (после перевода — чат с новым экспертом); null — чата нет.
+ * Чаты с экспертами из архива не в счёт.
+ */
 export async function conversationForLead(db: Db, leadId: string): Promise<Conversation | null> {
-  const [c] = await db
-    .select()
+  const [row] = await db
+    .select({ c: conversations })
     .from(conversations)
+    .innerJoin(experts, visibleToClient)
     .where(eq(conversations.leadId, leadId))
     .orderBy(desc(conversations.lastMessageAt), desc(conversations.createdAt))
     .limit(1);
-  return c ?? null;
+  return row?.c ?? null;
 }
 
 /** Чат заявки по его id (только если он этой заявки) или текущий, если id не задан. */
 export async function leadConversation(db: Db, leadId: string, conversationId?: string | null): Promise<Conversation | null> {
   if (!conversationId) return conversationForLead(db, leadId);
   if (!/^[0-9a-f-]{36}$/i.test(conversationId)) return null;
-  const [c] = await db
-    .select()
+  const [row] = await db
+    .select({ c: conversations })
     .from(conversations)
+    .innerJoin(experts, visibleToClient)
     .where(and(eq(conversations.id, conversationId), eq(conversations.leadId, leadId)));
-  return c ?? null;
+  return row?.c ?? null;
 }
 
 /** Клиент открыл чат — его сообщения больше не «непрочитанные» в списке чатов. */
@@ -81,7 +92,7 @@ export async function clientChats(db: Db, leadId: string): Promise<ClientChatIte
         from ${messages} m where m.conversation_id = ${conversations.id} order by m.id desc limit 1), '')`,
     })
     .from(conversations)
-    .innerJoin(experts, eq(experts.id, conversations.expertId))
+    .innerJoin(experts, visibleToClient)
     .where(eq(conversations.leadId, leadId))
     .orderBy(desc(conversations.lastMessageAt));
   const photos = await expertPhotoUrls(db);
@@ -102,9 +113,9 @@ export async function getConversation(db: Db, id: string): Promise<Conversation 
   return c ?? null;
 }
 
-/** Эксперты, которых может выбрать человек: онлайн; если онлайн никого — никого. */
+/** Эксперты, которых может выбрать человек: работают и не в архиве. */
 export async function selectableExperts(db: Db, now: Date) {
-  const all = (await listExperts(db)).filter((e) => e.active);
+  const all = (await listExperts(db)).filter((e) => e.active && !e.archivedAt);
   return all.map((e) => ({ ...e, isOnline: isOnline(e, now), status: expertStatus(e, now) }));
 }
 
@@ -124,12 +135,15 @@ export async function startConversation(db: Db, lead: Lead, expertId: number, no
         .from(conversations)
         .where(and(eq(conversations.leadId, lead.id), eq(conversations.expertId, expertId)))
     )[0];
+  const expert = await getExpert(db, expertId);
+  // Эксперт в архиве: ни нового чата, ни старого — клиент его не видит
+  if (!expert || expert.archivedAt) return { ok: false, error: "Эксперт не найден" };
   const existing = await withExpert();
   if (existing) return { ok: true, conversation: existing };
-
-  const expert = await getExpert(db, expertId);
-  if (!expert || !expert.active || expert.deletedAt) return { ok: false, error: "Эксперт не найден" };
-  const first = !(await conversationForLead(db, lead.id));
+  if (!expert.active || expert.deletedAt) return { ok: false, error: "Эксперт не найден" };
+  // Первый чат — первый вообще, считая скрытые чаты с экспертами из архива: разбор второй раз не приходит
+  const [earlier] = await db.select({ id: conversations.id }).from(conversations).where(eq(conversations.leadId, lead.id)).limit(1);
+  const first = !earlier;
   if (first && !isOnline(expert, now)) return { ok: false, error: "Этот эксперт сейчас не в сети — выберите другого" };
 
   const [created] = await db
@@ -379,7 +393,12 @@ export async function inbox(db: Db, limit = 300): Promise<InboxItem[]> {
 /** Шапка чата для сотрудников: кто клиент, какой эксперт, что видит клиент. */
 export async function conversationHeader(db: Db, conversation: Conversation) {
   const [row] = await db
-    .select({ leadName: leads.name, birthDate: leads.birthDate, expertName: experts.name })
+    .select({
+      leadName: leads.name,
+      birthDate: leads.birthDate,
+      expertName: experts.name,
+      expertArchived: sql<boolean>`${experts.archivedAt} is not null`.mapWith(Boolean),
+    })
     .from(conversations)
     .innerJoin(leads, eq(leads.id, conversations.leadId))
     .innerJoin(experts, eq(experts.id, conversations.expertId))

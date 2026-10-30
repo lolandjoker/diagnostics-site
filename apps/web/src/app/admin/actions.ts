@@ -26,6 +26,7 @@ import {
   parseRating,
   parseReviewsShown,
   saveExpertPhoto,
+  setExpertArchived,
   setExpertBusy,
   setExpertPassword,
   setExpertStatus,
@@ -247,6 +248,14 @@ export async function updateExpertAction(_prev: ActionResult, form: FormData): P
 // --- Удаление (с галочкой подтверждения в форме) ---
 
 /** Удалить эксперта: не входит и не виден клиентам; его старые чаты и сообщения остаются. */
+/** В архив / из архива: в архиве эксперт скрыт от клиентов полностью, вместе с его чатами. */
+export async function setExpertArchivedAction(form: FormData): Promise<void> {
+  await requireStaff();
+  const id = int(form, "id");
+  if (id !== null) await setExpertArchived(await getDb(), id, form.get("archived") === "true", new Date());
+  refresh();
+}
+
 export async function deleteExpertAction(form: FormData): Promise<void> {
   await requireStaff();
   const id = int(form, "id");

@@ -24,6 +24,7 @@ function until(d: Date, now: Date): string {
  */
 export function OnlineToggle({ expert }: { expert: PublicExpert }) {
   const now = new Date();
+  if (expert.archivedAt) return <span className="muted">в архиве</span>;
   if (!expert.active) return <span className="muted">выключен</span>;
   const status = expertStatus(expert, now);
   // Включено «навсегда» (самим экспертом или админом) — держится, пока не выключат
