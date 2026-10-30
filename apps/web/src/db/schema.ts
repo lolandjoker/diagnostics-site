@@ -302,6 +302,22 @@ export type MessageAuthor = (typeof MESSAGE_AUTHORS)[number];
  * Сообщение чата. author: client — человек, expert — эксперт (expertId — кто именно),
  * admin — админ, system — автоматическое (подробный разбор). productId — предложение продукта.
  */
+/**
+ * Оператор чатов: входит по логину и паролю в свою панель /operator и работает только с чатами — читает
+ * и отвечает во всех, как админ (клиент видит ответ от эксперта чата). Заводит и выключает админ.
+ */
+export const operators = pgTable("operators", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  login: text("login").notNull().unique(),
+  passwordHash: text("password_hash").notNull(),
+  /** Выключенный не может войти; его прежние сообщения остаются подписанными. */
+  active: boolean("active").notNull().default(true),
+  createdAt: createdAt(),
+  /** Удалён из списка; строка остаётся — по ней подписаны его сообщения. */
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+});
+
 export const messages = pgTable(
   "messages",
   {
@@ -314,6 +330,8 @@ export const messages = pgTable(
     body: text("body").notNull().default(""),
     productId: integer("product_id").references(() => products.id),
     createdAt: createdAt(),
+    /** author = admin, но написал оператор чатов — какой; null — сам админ. */
+    operatorId: integer("operator_id").references(() => operators.id),
   },
   (t) => [index("messages_conversation_idx").on(t.conversationId, t.id)],
 );

@@ -36,7 +36,10 @@ const nextConfig: NextConfig = {
     // Совпадающий заголовок из более позднего правила заменяет ранний
     return [
       { source: "/:path*", headers: securityHeaders },
-      ...["/admin", "/admin/:path*", "/expert", "/expert/:path*"].map((source) => ({ source, headers: panelHeaders })),
+      ...["/admin", "/admin/:path*", "/expert", "/expert/:path*", "/operator", "/operator/:path*"].map((source) => ({
+        source,
+        headers: panelHeaders,
+      })),
     ];
   },
 };

@@ -118,6 +118,7 @@ export function ChatThread({
   url,
   ownAuthors,
   ownExpertId,
+  ownOperatorId,
   labels,
   peer,
   call,
@@ -132,6 +133,11 @@ export function ChatThread({
   ownAuthors: MessageView["author"][];
   /** Для эксперта: справа — только его собственные сообщения, а не всех экспертов. */
   ownExpertId?: number;
+  /**
+   * Оператор чатов: свои — его сообщения (author = admin с его operatorId). У админа (ownAuthors = admin)
+   * без этого свои — только сообщения самого админа, без операторских.
+   */
+  ownOperatorId?: number;
   labels: ChatLabels;
   /** Шапка чата с собеседником; статус берётся из ответа сервера (expertStatus). */
   peer?: ChatPeer;
@@ -291,7 +297,10 @@ export function ChatThread({
   }
 
   const isOwn = (m: MessageView) =>
-    ownAuthors.includes(m.author) || (ownExpertId !== undefined && m.expertId === ownExpertId);
+    (m.author === "admin"
+      ? ownAuthors.includes("admin") && (m.operatorId ?? undefined) === ownOperatorId
+      : ownAuthors.includes(m.author)) ||
+    (ownExpertId !== undefined && m.expertId === ownExpertId);
 
   return (
     <div className="chat">
