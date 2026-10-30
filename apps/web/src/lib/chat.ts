@@ -8,7 +8,7 @@
  */
 import { and, asc, desc, eq, gt, isNull, lte, sql } from "drizzle-orm";
 import type { Db } from "@/db";
-import { conversations, experts, leads, messagePhotos, messages } from "@/db/schema";
+import { conversations, experts, leads, messagePhotos, messages, operators } from "@/db/schema";
 import type { MessageAuthor } from "@/db/schema";
 import { detectImageMime, expertPhotoUrls, expertStatus, getExpert, isOnline, listExperts } from "./experts";
 import type { Lead } from "./leads";
@@ -183,7 +183,8 @@ export async function deliverDueFullTexts(db: Db, now: Date, conversationId?: st
   }
 }
 
-export type PostInput = { author: MessageAuthor; body?: string; expertId?: number; photo?: Buffer };
+/** operatorId — для author = admin: написал оператор чатов (подпись у сотрудников — его имя). */
+export type PostInput = { author: MessageAuthor; body?: string; expertId?: number; operatorId?: number; photo?: Buffer };
 export type PostResult = { ok: true; id: number } | { ok: false; error: string };
 
 export async function postMessage(db: Db, conversationId: string, input: PostInput): Promise<PostResult> {
@@ -220,6 +221,7 @@ export async function postMessage(db: Db, conversationId: string, input: PostInp
         author: input.author,
         body,
         expertId: input.expertId ?? null,
+        operatorId: input.author === "admin" ? (input.operatorId ?? null) : null,
       })
       .returning({ id: messages.id });
     const messageId = (m as { id: number }).id;
@@ -255,6 +257,8 @@ export interface MessageView {
   expertId: number | null;
   /** Фото эксперта, написавшего сообщение; null — фото нет или пишет не эксперт. */
   avatar: string | null;
+  /** Сотрудникам: сообщение админа написал оператор чатов — какой (у клиента всегда null). */
+  operatorId: number | null;
   body: string;
   /** Адрес приложенного фото. */
   photo?: string;
@@ -272,9 +276,10 @@ export async function messageViews(
   viewer: "client" | "staff",
 ): Promise<MessageView[]> {
   const rows = await db
-    .select({ m: messages, expertName: experts.name, photoId: messagePhotos.messageId })
+    .select({ m: messages, expertName: experts.name, operatorName: operators.name, photoId: messagePhotos.messageId })
     .from(messages)
     .leftJoin(experts, eq(experts.id, messages.expertId))
+    .leftJoin(operators, eq(operators.id, messages.operatorId))
     .leftJoin(messagePhotos, eq(messagePhotos.messageId, messages.id))
     .where(and(eq(messages.conversationId, conversation.id), gt(messages.id, afterId)))
     .orderBy(asc(messages.id))
@@ -288,7 +293,7 @@ export async function messageViews(
   const chatExpert = viewer === "client" ? await getExpert(db, conversation.expertId) : null;
 
   const out: MessageView[] = [];
-  for (const { m, expertName, photoId } of rows) {
+  for (const { m, expertName, operatorName, photoId } of rows) {
     // Для клиента сообщение админа неотличимо от сообщения эксперта чата
     const asExpert = viewer === "client" && m.author === "admin";
     const author = asExpert ? "expert" : m.author;
@@ -299,7 +304,9 @@ export async function messageViews(
         : author === "expert"
           ? ((asExpert ? chatExpert?.name : expertName) ?? "Эксперт")
           : author === "admin"
-            ? t["chat.admin_name"]
+            ? operatorName
+              ? `Оператор: ${operatorName}`
+              : t["chat.admin_name"]
             : t["chat.system_name"];
     const view: MessageView = {
       id: m.id,
@@ -307,6 +314,7 @@ export async function messageViews(
       authorName,
       expertId,
       avatar: author === "expert" && expertId !== null ? (avatars.get(expertId) ?? null) : null,
+      operatorId: viewer === "staff" ? m.operatorId : null,
       // Продукты убраны с сайта; старые предложения продукта в переписке — пометкой
       body: m.productId !== null && m.body === "" ? "Предложение продукта (больше не действует)" : m.body,
       createdAt: m.createdAt.toISOString(),
@@ -317,7 +325,7 @@ export async function messageViews(
   return out;
 }
 
-/** Сотрудники прочитали чат: его открыл эксперт этого чата или админ. */
+/** Сотрудники прочитали чат: его открыл эксперт этого чата, админ или оператор чатов. */
 export async function markExpertRead(db: Db, conversationId: string, now: Date): Promise<void> {
   await db.update(conversations).set({ expertReadAt: now }).where(eq(conversations.id, conversationId));
 }

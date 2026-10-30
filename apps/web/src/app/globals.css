@@ -2247,6 +2247,21 @@ td.actions {
   padding: 10px 20px;
 }
 
+/* Короткая форма в строке таблицы (например, новый пароль оператора) */
+.inline-form fieldset {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.inline-form input {
+  max-width: 220px;
+}
+
 .inline-delete {
   display: inline-flex;
   gap: 8px;

@@ -29,7 +29,7 @@ export default async function AdminChatPage(props: PageProps<"/admin/chats/[id]"
         note={
           <p className="muted staff-chat__note">
             Ваши сообщения клиент видит от имени эксперта — {header?.expertName}, с его фото. Подпись «{t["chat.admin_name"]}»
-            видите только вы и эксперты.
+            (у операторов — «Оператор: имя») видите только вы и эксперты.
           </p>
         }
       />

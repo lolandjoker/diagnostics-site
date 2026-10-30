@@ -14,6 +14,7 @@ import { requireAdmin } from "@/lib/admin-auth";
 import { addReview, deleteReviews, setReviewBody, setReviewHidden, setReviewVerified } from "@/lib/reviews";
 import { addCertificates, deleteCertificate, setCertificateTitle } from "@/lib/certificates";
 import { addGalleryPhotos, deleteGalleryPhoto, deleteMainPhoto, makeMainPhoto } from "@/lib/gallery";
+import { createOperator, deleteOperator, setOperatorActive, setOperatorPassword } from "@/lib/operators";
 import { requireStaff } from "@/lib/staff-auth";
 import {
   ADMIN_ONLINE_FOREVER,
@@ -64,6 +65,43 @@ const done = (message: string): ActionResult => ({ ok: true, message });
 
 function refresh() {
   revalidatePath("/", "layout");
+}
+
+// --- Операторы чатов (только админ) ---
+
+export async function createOperatorAction(_prev: ActionResult, form: FormData): Promise<ActionResult> {
+  await requireAdmin();
+  const res = await createOperator(await getDb(), {
+    name: str(form, "name"),
+    login: str(form, "login"),
+    password: str(form, "password"),
+  });
+  if (!res.ok) return fail(res.error);
+  refresh();
+  return done("Оператор добавлен — логин и пароль передайте ему, вход: /operator/login");
+}
+
+export async function setOperatorActiveAction(form: FormData): Promise<void> {
+  await requireAdmin();
+  const id = int(form, "id");
+  if (id !== null) await setOperatorActive(await getDb(), id, form.get("active") === "true");
+  refresh();
+}
+
+export async function setOperatorPasswordAction(_prev: ActionResult, form: FormData): Promise<ActionResult> {
+  await requireAdmin();
+  const id = int(form, "id");
+  if (id === null) return fail("Оператор не найден");
+  const error = await setOperatorPassword(await getDb(), id, str(form, "password"));
+  if (error) return fail(error);
+  return done("Пароль сменён, прежние входы завершены");
+}
+
+export async function deleteOperatorAction(form: FormData): Promise<void> {
+  await requireAdmin();
+  const id = int(form, "id");
+  if (id !== null && form.get("confirm") === "on") await deleteOperator(await getDb(), id, new Date());
+  refresh();
 }
 
 // --- Тексты сайта ---

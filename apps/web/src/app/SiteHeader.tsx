@@ -7,7 +7,7 @@
 import { usePathname } from "next/navigation";
 import { Brand } from "./Brand";
 
-const HIDDEN = [/^\/$/, /^\/admin/, /^\/expert/, /^\/razbor\/[^/]+\/chat$/];
+const HIDDEN = [/^\/$/, /^\/admin/, /^\/expert/, /^\/operator/, /^\/razbor\/[^/]+\/chat$/];
 
 export function SiteHeader() {
   const pathname = usePathname();
