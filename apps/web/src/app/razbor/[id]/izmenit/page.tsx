@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { redirect } from "next/navigation";
 import { getDb } from "@/db";
 import { MAX_LEAD_EDITS, getLead, isoToBirthDate } from "@/lib/leads";
 import { Footer } from "../../../Footer";
@@ -11,7 +11,8 @@ export const dynamic = "force-dynamic";
 export default async function EditLeadPage(props: PageProps<"/razbor/[id]/izmenit">) {
   const { id } = await props.params;
   const lead = await getLead(await getDb(), id);
-  if (!lead) notFound();
+  // Заявки нет (удалена или чужой адрес из истории браузера) — к форме на главной
+  if (!lead) redirect("/");
   const left = MAX_LEAD_EDITS - lead.edits;
 
   return (

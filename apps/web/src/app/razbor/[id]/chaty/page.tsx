@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { redirect } from "next/navigation";
 import { getDb } from "@/db";
 import { clientChats } from "@/lib/chat";
 import { MAX_LEAD_EDITS, getLead } from "@/lib/leads";
@@ -13,7 +13,8 @@ export default async function ClientChatsPage(props: PageProps<"/razbor/[id]/cha
   const { id } = await props.params;
   const db = await getDb();
   const lead = await getLead(db, id);
-  if (!lead) notFound();
+  // Заявки нет (удалена или чужой адрес из истории браузера) — к форме на главной
+  if (!lead) redirect("/");
   const [chats, telegram] = await Promise.all([clientChats(db, lead.id), telegramLink(lead)]);
   if (chats.length === 0) redirect(`/razbor/${lead.id}/eksperty`);
   return (
