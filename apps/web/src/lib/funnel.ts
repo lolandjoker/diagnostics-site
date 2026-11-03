@@ -20,13 +20,22 @@ export function isTrackedStep(s: string): s is TrackedStep {
   return (TRACKED_STEPS as readonly string[]).includes(s);
 }
 
-/** Записать шаг. Повтор того же шага тем же браузером (или той же заявкой) не считается. */
-export async function trackStep(db: Db, visitorId: string, step: TrackedStep, leadId: string | null): Promise<void> {
+/**
+ * Записать шаг. Повтор того же шага тем же браузером (или той же заявкой) не считается.
+ * source — источник браузера (короткий адрес из ролика, lib/sources.ts), null — без метки.
+ */
+export async function trackStep(
+  db: Db,
+  visitorId: string,
+  step: TrackedStep,
+  leadId: string | null,
+  source: string | null = null,
+): Promise<void> {
   const forLead = LEAD_STEPS.includes(step);
   if (forLead && !leadId) return;
   await db
     .insert(funnelEvents)
-    .values({ visitorId, step, leadId: forLead ? leadId : null })
+    .values({ visitorId, step, leadId: forLead ? leadId : null, source })
     .onConflictDoNothing();
 }
 

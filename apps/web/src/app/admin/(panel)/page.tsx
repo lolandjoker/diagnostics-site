@@ -4,6 +4,7 @@ import { getDb } from "@/db";
 import { calls } from "@/db/schema";
 import { FUNNEL_PERIODS, funnel, funnelStart, periodStart, trackingSince } from "@/lib/funnel";
 import type { FunnelPeriod } from "@/lib/funnel";
+import { heardFromStats, sourceStats } from "@/lib/sources";
 
 const pct = (part: number, whole: number) => (whole > 0 ? `${Math.round((part / whole) * 100)}%` : "—");
 
@@ -20,13 +21,17 @@ export default async function DashboardPage(props: PageProps<"/admin">) {
   const period: FunnelPeriod = FUNNEL_PERIODS.some((p) => p.key === raw) ? (raw as FunnelPeriod) : "week";
   const db = await getDb();
   const tracking = await trackingSince(db);
-  const [steps, [callRow]] = await Promise.all([
-    tracking ? funnel(db, funnelStart(periodStart(period, new Date()), tracking)) : Promise.resolve([]),
+  const since = periodStart(period, new Date());
+  const [steps, [callRow], sources, heard] = await Promise.all([
+    tracking ? funnel(db, funnelStart(since, tracking)) : Promise.resolve([]),
     db
       .select({ n: count() })
       .from(calls)
       .where(sql`${calls.answeredAt} is not null`),
+    sourceStats(db, since),
+    heardFromStats(db, since),
   ]);
+  const heardTotal = heard.reduce((sum, h) => sum + h.leads, 0);
   const top = Math.max(1, ...steps.map((s) => s.count));
   // Самое большое падение между соседними шагами — там теряем больше всего людей
   let worst = -1;
@@ -87,6 +92,67 @@ export default async function DashboardPage(props: PageProps<"/admin">) {
             );
           })}
         </ol>
+      </section>
+
+      <section className="admin-section">
+        <h2>Откуда приходят</h2>
+        <p className="muted">
+          По коротким адресам из роликов (taromba.com/karta, taromba.com/tayna): сайт запоминает, по какому адресу человек
+          зашёл впервые. «Открыли главную» — браузеры за период, остальное — заявки, созданные за период.
+        </p>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Источник</th>
+                <th>Открыли главную</th>
+                <th>Заявки</th>
+                <th>Начали чат</th>
+                <th>Написали эксперту</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sources.map((s) => (
+                <tr key={s.key ?? "none"}>
+                  <td>{s.label}</td>
+                  <td>{s.visitors}</td>
+                  <td>
+                    {s.leads} <span className="muted">{pct(s.leads, s.visitors)}</span>
+                  </td>
+                  <td>
+                    {s.chats} <span className="muted">{pct(s.chats, s.leads)}</span>
+                  </td>
+                  <td>{s.wrote}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <h3>Ответы «Откуда вы о нас узнали?»</h3>
+        <p className="muted">
+          Вопрос внизу страницы разбора — только для тех, кто пришёл без короткого адреса. Ответили: {heardTotal}.
+        </p>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Ответ</th>
+                <th>Заявки</th>
+                <th>Начали чат</th>
+              </tr>
+            </thead>
+            <tbody>
+              {heard.map((h) => (
+                <tr key={h.key}>
+                  <td>{h.label}</td>
+                  <td>{h.leads}</td>
+                  <td>{h.chats}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </section>
 
       <div className="stats">

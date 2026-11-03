@@ -8,6 +8,7 @@ import { getDb } from "@/db";
 import { isTrackedStep, trackStep } from "@/lib/funnel";
 import { jsonBody, sameOrigin } from "@/lib/http";
 import { getLead } from "@/lib/leads";
+import { rememberedSource } from "@/lib/sources";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +35,7 @@ export async function POST(req: Request) {
   try {
     const db = await getDb();
     const lead = typeof body?.leadId === "string" ? await getLead(db, body.leadId) : null;
-    await trackStep(db, visitorId, step, lead?.id ?? null);
+    await trackStep(db, visitorId, step, lead?.id ?? null, await rememberedSource());
   } catch (err) {
     console.warn(`Воронка: ${err instanceof Error ? err.message : String(err)}`);
   }

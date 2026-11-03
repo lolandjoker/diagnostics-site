@@ -532,6 +532,51 @@ form:has(> .price-inline) {
   color: var(--muted);
 }
 
+/* «Откуда вы о нас узнали?» внизу страницы разбора — необязательный, тихий, в одно касание */
+.poll {
+  margin: 32px 0 0;
+  text-align: center;
+}
+
+.poll__q {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.poll__options {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.poll__option {
+  padding: 6px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.poll__option:hover,
+.poll__option:focus-visible {
+  border-color: var(--gold);
+}
+
+.poll__option:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.poll__thanks {
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
 .footer {
   max-width: 720px;
   margin: 0 auto;

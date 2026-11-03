@@ -64,12 +64,14 @@ export async function createLead(
   now: Date,
   variationId: number | null = null,
   telegramUserId: number | null = null,
+  /** Источник браузера (короткий адрес из ролика, lib/sources.ts); null — без метки. */
+  source: string | null = null,
 ): Promise<Lead> {
   const [lead] = await db
     .insert(leads)
     // consent_at — столбец обязательный и не удаляется (правило схемы); галочки согласия больше нет,
     // пишем время заявки
-    .values({ name: input.name.trim(), birthDate: input.birthDate, consentAt: now, variationId, telegramUserId })
+    .values({ name: input.name.trim(), birthDate: input.birthDate, consentAt: now, variationId, telegramUserId, source })
     .returning();
   return lead as Lead;
 }

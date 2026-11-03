@@ -2,7 +2,16 @@
 
 import { redirect } from "next/navigation";
 import { getDb } from "@/db";
-import { MAX_LEAD_EDITS, birthDateToIso, createLead, editLead, rememberLead, validateLead } from "@/lib/leads";
+import {
+  MAX_LEAD_EDITS,
+  birthDateToIso,
+  createLead,
+  editLead,
+  rememberLead,
+  rememberedLeadId,
+  validateLead,
+} from "@/lib/leads";
+import { isHeardFrom, rememberedSource, setHeardFrom } from "@/lib/sources";
 import { telegramConfig, verifyInitData } from "@/lib/telegram";
 import { pickVariation } from "@/lib/variations";
 
@@ -30,9 +39,18 @@ export async function submitLead(_prev: FormState, form: FormData): Promise<Form
   const tgInitData = str(form.get("tg"));
   const telegramUser = tg && tgInitData ? verifyInitData(tgInitData, tg.token, now) : null;
   const db = await getDb();
-  const lead = await createLead(db, input, now, await pickVariation(db), telegramUser?.id ?? null);
+  const lead = await createLead(db, input, now, await pickVariation(db), telegramUser?.id ?? null, await rememberedSource());
   await rememberLead(lead.id);
   redirect(`/razbor/${lead.id}`);
+}
+
+/**
+ * Ответ на «Откуда вы о нас узнали?» со страницы разбора. Отвечает только владелец заявки
+ * (её id в cookie этого браузера); повторный ответ не перезаписывает первый.
+ */
+export async function saveHeardFrom(leadId: string, answer: string): Promise<boolean> {
+  if (!isHeardFrom(answer) || (await rememberedLeadId()) !== leadId) return false;
+  return setHeardFrom(await getDb(), leadId, answer);
 }
 
 /** Страница «Изменить данные»: новые имя и дата рождения → обратно к разбору. */
