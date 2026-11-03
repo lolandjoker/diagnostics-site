@@ -134,6 +134,13 @@
       "when": 1793378069345,
       "tag": "0018_experts_archive",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1793697443829,
+      "tag": "0019_expert_diagnosis",
+      "breakpoints": true
     }
   ]
 }

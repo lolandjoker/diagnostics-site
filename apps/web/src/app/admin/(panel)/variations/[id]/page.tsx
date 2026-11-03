@@ -16,12 +16,12 @@ export default async function VariationPage(props: PageProps<"/admin/variations/
   return (
     <>
       <p>
-        <Link href="/admin/variations">← Все варианты</Link>
+        <Link href="/admin/variations">← Все краткие диагностики</Link>
       </p>
       <h1>{variation.title}</h1>
       <p className="muted">
-        Тексты одинаковые для всех, кому достался вариант. В текстах работает {"{name}"} — имя человека. Пустой текст
-        не показывается: нет текста 1 — на странице разбора его не будет, нет текста 2 — в чат ничего не придёт.
+        Текст одинаковый для всех, кому досталась эта диагностика. В тексте работает {"{name}"} — имя человека. Пустой
+        текст на странице разбора не показывается.
       </p>
 
       <ActionForm action={updateVariationAction}>
@@ -33,17 +33,13 @@ export default async function VariationPage(props: PageProps<"/admin/variations/
           </label>
           <label className="check">
             <input name="active" type="checkbox" defaultChecked={variation.active} />
-            <span>Выдавать новым людям</span>
+            <span>Выдавать (выключенная не достаётся ни новым, ни сменившим дату)</span>
           </label>
         </div>
 
         <label className="field">
-          <span>Текст 1 — на странице разбора, сразу после ввода имени и даты рождения</span>
-          <textarea name="short_text" defaultValue={texts.shortText} rows={6} />
-        </label>
-        <label className="field">
-          <span>Текст 2 — в чат через 3 минуты после выбора эксперта</span>
-          <textarea name="full_text" defaultValue={texts.fullText} rows={10} />
+          <span>Текст — на странице разбора, сразу после ввода имени и даты рождения</span>
+          <textarea name="short_text" defaultValue={texts.shortText} rows={8} />
         </label>
         <button className="button sticky-save">Сохранить</button>
       </ActionForm>
@@ -51,9 +47,9 @@ export default async function VariationPage(props: PageProps<"/admin/variations/
       <DeleteForm
         action={deleteVariationAction}
         id={variation.id}
-        title="Удалить вариант"
-        hint="Новым людям вариант больше не выдаётся, из списка и воронки он пропадёт. Тем, кому он уже достался, тексты по-прежнему показываются."
-        confirm={`Да, удалить вариант «${variation.title}»`}
+        title="Удалить диагностику"
+        hint="Больше никому не выдаётся, из списка и воронки пропадёт. Тем, кому она уже досталась, текст по-прежнему показывается."
+        confirm={`Да, удалить диагностику «${variation.title}»`}
       />
     </>
   );

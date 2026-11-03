@@ -28,14 +28,14 @@ const bytea = customType<{ data: Buffer; driverData: Buffer | Uint8Array }>({
   fromDriver: (v) => Buffer.from(v),
 });
 
-/** Настройки сайта «ключ → значение» (например, как выбирать вариант диагностики). */
+/** Настройки сайта «ключ → значение» (например, как выбирать краткую диагностику). */
 export const settings = pgTable("settings", {
   key: text("key").primaryKey(),
   value: text("value").notNull(),
 });
 
 /**
- * Вариант диагностики: способ расчёта + для каждого значения короткий и полный текст.
+ * Краткая диагностика (раньше — вариант: способ расчёта + короткий и полный текст; полный больше не показывается).
  * Человеку при заявке достаётся один вариант; по вариантам считается конверсия.
  */
 export const variations = pgTable("variations", {
@@ -102,6 +102,11 @@ export const experts = pgTable("experts", {
    * войти в панель он не может. Достали из архива — всё возвращается как было.
    */
   archivedAt: timestamp("archived_at", { withTimezone: true }),
+  /**
+   * Подробная диагностика эксперта: приходит в чат с ним через 3 минуты после начала чата
+   * ({name} — имя клиента). Пустая — в чат ничего не приходит.
+   */
+  fullText: text("full_text").notNull().default(""),
 });
 
 /** Сертификат эксперта — картинка (JPEG, PNG, WebP) с подписью; виден в профиле эксперта. */
@@ -187,7 +192,7 @@ export const leads = pgTable(
     /** Раньше — время согласия (галочка в форме); галочку убрали, теперь совпадает со временем заявки. */
     consentAt: timestamp("consent_at", { withTimezone: true }).notNull(),
     createdAt: createdAt(),
-    /** Доставшийся вариант диагностики; null — вариантов не было. */
+    /** Краткая диагностика на странице разбора; при смене даты — следующая. null — кратких диагностик нет. */
     variationId: integer("variation_id").references(() => variations.id, { onDelete: "set null" }),
     /**
      * Заявка из приложения в Telegram-боте: id пользователя Telegram. По нему человек снова попадает
@@ -196,6 +201,8 @@ export const leads = pgTable(
     telegramUserId: bigint("telegram_user_id", { mode: "number" }),
     /** Сколько раз человек менял имя и дату рождения на странице разбора (не больше MAX_LEAD_EDITS). */
     edits: integer("edits").notNull().default(0),
+    /** Последняя смена имени и даты: новая краткая диагностика снова «считается» (анимация). */
+    editedAt: timestamp("edited_at", { withTimezone: true }),
   },
   (t) => [index("leads_telegram_user_idx").on(t.telegramUserId, t.createdAt)],
 );
@@ -287,7 +294,7 @@ export const conversations = pgTable(
     lastMessageAt: timestamp("last_message_at", { withTimezone: true }).notNull().defaultNow(),
     /** Когда эксперт чата последний раз открывал переписку — для счётчика непрочитанных. */
     expertReadAt: timestamp("expert_read_at", { withTimezone: true }),
-    /** Когда в чат ушёл текст 2 варианта (через 3 минуты после начала чата); null — ещё не ушёл. */
+    /** Когда в чат ушла подробная диагностика эксперта (через 3 минуты после начала чата); null — ещё не ушла. */
     fullTextSentAt: timestamp("full_text_sent_at", { withTimezone: true }),
     /** Клиент попросил позвонить; сбрасывается, когда эксперт или админ начал звонок. */
     callRequestedAt: timestamp("call_requested_at", { withTimezone: true }),

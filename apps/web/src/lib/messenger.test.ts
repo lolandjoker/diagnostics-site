@@ -38,7 +38,7 @@ beforeEach(async () => {
 const newLead = (name = "Анна") => createLead(db, { name, birthDate: "1990-03-15" }, new Date(), null);
 
 describe("переписки клиента", () => {
-  it("написать можно любому эксперту: у каждого свой чат, разбор — только в первом", async () => {
+  it("написать можно любому эксперту: у каждого свой чат и своя подробная диагностика", async () => {
     const lead = await newLead();
     const a = await startConversation(db, lead, maria, new Date());
     // Второй эксперт не в сети — написать ему всё равно можно
@@ -48,7 +48,7 @@ describe("переписки клиента", () => {
     expect(b.conversation.id).not.toBe(a.conversation.id);
     expect(b.conversation.expertId).toBe(olga);
     expect(a.conversation.fullTextSentAt).toBeNull();
-    expect(b.conversation.fullTextSentAt).not.toBeNull();
+    expect(b.conversation.fullTextSentAt).toBeNull();
     expect((await clientChats(db, lead.id)).map((c) => c.expertId).sort()).toEqual([maria, olga].sort());
 
     // К тому же эксперту — тот же чат

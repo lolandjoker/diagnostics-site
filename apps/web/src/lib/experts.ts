@@ -110,6 +110,7 @@ const publicColumns = {
   createdAt: experts.createdAt,
   deletedAt: experts.deletedAt,
   archivedAt: experts.archivedAt,
+  fullText: experts.fullText,
   rating: experts.rating,
   reviewsShown: experts.reviewsShown,
   about: experts.about,
@@ -246,6 +247,16 @@ export async function setExpertArchived(db: Db, id: number, archived: boolean, n
     .update(experts)
     .set(archived ? { archivedAt: now, online: false, busy: false, onlineUntil: null } : { archivedAt: null })
     .where(and(eq(experts.id, id), isNull(experts.deletedAt)));
+}
+
+export const MAX_FULL_TEXT_LENGTH = 20_000;
+
+/** Подробная диагностика эксперта (см. experts.fullText). Слишком длинная — текст ошибки. */
+export async function setExpertFullText(db: Db, id: number, input: string): Promise<string | null> {
+  const fullText = input.replace(/\r\n/g, "\n").trim();
+  if (fullText.length > MAX_FULL_TEXT_LENGTH) return `Диагностика длиннее ${MAX_FULL_TEXT_LENGTH} символов`;
+  await db.update(experts).set({ fullText }).where(eq(experts.id, id));
+  return null;
 }
 
 /** Отметка «эксперт на месте» — при каждом обращении к панели. */

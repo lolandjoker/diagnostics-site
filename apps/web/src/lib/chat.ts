@@ -14,13 +14,12 @@ import { detectImageMime, expertPhotoUrls, expertStatus, getExpert, isOnline, li
 import type { Lead } from "./leads";
 import { notifyClient } from "./telegram";
 import { fillTemplate, getTexts } from "./texts";
-import { variationFor } from "./variations";
 
 export type Conversation = typeof conversations.$inferSelect;
 
 export const MAX_MESSAGE_LENGTH = 4000;
 export const CLIENT_MESSAGES_PER_MINUTE = 20;
-/** Через сколько после начала чата в него приходит текст 2 варианта. */
+/** Через сколько после начала чата в него приходит подробная диагностика эксперта. */
 export const FULL_TEXT_DELAY_MS = 3 * 60 * 1000;
 /** За сколько до текста 2 у клиента появляется «печатает…» — будто подробный разбор набирают. */
 export const FULL_TEXT_TYPING_MS = 20_000;
@@ -123,8 +122,8 @@ export type StartResult = { ok: true; conversation: Conversation } | { ok: false
 
 /**
  * Человек выбрал эксперта: открывается чат с ним (уже был — тот же). Писать можно любому эксперту,
- * у каждого свой чат в списке переписок. Первый чат — только с экспертом в сети, и в него через
- * FULL_TEXT_DELAY_MS приходит текст 2 варианта (см. deliverDueFullTexts); в следующие — уже нет.
+ * у каждого свой чат в списке переписок. Первый чат — только с экспертом в сети. В каждый чат через
+ * FULL_TEXT_DELAY_MS приходит подробная диагностика этого эксперта (см. deliverDueFullTexts).
  * За клиента ничего не пишем: в пустом чате ему показываются подсказки-вопросы (chat.suggestions).
  */
 export async function startConversation(db: Db, lead: Lead, expertId: number, now: Date): Promise<StartResult> {
@@ -141,14 +140,14 @@ export async function startConversation(db: Db, lead: Lead, expertId: number, no
   const existing = await withExpert();
   if (existing) return { ok: true, conversation: existing };
   if (!expert.active || expert.deletedAt) return { ok: false, error: "Эксперт не найден" };
-  // Первый чат — первый вообще, считая скрытые чаты с экспертами из архива: разбор второй раз не приходит
+  // Первый чат — первый вообще, считая скрытые чаты с экспертами из архива
   const [earlier] = await db.select({ id: conversations.id }).from(conversations).where(eq(conversations.leadId, lead.id)).limit(1);
   const first = !earlier;
   if (first && !isOnline(expert, now)) return { ok: false, error: "Этот эксперт сейчас не в сети — выберите другого" };
 
   const [created] = await db
     .insert(conversations)
-    .values({ leadId: lead.id, expertId: expert.id, ...(first ? {} : { fullTextSentAt: now }) })
+    .values({ leadId: lead.id, expertId: expert.id })
     .onConflictDoNothing()
     .returning();
   // Двойной клик: чат уже создан параллельным запросом
@@ -159,14 +158,14 @@ export async function startConversation(db: Db, lead: Lead, expertId: number, no
   return { ok: true, conversation: created };
 }
 
-/** Текст 2 ещё не пришёл, но придёт в ближайшие FULL_TEXT_TYPING_MS — показываем «печатает…». */
+/** Диагностика ещё не пришла, но придёт в ближайшие FULL_TEXT_TYPING_MS — показываем «печатает…». */
 export function fullTextTyping(c: Pick<Conversation, "createdAt" | "fullTextSentAt">, now: Date): boolean {
   if (c.fullTextSentAt) return false;
   return now.getTime() >= c.createdAt.getTime() + FULL_TEXT_DELAY_MS - FULL_TEXT_TYPING_MS;
 }
 
 /**
- * Отправляет текст 2 варианта в чаты, которым уже FULL_TEXT_DELAY_MS, — сообщением с подписью
+ * Отправляет подробную диагностику эксперта в его чаты, которым уже FULL_TEXT_DELAY_MS, — сообщением с подписью
  * «Подробный разбор», а не от имени эксперта. Вызывается при каждом опросе чата и списка чатов,
  * поэтому сообщение появляется вовремя без фоновых задач. Каждый чат отмечается одним UPDATE —
  * два одновременных опроса не отправят текст дважды. conversationId — проверить только этот чат.
@@ -182,16 +181,13 @@ export async function deliverDueFullTexts(db: Db, now: Date, conversationId?: st
         conversationId === undefined ? undefined : eq(conversations.id, conversationId),
       ),
     )
-    .returning({ id: conversations.id, leadId: conversations.leadId });
+    .returning({ id: conversations.id, leadId: conversations.leadId, expertId: conversations.expertId });
 
   for (const c of due) {
-    const [lead] = await db
-      .select({ name: leads.name, variationId: leads.variationId })
-      .from(leads)
-      .where(eq(leads.id, c.leadId));
-    const texts = lead ? await variationFor(db, lead.variationId) : null;
-    if (lead && texts?.fullText) {
-      await postMessage(db, c.id, { author: "system", body: fillTemplate(texts.fullText, { name: lead.name }) });
+    const [lead] = await db.select({ name: leads.name }).from(leads).where(eq(leads.id, c.leadId));
+    const [expert] = await db.select({ fullText: experts.fullText }).from(experts).where(eq(experts.id, c.expertId));
+    if (lead && expert?.fullText) {
+      await postMessage(db, c.id, { author: "system", body: fillTemplate(expert.fullText, { name: lead.name }) });
       void notifyClient(db, c.id, { kind: "fullText" });
     }
   }

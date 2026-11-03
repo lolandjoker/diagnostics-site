@@ -5,6 +5,7 @@ import { assertValidBirthDate } from "@diag/engine";
 import type { BirthDate } from "@diag/engine";
 import type { Db } from "@/db";
 import { leads } from "@/db/schema";
+import { nextVariation } from "./variations";
 
 export type Lead = typeof leads.$inferSelect;
 
@@ -80,14 +81,23 @@ export const RESULT_LOADING_MS = 30_000;
 export const MAX_LEAD_EDITS = 3;
 
 /**
- * Человек поправил имя или дату рождения. Разбор остаётся тем же (вариант не меняется),
- * подробный разбор, если уже пришёл в чат, повторно не приходит. Попытки кончились — null.
+ * Человек поправил имя или дату рождения: ему достаётся следующая краткая диагностика (nextVariation),
+ * и она снова «считается» (editedAt). Подробный разбор, если уже пришёл в чат, повторно не приходит.
+ * Попытки кончились — null.
  */
-export async function editLead(db: Db, id: string, input: LeadInput): Promise<Lead | null> {
+export async function editLead(db: Db, id: string, input: LeadInput, now = new Date()): Promise<Lead | null> {
   if (!isUuid(id)) return null;
+  const current = await getLead(db, id);
+  if (!current || current.edits >= MAX_LEAD_EDITS) return null;
   const [lead] = await db
     .update(leads)
-    .set({ name: input.name.trim(), birthDate: input.birthDate, edits: sql`${leads.edits} + 1` })
+    .set({
+      name: input.name.trim(),
+      birthDate: input.birthDate,
+      edits: sql`${leads.edits} + 1`,
+      variationId: await nextVariation(db, current.variationId),
+      editedAt: now,
+    })
     .where(and(eq(leads.id, id), lt(leads.edits, MAX_LEAD_EDITS)))
     .returning();
   return lead ?? null;

@@ -28,6 +28,7 @@ import {
   isOnline,
   saveExpertPhoto,
   setExpertBusy,
+  setExpertFullText,
   setExpertOnline,
   setExpertStatus,
   setExpertPassword,
@@ -35,13 +36,14 @@ import {
   verifyExpertToken,
   verifyPassword,
 } from "./experts";
-import { createLead } from "./leads";
+import { MAX_LEAD_EDITS, createLead, editLead } from "./leads";
 import { answerCall, startCall } from "./calls";
 import {
   NO_METHOD,
   deleteVariation,
   getVariation,
   listVariations,
+  nextVariation,
   pickVariation,
   saveVariationTexts,
   setVariationMode,
@@ -98,6 +100,26 @@ describe("варианты диагностики", () => {
     const seen = new Set<number | null>();
     for (let i = 0; i < 40; i++) seen.add(await pickVariation(db));
     expect(seen.size).toBe(2);
+  });
+
+  it("смена даты — следующая краткая диагностика: каждая по разу, выключенные пропускаются", async () => {
+    const a = await newVariation("А");
+    const off = await newVariation("Выключена", NO_METHOD, false);
+    const b = await newVariation("Б");
+    const c = await newVariation("В");
+    expect(await nextVariation(db, a.id)).toBe(b.id);
+    expect(await nextVariation(db, c.id)).toBe(a.id);
+    expect(await nextVariation(db, off.id)).toBe(b.id);
+
+    const l = await lead(a.id);
+    const seen = [l.variationId];
+    for (let i = 1; i <= MAX_LEAD_EDITS; i++) {
+      const edited = await editLead(db, l.id, { name: "Анна", birthDate: "1991-04-16" }, new Date(NOW.getTime() + i));
+      seen.push(edited!.variationId);
+      expect(edited!.editedAt).not.toBeNull();
+    }
+    // Три разные подряд, на четвёртом вводе — снова первая
+    expect(seen).toEqual([a.id, b.id, c.id, a.id]);
   });
 
   it("удалённый вариант: новым не выдаётся, в списке и воронке нет, у выданных тексты остаются", async () => {
@@ -240,10 +262,11 @@ describe("чат", () => {
     expect(await startConversation(db, l, res.id, new Date())).toMatchObject({ ok: false });
   });
 
-  it("текст 2 приходит через 3 минуты, один раз, подписан как разбор, а не от эксперта", async () => {
+  it("подробная диагностика эксперта приходит через 3 минуты, один раз, подписана как разбор", async () => {
     const v = await newVariation("А");
-    await saveVariationTexts(db, v.id, { shortText: "к", fullText: "{name}, подробно" });
+    await saveVariationTexts(db, v.id, { shortText: "к", fullText: "старый текст 2 — не используется" });
     const expertId = await onlineExpert();
+    expect(await setExpertFullText(db, expertId, " {name}, подробно от Марии ")).toBeNull();
     const l = await createLead(db, { name: "Qwerty", birthDate: "2001-01-01" }, NOW, v.id);
     const res = await startConversation(db, l, expertId, new Date());
     if (!res.ok) throw new Error(res.error);
@@ -257,7 +280,7 @@ describe("чат", () => {
     await deliverDueFullTexts(db, new Date(due.getTime() + 60_000));
     const client = await messageViews(db, res.conversation, 0, "client");
     expect(client).toHaveLength(1);
-    expect(client[0]).toMatchObject({ author: "system", authorName: "Подробный разбор", body: "Qwerty, подробно" });
+    expect(client[0]).toMatchObject({ author: "system", authorName: "Подробный разбор", body: "Qwerty, подробно от Марии" });
 
     const again = await startConversation(db, l, expertId, new Date());
     expect(again.ok && again.conversation.id).toBe(res.conversation.id);
