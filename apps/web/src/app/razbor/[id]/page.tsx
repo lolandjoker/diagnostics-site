@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { redirect } from "next/navigation";
 import { getDb } from "@/db";
 import { MAX_LEAD_EDITS, RESULT_LOADING_MS, getLead } from "@/lib/leads";
 import { birthPortrait } from "@/lib/portrait";
@@ -18,7 +18,8 @@ export default async function ResultPage(props: PageProps<"/razbor/[id]">) {
   const { id } = await props.params;
   const db = await getDb();
   const lead = await getLead(db, id);
-  if (!lead) notFound();
+  // Заявки нет (удалена или чужой адрес из истории браузера) — к форме на главной
+  if (!lead) redirect("/");
   // Сразу после заявки разбор «считается» — анимация, потом страница обновится сама
   const loadingLeft = (lead.editedAt ?? lead.createdAt).getTime() + RESULT_LOADING_MS - Date.now();
   if (loadingLeft > 0) return <ResultLoading leftMs={loadingLeft} totalMs={RESULT_LOADING_MS} />;

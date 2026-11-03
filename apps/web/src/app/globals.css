@@ -3348,3 +3348,15 @@ body.no-scroll {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Страница «не найдено» */
+.not-found {
+  text-align: center;
+}
+
+.not-found .button {
+  display: inline-flex;
+  justify-content: center;
+  margin-top: 8px;
+  text-decoration: none;
+}

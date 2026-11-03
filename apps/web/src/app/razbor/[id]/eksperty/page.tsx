@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { redirect } from "next/navigation";
 import { getDb } from "@/db";
 import { clientChats, conversationForLead, selectableExperts } from "@/lib/chat";
 import { expertPhotoUrls, formatRating } from "@/lib/experts";
@@ -23,7 +23,8 @@ export default async function ExpertsPage(props: PageProps<"/razbor/[id]/ekspert
   const { error } = await props.searchParams;
   const db = await getDb();
   const lead = await getLead(db, id);
-  if (!lead) notFound();
+  // Заявки нет (удалена или чужой адрес из истории браузера) — к форме на главной
+  if (!lead) redirect("/");
   // Чат уже есть — написать можно любому эксперту, у каждого свой чат
   const chat = await conversationForLead(db, lead.id);
   const chatWith = new Map((chat ? await clientChats(db, lead.id) : []).map((c) => [c.expertId, c.id]));

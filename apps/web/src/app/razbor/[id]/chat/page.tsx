@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { redirect } from "next/navigation";
 import { getDb } from "@/db";
 import { clientChats, conversationForLead, leadConversation } from "@/lib/chat";
 import { expertPhotoUrls, formatRating, getExpert } from "@/lib/experts";
@@ -29,7 +29,8 @@ export default async function ClientChatPage(props: PageProps<"/razbor/[id]/chat
   const { c } = await props.searchParams;
   const db = await getDb();
   const lead = await getLead(db, id);
-  if (!lead) notFound();
+  // Заявки нет (удалена или чужой адрес из истории браузера) — к форме на главной
+  if (!lead) redirect("/");
   const conversation = await leadConversation(db, lead.id, typeof c === "string" ? c : null);
   if (!conversation) {
     // Чужой или старый адрес чата — в текущий чат; чатов нет — к выбору эксперта
