@@ -12,7 +12,6 @@ export const metadata: Metadata = { title: "Админка" };
 const NAV: { href: string; label: string; expertHref?: string; adminOnly?: boolean }[] = [
   { href: "/admin", label: "Сводка" },
   { href: "/admin/chats", label: "Чаты", expertHref: "/expert" },
-  { href: "/admin/variations", label: "Варианты диагностики" },
   { href: "/admin/experts", label: "Эксперты" },
   { href: "/admin/reviews", label: "Отзывы" },
   { href: "/admin/texts", label: "Тексты сайта", adminOnly: true },

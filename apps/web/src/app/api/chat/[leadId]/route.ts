@@ -19,7 +19,6 @@ import { expertStatus, getExpert } from "@/lib/experts";
 import { afterParam, jsonError, messagePayload, noStore, sameOrigin } from "@/lib/http";
 import { getLead } from "@/lib/leads";
 import { clearTyping, isTyping } from "@/lib/typing";
-import { variationFor } from "@/lib/variations";
 
 export const dynamic = "force-dynamic";
 
@@ -37,10 +36,8 @@ export async function GET(req: Request, ctx: RouteContext<"/api/chat/[leadId]">)
   await deliverDueFullTexts(db, now, conversation.id);
   if (new URL(req.url).searchParams.get("hidden") !== "1") await markClientRead(db, conversation.id, now);
   const expert = await getExpert(db, conversation.expertId);
-  // «Печатает…»: эксперт (или админ) набирает текст — или вот-вот придёт подробный разбор
-  const typing =
-    isTyping(conversation.id, "staff", now) ||
-    (fullTextTyping(conversation, now) && !!(await variationFor(db, lead.variationId))?.fullText);
+  // «Печатает…»: эксперт (или админ) набирает текст — или вот-вот придёт его подробная диагностика
+  const typing = isTyping(conversation.id, "staff", now) || (fullTextTyping(conversation, now) && !!expert?.fullText);
   return Response.json(
     {
       messages: await messageViews(db, conversation, afterParam(req), "client"),

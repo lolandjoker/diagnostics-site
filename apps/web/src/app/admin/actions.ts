@@ -27,12 +27,13 @@ import {
   parseReviewsShown,
   saveExpertPhoto,
   setExpertArchived,
+  setExpertFullText,
   setExpertBusy,
   setExpertPassword,
   setExpertStatus,
   setOnlineByAdmin,
 } from "@/lib/experts";
-import { NO_METHOD, VARIATION_MODES, deleteVariation, getVariation, saveVariationTexts, setVariationMode } from "@/lib/variations";
+import { NO_METHOD, VARIATION_MODES, deleteVariation, getVariation, getVariationTexts, saveVariationTexts, setVariationMode } from "@/lib/variations";
 import type { VariationMode } from "@/lib/variations";
 import { TEXT_DEFS, saveTexts } from "@/lib/texts";
 import type { TextKey } from "@/lib/texts";
@@ -120,7 +121,7 @@ export async function saveTextsAction(_prev: ActionResult, form: FormData): Prom
   return done("Сохранено");
 }
 
-// --- Варианты диагностики ---
+// --- Краткие диагностики (в базе — варианты) ---
 
 export async function setVariationModeAction(_prev: ActionResult, form: FormData): Promise<ActionResult> {
   await requireStaff();
@@ -134,7 +135,7 @@ export async function setVariationModeAction(_prev: ActionResult, form: FormData
 export async function createVariationAction(_prev: ActionResult, form: FormData): Promise<ActionResult> {
   await requireStaff();
   const title = str(form, "title").trim();
-  if (!title) return fail("Укажите название варианта");
+  if (!title) return fail("Укажите название диагностики");
   const [v] = await (await getDb()).insert(variations).values({ title, method: NO_METHOD }).returning();
   refresh();
   redirect(`/admin/variations/${v?.id}`);
@@ -145,9 +146,9 @@ export async function updateVariationAction(_prev: ActionResult, form: FormData)
   const db = await getDb();
   const id = int(form, "id");
   const variation = id === null ? null : await getVariation(db, id);
-  if (!variation) return fail("Вариант не найден");
+  if (!variation) return fail("Диагностика не найдена");
   const title = str(form, "title").trim();
-  if (!title) return fail("Укажите название варианта");
+  if (!title) return fail("Укажите название диагностики");
   await db
     .update(variations)
     .set({ title, active: form.get("active") === "on" })
@@ -155,7 +156,8 @@ export async function updateVariationAction(_prev: ActionResult, form: FormData)
 
   await saveVariationTexts(db, variation.id, {
     shortText: str(form, "short_text").replace(/\r\n/g, "\n"),
-    fullText: str(form, "full_text").replace(/\r\n/g, "\n"),
+    // Текст 2 больше не показывается (подробная диагностика — у экспертов), прежний сохраняем как есть
+    fullText: (await getVariationTexts(db, variation.id)).fullText,
   });
   refresh();
   return done("Сохранено");
@@ -248,6 +250,17 @@ export async function updateExpertAction(_prev: ActionResult, form: FormData): P
 // --- Удаление (с галочкой подтверждения в форме) ---
 
 /** Удалить эксперта: не входит и не виден клиентам; его старые чаты и сообщения остаются. */
+/** Подробная диагностика эксперта — приходит в чат с ним. */
+export async function setExpertFullTextAction(_prev: ActionResult, form: FormData): Promise<ActionResult> {
+  await requireStaff();
+  const id = int(form, "id");
+  if (id === null) return fail("Эксперт не найден");
+  const error = await setExpertFullText(await getDb(), id, str(form, "full_text"));
+  if (error) return fail(error);
+  refresh();
+  return done("Диагностика сохранена");
+}
+
 /** В архив / из архива: в архиве эксперт скрыт от клиентов полностью, вместе с его чатами. */
 export async function setExpertArchivedAction(form: FormData): Promise<void> {
   await requireStaff();

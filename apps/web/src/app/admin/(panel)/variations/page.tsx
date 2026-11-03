@@ -13,15 +13,19 @@ export default async function VariationsPage() {
 
   return (
     <>
-      <h1>Варианты диагностики</h1>
+      <p>
+        <Link href="/admin/experts">← Эксперты</Link>
+      </p>
+      <h1>Краткие диагностики</h1>
       <p className="muted">
-        В варианте два текста, одинаковые для всех — от имени и даты рождения не зависят: текст 1 показывается на
-        странице разбора, текст 2 приходит в чат с подписью «Подробный разбор» через 3 минуты после того, как человек
-        выбрал эксперта. Новому человеку достаётся один активный вариант и закрепляется за ним.
+        Краткая диагностика — текст на странице разбора сразу после ввода имени и даты рождения, одинаковый для всех.
+        Новому человеку достаётся одна из включённых. Каждый раз, когда он меняет дату рождения, — следующая по списку,
+        так что каждую он увидит по разу. Подробная диагностика у каждого эксперта своя — задаётся на странице эксперта
+        и приходит в чат с ним.
       </p>
 
       <section className="admin-section">
-        <h2>Как выбирать вариант</h2>
+        <h2>Какую давать новому человеку</h2>
         <ActionForm action={setVariationModeAction}>
           <div className="row">
             {Object.entries(VARIATION_MODES).map(([key, label]) => (
@@ -37,12 +41,12 @@ export default async function VariationsPage() {
 
       {list.length > 0 && (
         <section className="admin-section">
-          <h2>Варианты и конверсия</h2>
+          <h2>Диагностики и конверсия</h2>
           <div className="table-wrap">
             <table>
               <thead>
                 <tr>
-                  <th>Вариант</th>
+                  <th>Диагностика</th>
                   <th>Получили диагностику</th>
                   <th>Перешли в чат</th>
                   <th>Написали</th>
@@ -57,7 +61,7 @@ export default async function VariationsPage() {
                     <tr key={v.id} className={v.active ? "" : "muted"}>
                       <td>
                         <Link href={`/admin/variations/${v.id}`}>{v.title}</Link>
-                        {!v.active && " (выключен)"}
+                        {!v.active && " (выключена)"}
                       </td>
                       <td>{leads}</td>
                       <td>
@@ -75,18 +79,20 @@ export default async function VariationsPage() {
               </tbody>
             </table>
           </div>
-          <p className="muted">Проценты — от числа получивших диагностику.</p>
+          <p className="muted">
+            Проценты — от числа получивших диагностику. У сменивших дату считается последняя полученная.
+          </p>
         </section>
       )}
 
       <section className="admin-section">
-        <h2>Новый вариант</h2>
+        <h2>Новая краткая диагностика</h2>
         <ActionForm action={createVariationAction}>
           <label className="field">
             <span>Название (видно только вам)</span>
-            <input name="title" required placeholder="например: «Вариант А — мягкий»" />
+            <input name="title" required placeholder="например: «Скрытые причины»" />
           </label>
-          <button className="button">Создать и перейти к текстам</button>
+          <button className="button">Создать и перейти к тексту</button>
         </ActionForm>
       </section>
     </>

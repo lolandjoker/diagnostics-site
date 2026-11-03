@@ -32,10 +32,8 @@ describe("архив экспертов", () => {
     expect(await leadConversation(db, lead.id, chat.conversation.id)).toBeNull();
     expect(await startConversation(db, lead, maria.id, now)).toMatchObject({ ok: false });
 
-    // Новый чат с другим экспертом — уже не первый: подробный разбор второй раз не придёт
     const second = await startConversation(db, lead, vera.id, now);
-    if (!second.ok) throw new Error(second.error);
-    expect(second.conversation.fullTextSentAt).not.toBeNull();
+    expect(second.ok).toBe(true);
 
     await setExpertArchived(db, maria.id, false, now);
     expect((await getExpert(db, maria.id))!.archivedAt).toBeNull();

@@ -20,7 +20,7 @@ export default async function ResultPage(props: PageProps<"/razbor/[id]">) {
   const lead = await getLead(db, id);
   if (!lead) notFound();
   // Сразу после заявки разбор «считается» — анимация, потом страница обновится сама
-  const loadingLeft = lead.createdAt.getTime() + RESULT_LOADING_MS - Date.now();
+  const loadingLeft = (lead.editedAt ?? lead.createdAt).getTime() + RESULT_LOADING_MS - Date.now();
   if (loadingLeft > 0) return <ResultLoading leftMs={loadingLeft} totalMs={RESULT_LOADING_MS} />;
 
   const t = await getTexts(db, [

@@ -1,8 +1,8 @@
 /**
- * Варианты диагностики. В варианте два текста, одинаковые для всех — от имени и даты рождения
- * не зависят: текст 1 (страница разбора) и текст 2 (приходит в чат через 3 минуты после того,
- * как человек выбрал эксперта). Новому человеку вариант достаётся случайно или по кругу
- * (settings: variation_mode).
+ * Краткие диагностики (в базе — варианты): текст на странице разбора, одинаковый для всех — от имени
+ * и даты рождения не зависит. Новому человеку достаётся случайно или по кругу (settings: variation_mode),
+ * при каждой смене даты — следующая по списку, пока не покажутся все. Подробная диагностика у каждого
+ * эксперта своя (experts.full_text); текст 2 варианта больше не показывается, но в базе остаётся.
  */
 import { randomInt } from "node:crypto";
 import { and, asc, count, countDistinct, eq, isNotNull, isNull, sql } from "drizzle-orm";
@@ -56,12 +56,27 @@ export async function pickVariation(db: Db): Promise<number | null> {
   return (active[randomInt(active.length)] as { id: number }).id;
 }
 
+/**
+ * Краткая диагностика после смены даты: следующая активная по списку (после последней — первая),
+ * так за несколько смен человек увидит каждую по разу. Активных нет — null.
+ */
+export async function nextVariation(db: Db, currentId: number | null): Promise<number | null> {
+  if (currentId === null) return pickVariation(db);
+  const active = await db
+    .select({ id: variations.id })
+    .from(variations)
+    .where(and(eq(variations.active, true), isNull(variations.deletedAt)))
+    .orderBy(asc(variations.id));
+  if (active.length === 0) return null;
+  return (active.find((v) => v.id > currentId) ?? (active[0] as { id: number })).id;
+}
+
 export interface VariationTexts {
   shortText: string;
   fullText: string;
 }
 
-/** Тексты варианта: текст 1 — на страницу разбора, текст 2 — в чат. null — варианта нет. */
+/** Тексты варианта: shortText — на страницу разбора (fullText больше не показывается). null — варианта нет. */
 export async function variationFor(db: Db, variationId: number | null): Promise<VariationTexts | null> {
   if (variationId === null) return null;
   const [texts] = await db

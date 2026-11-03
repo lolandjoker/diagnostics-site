@@ -94,7 +94,7 @@ export default async function DashboardPage(props: PageProps<"/admin">) {
           <b>{callRow?.n ?? 0}</b> состоявшихся звонков за всё время
         </div>
       </div>
-      <p className="muted">Воронка по каждому варианту диагностики — в разделе «Варианты диагностики».</p>
+      <p className="muted">Воронка по каждой краткой диагностике — в «Эксперты» → «Краткие диагностики».</p>
     </>
   );
 }

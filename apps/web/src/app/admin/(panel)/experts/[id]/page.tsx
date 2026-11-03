@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { getDb } from "@/db";
 import { MAX_CERTIFICATES_PER_UPLOAD, listCertificates } from "@/lib/certificates";
 import { MAX_GALLERY_PHOTOS, listGallery } from "@/lib/gallery";
-import { MIN_EXPERT_PASSWORD, expertPhotoUrls, formatRating, getExpert } from "@/lib/experts";
+import { MAX_FULL_TEXT_LENGTH, MIN_EXPERT_PASSWORD, expertPhotoUrls, formatRating, getExpert } from "@/lib/experts";
 import { ActionForm } from "../../../ActionForm";
 import { BulkCheck, BulkDelete } from "../../../BulkDelete";
 import { initial } from "../../../../Avatar";
@@ -18,6 +18,7 @@ import {
   makeMainPhotoAction,
   setCertificateTitleAction,
   setExpertArchivedAction,
+  setExpertFullTextAction,
   updateExpertAction,
 } from "../../../actions";
 
@@ -116,6 +117,23 @@ export default async function ExpertAdminPage(props: PageProps<"/admin/experts/[
         </label>
         <button className="button">Сохранить</button>
       </ActionForm>
+
+      <section className="admin-section">
+        <h2>Подробная диагностика</h2>
+        <p className="muted">
+          Своя у этого эксперта: приходит в чат с ним через 3 минуты после того, как клиент открыл чат, с подписью
+          «Подробный разбор». Перед этим клиент видит «печатает…». {"{name}"} — имя клиента. Пусто — в чат ничего не
+          придёт.
+        </p>
+        <ActionForm action={setExpertFullTextAction}>
+          <input type="hidden" name="id" value={expert.id} />
+          <label className="field">
+            <span>Текст диагностики</span>
+            <textarea name="full_text" defaultValue={expert.fullText} rows={14} maxLength={MAX_FULL_TEXT_LENGTH} />
+          </label>
+          <button className="button">Сохранить диагностику</button>
+        </ActionForm>
+      </section>
 
       <section className="admin-section">
         <h2>Фото</h2>

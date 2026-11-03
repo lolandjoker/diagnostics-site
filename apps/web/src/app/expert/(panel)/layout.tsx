@@ -23,7 +23,6 @@ export default async function ExpertLayout({ children }: { children: ReactNode }
         <nav>
           <Link href="/expert">Чаты</Link>
           <Link href="/admin">Сводка</Link>
-          <Link href="/admin/variations">Варианты диагностики</Link>
           <Link href="/admin/experts">Эксперты</Link>
           <Link href="/admin/reviews">Отзывы</Link>
           <span className="muted">{expert.name}</span>
