@@ -88,6 +88,17 @@ export const TEXT_DEFS = [
   { key: "price.amount", group: "Цена", label: "Обычная цена консультации эксперта, ₽", default: "5000", number: true },
   { key: "price.label", group: "Цена", label: "Подпись перед ценой", default: "Консультация эксперта:" },
   { key: "price.free", group: "Цена", label: "Вместо цены", default: "Бесплатно" },
+  // Источники: свободные короткие адреса для других площадок (lib/sources.ts)
+  { key: "source.r1", group: "Источники", label: "taromba.com/r1 — название в «Сводке»", default: "Ссылка 1" },
+  { key: "source.r2", group: "Источники", label: "taromba.com/r2 — название в «Сводке»", default: "Ссылка 2" },
+  { key: "source.r3", group: "Источники", label: "taromba.com/r3 — название в «Сводке»", default: "Ссылка 3" },
+  { key: "source.r4", group: "Источники", label: "taromba.com/r4 — название в «Сводке»", default: "Ссылка 4" },
+  { key: "source.r5", group: "Источники", label: "taromba.com/r5 — название в «Сводке»", default: "Ссылка 5" },
+  { key: "source.r6", group: "Источники", label: "taromba.com/r6 — название в «Сводке»", default: "Ссылка 6" },
+  { key: "source.r7", group: "Источники", label: "taromba.com/r7 — название в «Сводке»", default: "Ссылка 7" },
+  { key: "source.r8", group: "Источники", label: "taromba.com/r8 — название в «Сводке»", default: "Ссылка 8" },
+  { key: "source.r9", group: "Источники", label: "taromba.com/r9 — название в «Сводке»", default: "Ссылка 9" },
+  { key: "source.r10", group: "Источники", label: "taromba.com/r10 — название в «Сводке»", default: "Ссылка 10" },
   // Документы и подвал
   { key: "legal.offer", group: "Документы", label: "Публичная оферта", default: "Текст оферты пока не заполнен." },
   {

@@ -5,7 +5,9 @@
  * Кто набрал просто taromba.com, тому на странице разбора задаём необязательный вопрос
  * «Откуда вы о нас узнали?».
  *
- * Новый источник: ключ в SOURCES и папка app/<ключ>/route.ts с `export const GET = sourceEntry("<ключ>")`.
+ * Ещё 10 адресов taromba.com/r1 … /r10 — для других площадок; их названия в сводке меняются в «Текстах сайта»
+ * → «Источники» (source.r1 …). Новый источник: ключ в SOURCES и папка app/<ключ>/route.ts
+ * с `export const GET = sourceEntry("<ключ>")`.
  */
 import { and, count, countDistinct, eq, gte, isNotNull, isNull } from "drizzle-orm";
 import { cookies } from "next/headers";
@@ -15,6 +17,16 @@ import { conversations, funnelEvents, leads, messages } from "@/db/schema";
 export const SOURCES = {
   karta: "TikTok · Твоя карта",
   tayna: "TikTok · Необъяснимое",
+  r1: "Ссылка 1",
+  r2: "Ссылка 2",
+  r3: "Ссылка 3",
+  r4: "Ссылка 4",
+  r5: "Ссылка 5",
+  r6: "Ссылка 6",
+  r7: "Ссылка 7",
+  r8: "Ссылка 8",
+  r9: "Ссылка 9",
+  r10: "Ссылка 10",
 } as const;
 
 export type SourceKey = keyof typeof SOURCES;

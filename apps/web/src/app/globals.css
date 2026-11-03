@@ -532,22 +532,25 @@ form:has(> .price-inline) {
   color: var(--muted);
 }
 
-/* «Откуда вы о нас узнали?» внизу страницы разбора — необязательный, тихий, в одно касание */
+/* «Откуда вы о нас узнали?» — карточка в чате над подсказками, ответ в одно касание */
 .poll {
-  margin: 32px 0 0;
-  text-align: center;
+  margin: 10px 12px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
 }
 
 .poll__q {
   margin: 0 0 10px;
-  color: var(--muted);
-  font-size: 0.875rem;
+  color: var(--text);
+  font-size: 0.9375rem;
+  font-weight: 600;
 }
 
 .poll__options {
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
   gap: 8px;
 }
 

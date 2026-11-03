@@ -5,6 +5,7 @@ import { clientChats, conversationForLead, leadConversation } from "@/lib/chat";
 import { expertPhotoUrls, formatRating, getExpert } from "@/lib/experts";
 import { expertGallery } from "@/lib/gallery";
 import { MAX_LEAD_EDITS, getLead } from "@/lib/leads";
+import { HEARD_FROM } from "@/lib/sources";
 import { telegramLink } from "@/lib/telegram";
 import { replyTimeLabel, replyTimes } from "@/lib/reply-time";
 import { expertReviews, reviewsCount } from "@/lib/reviews";
@@ -13,6 +14,7 @@ import { CallPanel } from "../../../CallPanel";
 import { ChatThread } from "../../../ChatThread";
 import { ClientChatList } from "../../../ClientChatList";
 import { ExpertPanel } from "../../../ExpertPanel";
+import { HeardFromPoll } from "../../../HeardFromPoll";
 import { ReviewButton } from "../../../ReviewButton";
 
 export const dynamic = "force-dynamic";
@@ -85,6 +87,12 @@ export default async function ClientChatPage(props: PageProps<"/razbor/[id]/chat
             backHref: `/razbor/${lead.id}/eksperty`,
             backLabel: "К экспертам",
           }}
+          // «Откуда узнали?» — только тем, кто открыл просто taromba.com: не по короткому адресу и не из Telegram-бота
+          prompt={
+            !lead.source &&
+            !lead.heardFrom &&
+            lead.telegramUserId === null && <HeardFromPoll leadId={lead.id} options={HEARD_FROM} />
+          }
           notice={
             telegram &&
             !telegram.connected && (
