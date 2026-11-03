@@ -109,7 +109,7 @@ export async function setHeardFrom(db: Db, leadId: string, answer: HeardFrom): P
 }
 
 export interface SourceRow {
-  /** Ключ источника; null — пришли без короткого адреса. */
+  /** Ключ источника; null — открыли просто taromba.com (или из Telegram-бота). */
   key: SourceKey | null;
   label: string;
   visitors: number;
@@ -153,7 +153,7 @@ export async function sourceStats(db: Db, since: Date | null): Promise<SourceRow
   const keys: (SourceKey | null)[] = [...(Object.keys(SOURCES) as SourceKey[]), null];
   return keys.map((key) => ({
     key,
-    label: key ? SOURCES[key] : "Без короткого адреса",
+    label: key ? SOURCES[key] : "По главной ссылке",
     visitors: visitors.get(key) ?? 0,
     leads: leadCounts.get(key) ?? 0,
     chats: chats.get(key) ?? 0,

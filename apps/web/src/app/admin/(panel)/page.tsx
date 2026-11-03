@@ -133,7 +133,7 @@ export default async function DashboardPage(props: PageProps<"/admin">) {
                 <tr key={s.key ?? "none"}>
                   <td>
                     {(s.key && REF_TEXT_KEYS.includes(`source.${s.key}` as RefTextKey) && sourceNames[`source.${s.key}` as RefTextKey]) || s.label}
-                    {s.key && <div className="muted">taromba.com/{s.key}</div>}
+                    <div className="muted">{s.key ? `taromba.com/${s.key}` : "taromba.com и Telegram-бот"}</div>
                   </td>
                   <td>{s.visitors}</td>
                   <td>
@@ -151,7 +151,8 @@ export default async function DashboardPage(props: PageProps<"/admin">) {
 
         <h3>Ответы «Откуда вы о нас узнали?»</h3>
         <p className="muted">
-          Вопрос внизу страницы разбора — только для тех, кто пришёл без короткого адреса. Ответили: {heardTotal}.
+          Вопрос в чате — только для тех, кто открыл просто taromba.com (не по короткой ссылке и не из Telegram-бота).
+          Ответили: {heardTotal}.
         </p>
         <div className="table-wrap">
           <table>
