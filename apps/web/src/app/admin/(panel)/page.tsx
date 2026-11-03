@@ -5,6 +5,21 @@ import { calls } from "@/db/schema";
 import { FUNNEL_PERIODS, funnel, funnelStart, periodStart, trackingSince } from "@/lib/funnel";
 import type { FunnelPeriod } from "@/lib/funnel";
 import { heardFromStats, sourceStats } from "@/lib/sources";
+import { getTexts } from "@/lib/texts";
+
+const REF_TEXT_KEYS = [
+  "source.r1",
+  "source.r2",
+  "source.r3",
+  "source.r4",
+  "source.r5",
+  "source.r6",
+  "source.r7",
+  "source.r8",
+  "source.r9",
+  "source.r10",
+] as const;
+type RefTextKey = (typeof REF_TEXT_KEYS)[number];
 
 const pct = (part: number, whole: number) => (whole > 0 ? `${Math.round((part / whole) * 100)}%` : "—");
 
@@ -22,7 +37,7 @@ export default async function DashboardPage(props: PageProps<"/admin">) {
   const db = await getDb();
   const tracking = await trackingSince(db);
   const since = periodStart(period, new Date());
-  const [steps, [callRow], sources, heard] = await Promise.all([
+  const [steps, [callRow], sources, heard, sourceNames] = await Promise.all([
     tracking ? funnel(db, funnelStart(since, tracking)) : Promise.resolve([]),
     db
       .select({ n: count() })
@@ -30,6 +45,7 @@ export default async function DashboardPage(props: PageProps<"/admin">) {
       .where(sql`${calls.answeredAt} is not null`),
     sourceStats(db, since),
     heardFromStats(db, since),
+    getTexts(db, REF_TEXT_KEYS),
   ]);
   const heardTotal = heard.reduce((sum, h) => sum + h.leads, 0);
   const top = Math.max(1, ...steps.map((s) => s.count));
@@ -97,8 +113,9 @@ export default async function DashboardPage(props: PageProps<"/admin">) {
       <section className="admin-section">
         <h2>Откуда приходят</h2>
         <p className="muted">
-          По коротким адресам из роликов (taromba.com/karta, taromba.com/tayna): сайт запоминает, по какому адресу человек
-          зашёл впервые. «Открыли главную» — браузеры за период, остальное — заявки, созданные за период.
+          По коротким адресам: сайт запоминает, по какому адресу человек зашёл впервые. «Открыли главную» — браузеры за
+          период, остальное — заявки, созданные за период. Адреса taromba.com/r1 … /r10 — для других площадок, их
+          названия меняются в <Link href="/admin/texts">«Текстах сайта» → «Источники»</Link>.
         </p>
         <div className="table-wrap">
           <table>
@@ -114,7 +131,10 @@ export default async function DashboardPage(props: PageProps<"/admin">) {
             <tbody>
               {sources.map((s) => (
                 <tr key={s.key ?? "none"}>
-                  <td>{s.label}</td>
+                  <td>
+                    {(s.key && REF_TEXT_KEYS.includes(`source.${s.key}` as RefTextKey) && sourceNames[`source.${s.key}` as RefTextKey]) || s.label}
+                    {s.key && <div className="muted">taromba.com/{s.key}</div>}
+                  </td>
                   <td>{s.visitors}</td>
                   <td>
                     {s.leads} <span className="muted">{pct(s.leads, s.visitors)}</span>

@@ -1,17 +1,26 @@
 "use client";
 
 /**
- * Необязательный вопрос «Откуда вы о нас узнали?» внизу страницы разбора — для тех, кто пришёл
- * без короткого адреса (lib/sources.ts). Один ответ в одно касание; не отвлекает от главного.
+ * Необязательный вопрос «Откуда вы о нас узнали?» — карточкой в чате над подсказками, для тех, кто открыл
+ * просто taromba.com (не по короткому адресу, lib/sources.ts). Ответ в одно касание; ответил — карточка
+ * говорит «спасибо» и исчезает.
  */
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { saveHeardFrom } from "./actions";
 
 export function HeardFromPoll({ leadId, options }: { leadId: string; options: readonly { key: string; label: string }[] }) {
   const [done, setDone] = useState(false);
+  const [hidden, setHidden] = useState(false);
   const [pending, startTransition] = useTransition();
 
-  if (done) return <p className="poll poll__thanks">Спасибо, что ответили!</p>;
+  useEffect(() => {
+    if (!done) return;
+    const t = setTimeout(() => setHidden(true), 2500);
+    return () => clearTimeout(t);
+  }, [done]);
+
+  if (hidden) return null;
+  if (done) return <p className="poll poll__thanks" role="status">Спасибо, что ответили!</p>;
 
   return (
     <section className="poll" aria-label="Откуда вы о нас узнали?">

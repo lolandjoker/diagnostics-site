@@ -20,6 +20,9 @@ describe("источники трафика", () => {
   it("короткие адреса и ответы проверяются по списку", () => {
     expect(isSource("karta")).toBe(true);
     expect(isSource("tayna")).toBe(true);
+    expect(isSource("r1")).toBe(true);
+    expect(isSource("r10")).toBe(true);
+    expect(isSource("r11")).toBe(false);
     expect(isSource("admin")).toBe(false);
     expect(isSource("toString")).toBe(false); // не берём ключи из прототипа
     expect(isHeardFrom("tiktok")).toBe(true);
