@@ -3,10 +3,12 @@ import { notFound } from "next/navigation";
 import { getDb } from "@/db";
 import { MAX_LEAD_EDITS, RESULT_LOADING_MS, getLead } from "@/lib/leads";
 import { birthPortrait } from "@/lib/portrait";
+import { HEARD_FROM } from "@/lib/sources";
 import { fillTemplate, getTexts } from "@/lib/texts";
 import { typograph } from "@/lib/typograph";
 import { variationFor } from "@/lib/variations";
 import { Footer } from "../../Footer";
+import { HeardFromPoll } from "../../HeardFromPoll";
 import { Portrait } from "../../Portrait";
 import { PriceTag } from "../../PriceTag";
 import { Track } from "../../Track";
@@ -70,6 +72,9 @@ export default async function ResultPage(props: PageProps<"/razbor/[id]">) {
             "Имя и дату рождения больше изменить нельзя"
           )}
         </p>
+
+        {/* Источник неизвестен (пришёл не по короткому адресу) и ещё не ответил — спрашиваем */}
+        {!lead.source && !lead.heardFrom && <HeardFromPoll leadId={lead.id} options={HEARD_FROM} />}
       </main>
       <Footer />
     </>

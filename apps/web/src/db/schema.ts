@@ -203,6 +203,13 @@ export const leads = pgTable(
     edits: integer("edits").notNull().default(0),
     /** Последняя смена имени и даты: новая краткая диагностика снова «считается» (анимация). */
     editedAt: timestamp("edited_at", { withTimezone: true }),
+    /**
+     * Откуда пришёл человек: ключ короткого адреса (taromba.com/karta → «karta», lib/sources.ts),
+     * по которому он впервые зашёл на сайт; null — пришёл без метки.
+     */
+    source: text("source"),
+    /** Ответ на вопрос «Откуда вы о нас узнали?» на странице разбора (HEARD_FROM); null — не ответил. */
+    heardFrom: text("heard_from"),
   },
   (t) => [index("leads_telegram_user_idx").on(t.telegramUserId, t.createdAt)],
 );
@@ -481,6 +488,8 @@ export const funnelEvents = pgTable(
     visitorId: text("visitor_id").notNull(),
     leadId: uuid("lead_id").references(() => leads.id, { onDelete: "cascade" }),
     step: text("step").notNull(),
+    /** Источник браузера на момент шага (cookie короткого адреса, lib/sources.ts); null — без метки. */
+    source: text("source"),
     createdAt: createdAt(),
   },
   (t) => [
