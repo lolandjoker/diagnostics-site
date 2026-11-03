@@ -1,9 +1,9 @@
 /**
  * Источники трафика. В TikTok нет кликабельной ссылки, поэтому в каждом ролике на экране —
  * свой короткий адрес (taromba.com/karta). Человек набирает его, сайт запоминает источник в cookie
- * (первое касание, на 30 дней) и открывает главную; дальше источник попадает в воронку и в заявку.
- * Кто набрал просто taromba.com, тому на странице разбора задаём необязательный вопрос
- * «Откуда вы о нас узнали?».
+ * (первое касание, навсегда — см. keepSource) и открывает главную; дальше источник попадает в воронку
+ * и в заявку (в заявке хранится всегда). Кто открыл просто taromba.com, тому в чате задаём необязательный
+ * вопрос «Откуда вы о нас узнали?».
  *
  * Ещё 10 адресов taromba.com/r1 … /r10 — для других площадок; их названия в сводке меняются в «Текстах сайта»
  * → «Источники» (source.r1 …). Новый источник: ключ в SOURCES и папка app/<ключ>/route.ts
@@ -36,7 +36,30 @@ export function isSource(s: unknown): s is SourceKey {
 }
 
 export const SOURCE_COOKIE = "src";
-const SOURCE_COOKIE_DAYS = 30;
+/** «Навсегда»: дольше 400 дней браузеры cookie не хранят, поэтому срок продлевается при каждом заходе (keepSource). */
+const SOURCE_COOKIE_DAYS = 400;
+
+function setSourceCookie(jar: Awaited<ReturnType<typeof cookies>>, key: SourceKey): void {
+  jar.set(SOURCE_COOKIE, key, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: SOURCE_COOKIE_DAYS * 86_400,
+  });
+}
+
+/**
+ * Продлить запомненный источник ещё на SOURCE_COOKIE_DAYS — при каждом шаге воронки (api/track), чтобы
+ * у того, кто возвращается на сайт, источник не истекал никогда. Только в обработчиках и server actions.
+ */
+export async function keepSource(): Promise<SourceKey | null> {
+  const jar = await cookies();
+  const value = jar.get(SOURCE_COOKIE)?.value;
+  if (!isSource(value)) return null;
+  setSourceCookie(jar, value);
+  return value;
+}
 
 /** Источник этого браузера; только на сервере (cookie). */
 export async function rememberedSource(): Promise<SourceKey | null> {
@@ -51,15 +74,9 @@ export async function rememberedSource(): Promise<SourceKey | null> {
 export function sourceEntry(key: SourceKey) {
   return async function GET(): Promise<Response> {
     const jar = await cookies();
-    if (!isSource(jar.get(SOURCE_COOKIE)?.value)) {
-      jar.set(SOURCE_COOKIE, key, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        path: "/",
-        maxAge: SOURCE_COOKIE_DAYS * 86_400,
-      });
-    }
+    const current = jar.get(SOURCE_COOKIE)?.value;
+    // Уже запомненный — продлеваем как есть, новый — запоминаем
+    setSourceCookie(jar, isSource(current) ? current : key);
     return new Response(null, { status: 307, headers: { Location: "/" } });
   };
 }
