@@ -6,7 +6,7 @@
  * чата (имя и фото); подпись «Администратор» видят только эксперты и админ.
  * К сообщению можно приложить фото (JPEG, PNG или WebP до MAX_CHAT_PHOTO_BYTES).
  */
-import { and, asc, desc, eq, gt, isNull, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, isNull, lte, ne, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { conversations, experts, leads, messagePhotos, messages, operators } from "@/db/schema";
 import type { MessageAuthor } from "@/db/schema";
@@ -21,8 +21,6 @@ export const MAX_MESSAGE_LENGTH = 4000;
 export const CLIENT_MESSAGES_PER_MINUTE = 20;
 /** Через сколько после начала чата в него приходит подробная диагностика эксперта. */
 export const FULL_TEXT_DELAY_MS = 3 * 60 * 1000;
-/** За сколько до текста 2 у клиента появляется «печатает…» — будто подробный разбор набирают. */
-export const FULL_TEXT_TYPING_MS = 20_000;
 /** Фото в чате. Браузер перед отправкой уменьшает снимок, так что обычно выходит меньше 1 МБ. */
 export const MAX_CHAT_PHOTO_BYTES = 5 * 1024 * 1024;
 
@@ -122,8 +120,9 @@ export type StartResult = { ok: true; conversation: Conversation } | { ok: false
 
 /**
  * Человек выбрал эксперта: открывается чат с ним (уже был — тот же). Писать можно любому эксперту,
- * у каждого свой чат в списке переписок. Первый чат — только с экспертом в сети. В каждый чат через
- * FULL_TEXT_DELAY_MS приходит подробная диагностика этого эксперта (см. deliverDueFullTexts).
+ * у каждого свой чат в списке переписок. Первый чат — только с экспертом в сети. Через FULL_TEXT_DELAY_MS
+ * в чат приходит подробная диагностика этого эксперта — но одна на человека: получил в одном чате —
+ * в других уже не придёт (см. deliverDueFullTexts).
  * За клиента ничего не пишем: в пустом чате ему показываются подсказки-вопросы (chat.suggestions).
  */
 export async function startConversation(db: Db, lead: Lead, expertId: number, now: Date): Promise<StartResult> {
@@ -158,19 +157,57 @@ export async function startConversation(db: Db, lead: Lead, expertId: number, no
   return { ok: true, conversation: created };
 }
 
-/** Диагностика ещё не пришла, но придёт в ближайшие FULL_TEXT_TYPING_MS — показываем «печатает…». */
-export function fullTextTyping(c: Pick<Conversation, "createdAt" | "fullTextSentAt">, now: Date): boolean {
+/** Человек уже получил подробную диагностику — в любом своём чате (сообщение «Подробный разбор»). */
+export async function leadGotFullText(db: Db, leadId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: messages.id })
+    .from(messages)
+    .innerJoin(conversations, eq(conversations.id, messages.conversationId))
+    .where(and(eq(conversations.leadId, leadId), eq(messages.author, "system")))
+    .limit(1);
+  return !!row;
+}
+
+/**
+ * Чат, в который придёт подробная диагностика человека: самый ранний из ждущих её чатов с экспертом,
+ * у которого она заполнена (так же выбирает deliverDueFullTexts). null — не придёт ни в один.
+ */
+async function fullTextTarget(db: Db, leadId: string): Promise<string | null> {
+  if (await leadGotFullText(db, leadId)) return null;
+  const [row] = await db
+    .select({ id: conversations.id })
+    .from(conversations)
+    .innerJoin(experts, eq(experts.id, conversations.expertId))
+    .where(and(eq(conversations.leadId, leadId), isNull(conversations.fullTextSentAt), ne(experts.fullText, "")))
+    .orderBy(asc(conversations.createdAt), asc(conversations.id))
+    .limit(1);
+  return row?.id ?? null;
+}
+
+/**
+ * «Печатает…» всё время, пока идёт отсчёт до подробной диагностики: с начала чата и до её отправки.
+ * Только в том чате, куда она придёт: одна диагностика на человека (fullTextTarget).
+ */
+export async function fullTextTyping(db: Db, c: Pick<Conversation, "id" | "leadId" | "fullTextSentAt">): Promise<boolean> {
   if (c.fullTextSentAt) return false;
-  return now.getTime() >= c.createdAt.getTime() + FULL_TEXT_DELAY_MS - FULL_TEXT_TYPING_MS;
+  return (await fullTextTarget(db, c.leadId)) === c.id;
 }
 
 /**
  * Отправляет подробную диагностику эксперта в его чаты, которым уже FULL_TEXT_DELAY_MS, — сообщением с подписью
  * «Подробный разбор», а не от имени эксперта. Вызывается при каждом опросе чата и списка чатов,
  * поэтому сообщение появляется вовремя без фоновых задач. Каждый чат отмечается одним UPDATE —
- * два одновременных опроса не отправят текст дважды. conversationId — проверить только этот чат.
+ * два одновременных опроса не отправят текст дважды. Диагностика одна на человека: приходит в самый ранний
+ * чат с экспертом, у которого она заполнена, в остальные — нет. conversationId — проверить только чаты
+ * этого человека (все сразу: иначе, сидя в другом чате, он получил бы её не туда).
  */
 export async function deliverDueFullTexts(db: Db, now: Date, conversationId?: string): Promise<void> {
+  let leadId: string | undefined;
+  if (conversationId !== undefined) {
+    const [c] = await db.select({ leadId: conversations.leadId }).from(conversations).where(eq(conversations.id, conversationId));
+    if (!c) return;
+    leadId = c.leadId;
+  }
   const due = await db
     .update(conversations)
     .set({ fullTextSentAt: now })
@@ -178,15 +215,23 @@ export async function deliverDueFullTexts(db: Db, now: Date, conversationId?: st
       and(
         isNull(conversations.fullTextSentAt),
         lte(conversations.createdAt, new Date(now.getTime() - FULL_TEXT_DELAY_MS)),
-        conversationId === undefined ? undefined : eq(conversations.id, conversationId),
+        leadId === undefined ? undefined : eq(conversations.leadId, leadId),
       ),
     )
-    .returning({ id: conversations.id, leadId: conversations.leadId, expertId: conversations.expertId });
+    .returning({
+      id: conversations.id,
+      leadId: conversations.leadId,
+      expertId: conversations.expertId,
+      createdAt: conversations.createdAt,
+    });
 
+  // Созрели сразу несколько чатов одного человека — диагностика уходит в тот, что открыт раньше
+  due.sort((x, y) => x.createdAt.getTime() - y.createdAt.getTime() || x.id.localeCompare(y.id));
   for (const c of due) {
     const [lead] = await db.select({ name: leads.name }).from(leads).where(eq(leads.id, c.leadId));
     const [expert] = await db.select({ fullText: experts.fullText }).from(experts).where(eq(experts.id, c.expertId));
-    if (lead && expert?.fullText) {
+    // Одна диагностика на человека: уже получил в другом чате — в этот не отправляем
+    if (lead && expert?.fullText && !(await leadGotFullText(db, c.leadId))) {
       await postMessage(db, c.id, { author: "system", body: fillTemplate(expert.fullText, { name: lead.name }) });
       void notifyClient(db, c.id, { kind: "fullText" });
     }
