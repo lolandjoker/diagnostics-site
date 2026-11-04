@@ -5,8 +5,8 @@ import { conversations, messages } from "@/db/schema";
 import { addCertificate, deleteCertificate, getCertificate, listCertificates } from "./certificates";
 import {
   FULL_TEXT_DELAY_MS,
-  FULL_TEXT_TYPING_MS,
   clientChats,
+  deliverDueFullTexts,
   conversationForLead,
   fullTextTyping,
   leadConversation,
@@ -14,7 +14,7 @@ import {
   postMessage,
   startConversation,
 } from "./chat";
-import { createExpert, expertTags, setExpertOnline } from "./experts";
+import { createExpert, expertTags, setExpertFullText, setExpertOnline } from "./experts";
 import { MAX_LEAD_EDITS, createLead, editLead } from "./leads";
 import { TYPING_TTL_MS, clearTyping, isTyping, setTyping } from "./typing";
 
@@ -123,13 +123,55 @@ describe("«печатает…»", () => {
     expect(isTyping("chat-1", "client", t0)).toBe(false);
   });
 
-  it("перед подробным разбором — имитация набора за FULL_TEXT_TYPING_MS", () => {
-    const createdAt = new Date("2026-10-27T10:00:00Z");
-    const due = createdAt.getTime() + FULL_TEXT_DELAY_MS;
-    const c = { createdAt, fullTextSentAt: null };
-    expect(fullTextTyping(c, new Date(due - FULL_TEXT_TYPING_MS - 1000))).toBe(false);
-    expect(fullTextTyping(c, new Date(due - FULL_TEXT_TYPING_MS + 1000))).toBe(true);
-    expect(fullTextTyping({ createdAt, fullTextSentAt: new Date(due) }, new Date(due + 1000))).toBe(false);
+  it("подробная диагностика — одна на человека; «печатает…» весь отсчёт до неё", async () => {
+    await setExpertFullText(db, maria, "{name}, диагностика Марии");
+    await setExpertFullText(db, olga, "{name}, диагностика Ольги");
+    const lead = await newLead();
+    const t0 = new Date();
+    const a = await startConversation(db, lead, maria, t0);
+    const b = await startConversation(db, lead, olga, new Date(t0.getTime() + 1000));
+    if (!a.ok || !b.ok) throw new Error("не открылся чат");
+    const typing = async (id: string) => {
+      const [c] = await db.select().from(conversations).where(eq(conversations.id, id));
+      return fullTextTyping(db, c!);
+    };
+    // С начала чата и до самой отправки — «печатает…», но только в первом: диагностика придёт туда
+    expect(await typing(a.conversation.id)).toBe(true);
+    expect(await typing(b.conversation.id)).toBe(false);
+
+    // Человек сидит во втором чате, оба созрели — диагностика всё равно приходит только в первый
+    await deliverDueFullTexts(db, new Date(t0.getTime() + FULL_TEXT_DELAY_MS + 2000), b.conversation.id);
+    const sys = await db.select().from(messages).where(eq(messages.author, "system"));
+    expect(sys).toHaveLength(1);
+    expect(sys[0]!.conversationId).toBe(a.conversation.id);
+    expect(await typing(a.conversation.id)).toBe(false);
+    expect(await typing(b.conversation.id)).toBe(false);
+
+    // Новый чат после получения — ни «печатает…», ни диагностики
+    await setExpertOnline(db, olga, true, new Date());
+    const third = await createExpert(db, { name: "Вера", login: "vera-x", password: "пароль-эксперта" });
+    if (!third.ok) throw new Error(third.error);
+    await setExpertFullText(db, third.id, "диагностика Веры");
+    const c = await startConversation(db, lead, third.id, new Date());
+    if (!c.ok) throw new Error(c.error);
+    expect(await typing(c.conversation.id)).toBe(false);
+    await deliverDueFullTexts(db, new Date(Date.now() + FULL_TEXT_DELAY_MS + 1000), c.conversation.id);
+    expect(await db.select().from(messages).where(eq(messages.author, "system"))).toHaveLength(1);
+  });
+
+  it("у первого эксперта диагностика не заполнена — она придёт во второй чат", async () => {
+    await setExpertFullText(db, maria, "");
+    await setExpertFullText(db, olga, "{name}, диагностика Ольги");
+    const lead = await newLead();
+    const t0 = new Date();
+    const a = await startConversation(db, lead, maria, t0);
+    const b = await startConversation(db, lead, olga, new Date(t0.getTime() + 1000));
+    if (!a.ok || !b.ok) throw new Error("не открылся чат");
+    expect(await fullTextTyping(db, a.conversation)).toBe(false);
+    expect(await fullTextTyping(db, b.conversation)).toBe(true);
+    await deliverDueFullTexts(db, new Date(t0.getTime() + FULL_TEXT_DELAY_MS + 2000), a.conversation.id);
+    const sys = await db.select().from(messages).where(eq(messages.author, "system"));
+    expect(sys.map((m) => m.conversationId)).toEqual([b.conversation.id]);
   });
 });
 
