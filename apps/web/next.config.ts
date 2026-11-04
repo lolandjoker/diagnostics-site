@@ -2,7 +2,8 @@ import type { NextConfig } from "next";
 
 /**
  * Заголовки безопасности для всех страниц.
- * Политика источников (CSP) добавится, когда появятся внешние скрипты (Метрика, капча).
+ * Политики источников скриптов (CSP script-src) нет: на клиентских страницах грузится пиксель Meta
+ * (app/MetaPixel.tsx) с connect.facebook.net — если её добавлять, разрешить его и www.facebook.com.
  */
 const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },

@@ -6,6 +6,7 @@ import "@fontsource/cormorant-garamond/500.css";
 import "@fontsource/cormorant-garamond/600.css";
 import "./globals.css";
 import { BRAND } from "./Brand";
+import { MetaPixel } from "./MetaPixel";
 import { SiteHeader } from "./SiteHeader";
 import { TelegramBridge } from "./TelegramBridge";
 
@@ -29,6 +30,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <SiteHeader />
         {children}
         <TelegramBridge />
+        <MetaPixel />
       </body>
     </html>
   );
