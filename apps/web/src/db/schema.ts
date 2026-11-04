@@ -103,7 +103,7 @@ export const experts = pgTable("experts", {
    */
   archivedAt: timestamp("archived_at", { withTimezone: true }),
   /**
-   * Подробная диагностика эксперта: приходит в чат с ним через 3 минуты после начала чата
+   * Подробная диагностика эксперта: приходит в чат с ним через 3 минуты 17 секунд после начала чата
    * ({name} — имя клиента). Пустая — в чат ничего не приходит.
    */
   fullText: text("full_text").notNull().default(""),
@@ -301,8 +301,10 @@ export const conversations = pgTable(
     lastMessageAt: timestamp("last_message_at", { withTimezone: true }).notNull().defaultNow(),
     /** Когда эксперт чата последний раз открывал переписку — для счётчика непрочитанных. */
     expertReadAt: timestamp("expert_read_at", { withTimezone: true }),
-    /** Когда в чат ушла подробная диагностика эксперта (через 3 минуты после начала чата); null — ещё не ушла. */
+    /** Когда в чат ушла подробная диагностика эксперта (через 3 минуты 17 секунд после начала чата); null — ещё не ушла. */
     fullTextSentAt: timestamp("full_text_sent_at", { withTimezone: true }),
+    /** Когда подошло время приветствия эксперта (через 17 секунд после начала чата); null — ещё не подошло. */
+    greetingSentAt: timestamp("greeting_sent_at", { withTimezone: true }),
     /** Клиент попросил позвонить; сбрасывается, когда эксперт или админ начал звонок. */
     callRequestedAt: timestamp("call_requested_at", { withTimezone: true }),
     /** Когда клиент последний раз открывал этот чат — для счётчика непрочитанных в его списке чатов. */
@@ -351,6 +353,8 @@ export const messages = pgTable(
     createdAt: createdAt(),
     /** author = admin, но написал оператор чатов — какой; null — сам админ. */
     operatorId: integer("operator_id").references(() => operators.id),
+    /** Отправлено сайтом от имени эксперта (приветствие) — не считается его ответом в статистике. */
+    automatic: boolean("automatic").notNull().default(false),
   },
   (t) => [index("messages_conversation_idx").on(t.conversationId, t.id)],
 );

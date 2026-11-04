@@ -1,7 +1,7 @@
 /**
  * «Обычно отвечает за …» — сколько эксперт на самом деле отвечает, по его чатам за последние REPLY_WINDOW_DAYS:
  * ожидание — от первого неотвеченного сообщения клиента до ответа эксперта или админа в этом чате
- * (подробный разбор — автоматический, не считается). Медиана — один долгий ответ картину не портит.
+ * (подробный разбор и приветствие — автоматические, не считаются). Медиана — один долгий ответ картину не портит.
  * Ответов меньше MIN_REPLIES — ничего не показываем: судить рано.
  */
 import { and, asc, eq, gte, inArray } from "drizzle-orm";
@@ -28,6 +28,7 @@ export async function replyTimes(db: Db, expertIds: number[], now: Date): Promis
       and(
         inArray(conversations.expertId, expertIds),
         inArray(messages.author, ["client", "expert", "admin"]),
+        eq(messages.automatic, false),
         gte(messages.createdAt, new Date(now.getTime() - REPLY_WINDOW_DAYS * 86_400_000)),
       ),
     )

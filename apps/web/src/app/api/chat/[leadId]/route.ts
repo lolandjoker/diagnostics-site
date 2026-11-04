@@ -36,8 +36,8 @@ export async function GET(req: Request, ctx: RouteContext<"/api/chat/[leadId]">)
   await deliverDueFullTexts(db, now, conversation.id);
   if (new URL(req.url).searchParams.get("hidden") !== "1") await markClientRead(db, conversation.id, now);
   const expert = await getExpert(db, conversation.expertId);
-  // «Печатает…»: эксперт (или админ) набирает текст — или идёт отсчёт до его подробной диагностики
-  const typing = isTyping(conversation.id, "staff", now) || (await fullTextTyping(db, conversation));
+  // «Печатает…»: эксперт (или админ) набирает текст — или идёт отсчёт до приветствия и подробной диагностики
+  const typing = isTyping(conversation.id, "staff", now) || (await fullTextTyping(db, conversation, now));
   return Response.json(
     {
       messages: await messageViews(db, conversation, afterParam(req), "client"),
