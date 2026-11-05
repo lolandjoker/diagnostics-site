@@ -56,16 +56,19 @@ export function ClientChatList({
 
   return (
     <nav className="chats" aria-label="Переписки">
-      <Link className="chats__day" href={`/razbor/${leadId}/den`}>
-        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-          <path fill="currentColor" d="M11.2 2.6a9.6 9.6 0 1 0 10.2 12.6 8 8 0 0 1-10.2-12.6Z" />
-        </svg>
-        <span>
-          Мой день
-          <small>Карта дня и Клуб Таромбы</small>
-        </span>
-        <span aria-hidden="true">→</span>
-      </Link>
+      {/* В чате на компьютере; на странице «Переписки» есть вкладка «Мой день» */}
+      {currentId !== null && (
+        <Link className="chats__day" href={`/razbor/${leadId}/den`}>
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+            <path fill="currentColor" d="M11.2 2.6a9.6 9.6 0 1 0 10.2 12.6 8 8 0 0 1-10.2-12.6Z" />
+          </svg>
+          <span>
+            Мой день
+            <small>Карта дня и Клуб Таромбы</small>
+          </span>
+          <span aria-hidden="true">→</span>
+        </Link>
+      )}
       <div className="chats__title">Переписки</div>
       <ul className="chats__list">
         {items.map((c) => {
