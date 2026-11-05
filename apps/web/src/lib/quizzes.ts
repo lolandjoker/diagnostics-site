@@ -2,9 +2,10 @@
  * Квизы «Клуба Таромбы»: совместимость пары, тест «Ваш архетип», «Да или нет». Пройти может каждый,
  * а результат человек видит, только когда заявка привязана к Telegram (как расшифровку карты дня).
  * Результат сохраняется сразу; Telegram подключён — уходит и в бот, нет — уйдёт, когда человек подключит.
- * Лимит попыток в день (по Москве) — чтобы не тратить ИИ впустую.
+ * Одна попытка раз в N дней (по Москве): совместимость — раз в 5 дней, архетип — раз в 30, «Да или нет» — раз в день.
+ * Каждый день — только карта дня; хочется узнать больше раньше — к эксперту.
  */
-import { and, count, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import type { Db } from "@/db";
 import { clubQuizzes } from "@/db/schema";
 import { clubDay } from "./club";
@@ -12,7 +13,8 @@ import { clubDay } from "./club";
 export type QuizKind = "compat" | "archetype" | "yesno";
 export type QuizRow = typeof clubQuizzes.$inferSelect;
 
-export const DAILY_LIMIT: Record<QuizKind, number> = { compat: 5, archetype: 3, yesno: 3 };
+/** Через сколько дней (по Москве) можно пройти снова. */
+export const COOLDOWN_DAYS: Record<QuizKind, number> = { compat: 5, archetype: 30, yesno: 1 };
 
 export const QUIZ_TITLES: Record<QuizKind, string> = {
   compat: "Совместимость пары",
@@ -20,16 +22,21 @@ export const QUIZ_TITLES: Record<QuizKind, string> = {
   yesno: "Да или нет",
 };
 
-export async function attemptsToday(db: Db, leadId: string, kind: QuizKind, now: Date): Promise<number> {
-  const [row] = await db
-    .select({ n: count() })
-    .from(clubQuizzes)
-    .where(and(eq(clubQuizzes.leadId, leadId), eq(clubQuizzes.kind, kind), eq(clubQuizzes.day, clubDay(now))));
-  return row?.n ?? 0;
+const addDays = (day: string, n: number) =>
+  new Date(Date.UTC(Number(day.slice(0, 4)), Number(day.slice(5, 7)) - 1, Number(day.slice(8, 10)) + n)).toISOString().slice(0, 10);
+
+/** Полночь дня ГГГГ-ММ-ДД по Москве (UTC+3). */
+const moscowMidnight = (day: string) => new Date(Date.parse(`${day}T00:00:00Z`) - 3 * 3600_000);
+
+/** Когда можно пройти снова (ISO, полночь по Москве); null — можно сейчас. */
+export function nextAttemptFrom(row: { day: string } | null, kind: QuizKind, now: Date): string | null {
+  if (!row) return null;
+  const day = addDays(row.day, COOLDOWN_DAYS[kind]);
+  return clubDay(now) >= day ? null : moscowMidnight(day).toISOString();
 }
 
-export async function attemptsLeft(db: Db, leadId: string, kind: QuizKind, now: Date): Promise<number> {
-  return Math.max(0, DAILY_LIMIT[kind] - (await attemptsToday(db, leadId, kind, now)));
+export async function nextAttemptAt(db: Db, leadId: string, kind: QuizKind, now: Date): Promise<string | null> {
+  return nextAttemptFrom(await latestQuiz(db, leadId, kind), kind, now);
 }
 
 export async function latestQuiz(db: Db, leadId: string, kind: QuizKind): Promise<QuizRow | null> {

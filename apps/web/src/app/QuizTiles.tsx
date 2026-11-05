@@ -8,7 +8,17 @@ import { archetypeView } from "@/lib/quiz-archetype";
 import { compatView } from "@/lib/quiz-compat";
 import { yesNoView } from "@/lib/quiz-yesno";
 import { ANSWER_LABEL } from "@/lib/quiz-yesno-data";
-import { latestQuiz } from "@/lib/quizzes";
+import { type QuizKind, type QuizRow, latestQuiz, nextAttemptFrom } from "@/lib/quizzes";
+
+const dateLabel = new Intl.DateTimeFormat("ru-RU", { timeZone: "Europe/Moscow", day: "numeric", month: "long" });
+
+/** «снова завтра», «снова 10 ноября»; null — можно сейчас. */
+function again(row: QuizRow | null, kind: QuizKind, now: Date): string | null {
+  const next = nextAttemptFrom(row, kind, now);
+  if (!next) return null;
+  const t = new Date(next);
+  return t.getTime() - now.getTime() <= 86_400_000 ? "снова завтра" : `снова ${dateLabel.format(t)}`;
+}
 
 const ICONS = {
   compat: '<circle cx="9" cy="12" r="5.5"/><circle cx="15" cy="12" r="5.5"/>',
@@ -22,6 +32,8 @@ export async function QuizTiles({ db, leadId, birthDate, unlocked }: { db: Db; l
   const a = arch ? archetypeView(arch, unlocked) : null;
   const y = yn ? yesNoView(yn, unlocked) : null;
   const waiting = "Результат ждёт в клубе";
+  const now = new Date();
+  const when = { compat: again(compat, "compat", now), archetype: again(arch, "archetype", now), yesno: again(yn, "yesno", now) };
   const tiles = [
     {
       key: "compat",
@@ -34,7 +46,7 @@ export async function QuizTiles({ db, leadId, birthDate, unlocked }: { db: Db; l
       key: "archetype",
       href: "arhetip",
       title: "Ваш архетип",
-      text: "Пять вопросов и картинка для сторис",
+      text: "Пять вопросов о характере, результат можно выложить в сторис",
       status: a ? (a.result ? `Ваш архетип — ${a.result.archetype.name}` : waiting) : null,
     },
     {
@@ -56,7 +68,12 @@ export async function QuizTiles({ db, leadId, birthDate, unlocked }: { db: Db; l
             <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" dangerouslySetInnerHTML={{ __html: ICONS[t.key] }} />
             <b>{t.title}</b>
             <span>{t.text}</span>
-            {t.status && <small>{t.status}</small>}
+            {t.status && (
+              <small>
+                {t.status}
+                {when[t.key] && <em> · {when[t.key]}</em>}
+              </small>
+            )}
           </Link>
         ))}
       </div>

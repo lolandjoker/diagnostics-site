@@ -4644,3 +4644,41 @@ body.no-scroll {
     margin-top: 2px;
   }
 }
+
+/* Квиз пройден: когда можно снова и путь к эксперту */
+.quiz__next {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 16px;
+  border: 1px dashed rgba(217, 182, 111, 0.45);
+  border-radius: 16px;
+  text-align: center;
+}
+
+.quiz__next svg {
+  color: var(--gold);
+}
+
+.quiz__next p {
+  margin: 0;
+}
+
+.quiz__next b {
+  color: #f1d796;
+}
+
+.quiz__next span {
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.quiz__next .button {
+  margin-top: 4px;
+}
+
+.qtile small em {
+  color: var(--muted);
+  font-style: normal;
+  font-weight: 500;
+}

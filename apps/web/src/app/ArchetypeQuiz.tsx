@@ -9,26 +9,27 @@ import { useEffect, useState } from "react";
 import { arcanaBackSvg, arcanaFaceSvg } from "@/lib/arcana";
 import type { ArchetypeView } from "@/lib/quiz-archetype";
 import { QUESTIONS } from "@/lib/quiz-archetype-data";
-import { Attempts, QuizLocked, QuizSecret, askWith, useRefreshOnFocus } from "./QuizParts";
+import { NextAttempt, QuizLocked, QuizSecret, askWith, useRefreshOnFocus } from "./QuizParts";
 import { archetypeAction } from "./razbor/[id]/quiz-actions";
 
 export function ArchetypeQuiz({
   leadId,
   initial,
-  initialLeft,
+  initialNext,
   telegramHref,
   askHref,
   expertName,
 }: {
   leadId: string;
   initial: ArchetypeView | null;
-  initialLeft: number;
+  /** Когда можно снова; null — можно сейчас. */
+  initialNext: string | null;
   telegramHref: string | null;
   askHref: string;
   expertName: string | null;
 }) {
   const [view, setView] = useState(initial);
-  const [left, setLeft] = useState(initialLeft);
+  const [next, setNext] = useState(initialNext);
   const [answers, setAnswers] = useState<number[]>([]);
   const [taking, setTaking] = useState(initial === null);
   const [fresh, setFresh] = useState(false);
@@ -39,8 +40,8 @@ export function ArchetypeQuiz({
 
   useEffect(() => {
     setView(initial);
-    setLeft(initialLeft);
-  }, [initial, initialLeft]);
+    setNext(initialNext);
+  }, [initial, initialNext]);
 
   useEffect(() => {
     setCanShare(typeof navigator !== "undefined" && typeof navigator.share === "function" && typeof navigator.canShare === "function");
@@ -62,7 +63,7 @@ export function ArchetypeQuiz({
     }
     setFresh(true);
     setView(res.view);
-    setLeft(res.left);
+    setNext(res.next);
     setTaking(false);
     setAnswers([]);
   }
@@ -166,8 +167,8 @@ export function ArchetypeQuiz({
           <section className="arch__story">
             <img src={storyUrl} alt={`Картинка для сторис: мой архетип — ${r.archetype.name}`} width={180} height={320} loading="lazy" />
             <div>
-              <b>Картинка для сторис</b>
-              <span>Поделитесь в TikTok, Instagram или Telegram — пусть друзья тоже узнают свой архетип.</span>
+              <b>Ваш результат — картинкой для сторис</b>
+              <span>Сохраните её и выложите в сторис Instagram, Telegram или в TikTok — пусть друзья тоже узнают свой архетип.</span>
               <div className="arch__share">
                 {canShare && (
                   <button className="button" type="button" onClick={() => void share()}>
@@ -192,16 +193,22 @@ export function ArchetypeQuiz({
       ) : (
         <QuizLocked
           title="Ваш архетип готов"
-          text="Вступите в Клуб Таромбы — откроем архетип и картинку для сторис здесь и пришлём их в Telegram."
+          text="Вступите в Клуб Таромбы — откроем архетип и картинку с результатом здесь и пришлём их в Telegram."
           telegramHref={telegramHref}
         />
       )}
-      {left > 0 ? (
+      {next ? (
+        <NextAttempt
+          next={next}
+          what="Пройти тест снова можно"
+          button={!r}
+          askHref={askHref}
+          ask={r ? `Здравствуйте! Тест показал, что мой архетип — ${r.archetype.name}. Расскажите, как он связан с моей датой рождения?` : "Здравствуйте! Хочу разобрать свой архетип по дате рождения."}
+        />
+      ) : (
         <button className="button button--ghost" type="button" onClick={() => setTaking(true)}>
           Пройти заново
         </button>
-      ) : (
-        <Attempts left={0} forms={["раз", "раза", "раз"]} />
       )}
     </div>
   );

@@ -8,7 +8,7 @@ import type { Db } from "@/db";
 import type { Lead } from "./leads";
 import { SAFETY, aiJson, clip, ruDate } from "./ai-reading";
 import { ARCHETYPES, type Archetype, type ArchetypeKey, ORDER, QUESTIONS, type QuizQuestion } from "./quiz-archetype-data";
-import { type QuizRow, attemptsLeft, lifePath, parseJson, saveQuiz } from "./quizzes";
+import { type QuizRow, nextAttemptAt, lifePath, parseJson, saveQuiz } from "./quizzes";
 
 export { ARCHETYPES, QUESTIONS };
 export type { Archetype, ArchetypeKey, QuizQuestion };
@@ -64,7 +64,7 @@ const SCHEMA = {
 export async function runArchetype(db: Db, lead: Lead, answers: number[], now: Date): Promise<QuizRow | { error: string }> {
   const key = archetypeFor(answers, lead.birthDate);
   if (!key) return { error: "Ответьте на все вопросы" };
-  if ((await attemptsLeft(db, lead.id, "archetype", now)) <= 0) return { error: "Сегодня тест уже пройден несколько раз — приходите завтра" };
+  if (await nextAttemptAt(db, lead.id, "archetype", now)) return { error: "Тест можно проходить раз в 30 дней — а подробно разобрать архетип можно с экспертом" };
   const a = ARCHETYPES[key];
   const fallback = archetypeFallback(key);
   const picked = answers.map((x, i) => `${QUESTIONS[i]!.q} — ${QUESTIONS[i]!.options[x]!.text}`).join("\n");

@@ -58,7 +58,7 @@ async function sendQuiz(cfg: TelegramConfig, chatId: number, row: QuizRow, birth
       `${esc(t.summary)}\n\n<b>Чувства — ${s.feelings}%.</b> ${esc(t.feelings)}\n<b>Быт — ${s.life}%.</b> ${esc(t.life)}\n` +
       `<b>Страсть — ${s.passion}%.</b> ${esc(t.passion)}\n\n${em("sparkle")}<b>Что стоит разобрать.</b> <i>${esc(t.teaser)}</i>\n\n` +
       "Напишите эксперту прямо сюда — он разберёт вашу пару по двум датам рождения.";
-    await sendText(cfg, chatId, html, buttons(cfg, row.leadId, "sovmestimost", "Ещё пара"));
+    await sendText(cfg, chatId, html, buttons(cfg, row.leadId, "sovmestimost", "Открыть на сайте"));
     return;
   }
   if (row.kind === "archetype") {
@@ -70,7 +70,7 @@ async function sendQuiz(cfg: TelegramConfig, chatId: number, row: QuizRow, birth
       `${esc(v.result.personal)}\n\n<b>Сила.</b> ${esc(a.strength)}\n<b>В любви.</b> ${esc(a.love)}\n<b>Тень.</b> ${esc(a.shadow)}\n\n` +
       `${em("sparkle")}<b>Что стоит разобрать.</b> <i>${esc(v.result.teaser)}</i>\n\nКартинка — для сторис: сохраните и поделитесь.`;
     const bot = await botUsername(cfg);
-    await photoWithText(cfg, chatId, `story:${a.key}`, () => archetypeStoryPng(a.key, siteHost(cfg), bot), head, body, buttons(cfg, row.leadId, "arhetip", "Тест на сайте"));
+    await photoWithText(cfg, chatId, `story:${a.key}`, () => archetypeStoryPng(a.key, siteHost(cfg), bot), head, body, buttons(cfg, row.leadId, "arhetip", "Открыть на сайте"));
     return;
   }
   if (row.kind === "yesno") {
@@ -82,7 +82,7 @@ async function sendQuiz(cfg: TelegramConfig, chatId: number, row: QuizRow, birth
     const body =
       `${esc(r.text)}\n\n<b>Совет.</b> ${esc(r.advice)}\n\n${em("sparkle")}<b>Что за этим стоит.</b> <i>${esc(r.teaser)}</i>\n\n` +
       "Напишите эксперту прямо сюда — он разберёт ваш вопрос подробно.";
-    await photoWithText(cfg, chatId, `yn:${r.card}`, () => arcanaCardPng(r.card, now, "ДА ИЛИ НЕТ"), head, body, buttons(cfg, row.leadId, "da-net", "Ещё вопрос"));
+    await photoWithText(cfg, chatId, `yn:${r.card}`, () => arcanaCardPng(r.card, now, "ДА ИЛИ НЕТ"), head, body, buttons(cfg, row.leadId, "da-net", "Открыть на сайте"));
   }
 }
 

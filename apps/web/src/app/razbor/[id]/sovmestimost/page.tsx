@@ -1,5 +1,5 @@
 import { compatView, zodiac } from "@/lib/quiz-compat";
-import { attemptsLeft, latestQuiz } from "@/lib/quizzes";
+import { latestQuiz, nextAttemptFrom } from "@/lib/quizzes";
 import { CompatQuiz } from "../../../CompatQuiz";
 import { QuizPage } from "../../../QuizPage";
 import { quizContext } from "../quiz-context";
@@ -11,7 +11,7 @@ export default async function CompatPage(props: PageProps<"/razbor/[id]/sovmesti
   const { id } = await props.params;
   const ctx = await quizContext(id);
   const now = new Date();
-  const [row, left] = await Promise.all([latestQuiz(ctx.db, ctx.lead.id, "compat"), attemptsLeft(ctx.db, ctx.lead.id, "compat", now)]);
+  const row = await latestQuiz(ctx.db, ctx.lead.id, "compat");
   return (
     <QuizPage ctx={ctx} title="Совместимость пары" lead="Введите дату рождения партнёра — посчитаем совместимость по знакам зодиака и числам судьбы.">
       <CompatQuiz
@@ -19,7 +19,7 @@ export default async function CompatPage(props: PageProps<"/razbor/[id]/sovmesti
         selfBirth={ctx.lead.birthDate}
         selfSign={zodiac(ctx.lead.birthDate).name}
         initial={row ? compatView(row, ctx.lead.birthDate, ctx.unlocked) : null}
-        initialLeft={left}
+        initialNext={nextAttemptFrom(row, "compat", now)}
         telegramHref={ctx.telegramHref}
         askHref={ctx.askHref}
         expertName={ctx.expertName}

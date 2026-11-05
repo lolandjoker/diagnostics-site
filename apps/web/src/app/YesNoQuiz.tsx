@@ -8,26 +8,27 @@ import { useEffect, useState } from "react";
 import { ARCANA, arcanaBackSvg, arcanaFaceSvg } from "@/lib/arcana";
 import type { YesNoView } from "@/lib/quiz-yesno";
 import { ANSWER_LABEL, QUESTION_MAX, QUESTION_MIN } from "@/lib/quiz-yesno-data";
-import { Attempts, QuizLocked, QuizSecret, askWith, useRefreshOnFocus } from "./QuizParts";
+import { NextAttempt, QuizLocked, QuizSecret, askWith, useRefreshOnFocus } from "./QuizParts";
 import { yesNoAction } from "./razbor/[id]/quiz-actions";
 
 export function YesNoQuiz({
   leadId,
   initial,
-  initialLeft,
+  initialNext,
   telegramHref,
   askHref,
   expertName,
 }: {
   leadId: string;
   initial: YesNoView | null;
-  initialLeft: number;
+  /** Когда можно снова; null — можно сейчас. */
+  initialNext: string | null;
   telegramHref: string | null;
   askHref: string;
   expertName: string | null;
 }) {
   const [view, setView] = useState(initial);
-  const [left, setLeft] = useState(initialLeft);
+  const [next, setNext] = useState(initialNext);
   const [asking, setAsking] = useState(initial === null);
   const [question, setQuestion] = useState("");
   const [open, setOpen] = useState(initial !== null);
@@ -38,8 +39,8 @@ export function YesNoQuiz({
 
   useEffect(() => {
     setView(initial);
-    setLeft(initialLeft);
-  }, [initial, initialLeft]);
+    setNext(initialNext);
+  }, [initial, initialNext]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -55,7 +56,7 @@ export function YesNoQuiz({
     setFresh(true);
     setOpen(false);
     setView(res.view);
-    setLeft(res.left);
+    setNext(res.next);
     setAsking(false);
     setQuestion("");
     window.setTimeout(() => setOpen(true), 150);
@@ -85,7 +86,7 @@ export function YesNoQuiz({
             {error}
           </p>
         )}
-        <button className="button" type="submit" disabled={pending || left <= 0}>
+        <button className="button" type="submit" disabled={pending}>
           {pending ? "Карта открывается…" : "Вытянуть карту"}
         </button>
         {view && (
@@ -93,7 +94,7 @@ export function YesNoQuiz({
             Назад к ответу
           </button>
         )}
-        <Attempts left={left} forms={["вопрос", "вопроса", "вопросов"]} />
+        <p className="quiz__left">Карты отвечают на один вопрос в день.</p>
       </form>
     );
   }
@@ -150,12 +151,18 @@ export function YesNoQuiz({
               />
             </>
           )}
-          {left > 0 ? (
+          {next ? (
+            <NextAttempt
+              next={next}
+              what="Следующий вопрос картам"
+              button={!r}
+              askHref={askHref}
+              ask={`Здравствуйте! Мой вопрос картам: «${view.question}». Выпала карта «${c.name}»${label ? `, ответ — «${label}»` : ""}. Расскажите подробнее, что она значит для меня?`}
+            />
+          ) : (
             <button className="button button--ghost" type="button" onClick={() => setAsking(true)}>
               Задать другой вопрос
             </button>
-          ) : (
-            <Attempts left={0} forms={["вопрос", "вопроса", "вопросов"]} />
           )}
         </div>
       )}

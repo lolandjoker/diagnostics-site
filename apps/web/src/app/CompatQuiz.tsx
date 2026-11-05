@@ -7,7 +7,7 @@
 import { useEffect, useState } from "react";
 import { maskBirthDate } from "@/lib/date-input";
 import type { CompatView } from "@/lib/quiz-compat";
-import { Attempts, QuizLocked, QuizSecret, askWith, useRefreshOnFocus } from "./QuizParts";
+import { NextAttempt, QuizLocked, QuizSecret, askWith, useRefreshOnFocus } from "./QuizParts";
 import { compatAction } from "./razbor/[id]/quiz-actions";
 
 const R = 52;
@@ -51,7 +51,7 @@ export function CompatQuiz({
   selfBirth,
   selfSign,
   initial,
-  initialLeft,
+  initialNext,
   telegramHref,
   askHref,
   expertName,
@@ -60,13 +60,14 @@ export function CompatQuiz({
   selfBirth: string;
   selfSign: string;
   initial: CompatView | null;
-  initialLeft: number;
+  /** Когда можно посчитать снова; null — можно сейчас. */
+  initialNext: string | null;
   telegramHref: string | null;
   askHref: string;
   expertName: string | null;
 }) {
   const [view, setView] = useState(initial);
-  const [left, setLeft] = useState(initialLeft);
+  const [next, setNext] = useState(initialNext);
   const [editing, setEditing] = useState(initial === null);
   const [fresh, setFresh] = useState(false);
   const [name, setName] = useState("");
@@ -77,8 +78,8 @@ export function CompatQuiz({
 
   useEffect(() => {
     setView(initial);
-    setLeft(initialLeft);
-  }, [initial, initialLeft]);
+    setNext(initialNext);
+  }, [initial, initialNext]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -93,18 +94,15 @@ export function CompatQuiz({
     }
     setFresh(true);
     setView(res.view);
-    setLeft(res.left);
+    setNext(res.next);
     setEditing(false);
   }
 
   const r = view?.result ?? null;
-  const ask =
-    view && r
-      ? askWith(
-          askHref,
-          `Здравствуйте! Хочу разобрать совместимость: моя дата рождения ${ru(selfBirth)}, ${view.partnerName ? `${view.partnerName} — ` : "партнёра — "}${ru(view.partnerBirth)}. Сайт показал ${r.scores.total}%. Что вы скажете о нашей паре?`,
-        )
-      : askHref;
+  const askText = view
+    ? `Здравствуйте! Хочу разобрать совместимость: моя дата рождения ${ru(selfBirth)}, ${view.partnerName ? `${view.partnerName} — ` : "партнёра — "}${ru(view.partnerBirth)}.${r ? ` Сайт показал ${r.scores.total}%.` : ""} Что вы скажете о нашей паре?`
+    : "Здравствуйте! Хочу разобрать нашу совместимость с партнёром.";
+  const ask = askWith(askHref, askText);
 
   return (
     <div className={`compat ${fresh ? "is-fresh" : ""}`}>
@@ -134,7 +132,7 @@ export function CompatQuiz({
               {error}
             </p>
           )}
-          <button className="button" type="submit" disabled={pending || left <= 0}>
+          <button className="button" type="submit" disabled={pending}>
             {pending ? "Считаем…" : "Рассчитать совместимость"}
           </button>
           {view && (
@@ -142,7 +140,7 @@ export function CompatQuiz({
               Назад к результату
             </button>
           )}
-          <Attempts left={left} forms={["раз", "раза", "раз"]} />
+          <p className="quiz__left">Новую совместимость можно посчитать раз в 5 дней.</p>
         </form>
       ) : (
         view && (
@@ -216,7 +214,9 @@ export function CompatQuiz({
                 telegramHref={telegramHref}
               />
             )}
-            {left > 0 && (
+            {next ? (
+              <NextAttempt next={next} what="Следующий расчёт совместимости" askHref={askHref} ask={askText} button={!r} />
+            ) : (
               <button className="button button--ghost compat__again" type="button" onClick={() => setEditing(true)}>
                 Посчитать с другой датой
               </button>
