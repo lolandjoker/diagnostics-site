@@ -12,7 +12,7 @@ import { conversations, experts, leads, messagePhotos, messages, operators } fro
 import type { MessageAuthor } from "@/db/schema";
 import { detectImageMime, expertPhotoUrls, expertStatus, getExpert, isOnline, listExperts } from "./experts";
 import type { Lead } from "./leads";
-import { notifyClient } from "./telegram";
+import { notifyClient } from "./bot-delivery";
 import { fillTemplate, getTexts } from "./texts";
 
 export type Conversation = typeof conversations.$inferSelect;
@@ -271,14 +271,14 @@ export async function deliverDueFullTexts(db: Db, now: Date, conversationId?: st
     const [expert] = await db.select({ fullText: experts.fullText }).from(experts).where(eq(experts.id, c.expertId));
     // Одна диагностика на человека: уже получил в другом чате — в этот не отправляем
     if (lead && expert?.fullText && !(await leadGotFullText(db, c.leadId))) {
-      await postMessage(db, c.id, { author: "system", body: fillTemplate(expert.fullText, { name: lead.name }) });
-      void notifyClient(db, c.id, { kind: "fullText" });
+      const sent = await postMessage(db, c.id, { author: "system", body: fillTemplate(expert.fullText, { name: lead.name }) });
+      if (sent.ok) void notifyClient(db, c.id, { kind: "fullText", messageId: sent.id });
     }
   }
 }
 
 /** operatorId — для author = admin: написал оператор чатов (подпись у сотрудников — его имя). */
-/** automatic — сообщение отправил сайт от имени эксперта (приветствие). */
+/** automatic — сообщение отправил сайт от имени эксперта (приветствие); viaTelegram — клиент ответил из бота. */
 export type PostInput = {
   author: MessageAuthor;
   body?: string;
@@ -286,6 +286,7 @@ export type PostInput = {
   operatorId?: number;
   photo?: Buffer;
   automatic?: boolean;
+  viaTelegram?: boolean;
 };
 export type PostResult = { ok: true; id: number } | { ok: false; error: string };
 
@@ -325,6 +326,7 @@ export async function postMessage(db: Db, conversationId: string, input: PostInp
         expertId: input.expertId ?? null,
         operatorId: input.author === "admin" ? (input.operatorId ?? null) : null,
         automatic: input.automatic ?? false,
+        viaTelegram: input.author === "client" && input.viaTelegram === true,
       })
       .returning({ id: messages.id });
     const messageId = (m as { id: number }).id;
@@ -334,9 +336,9 @@ export async function postMessage(db: Db, conversationId: string, input: PostInp
     await tx.update(conversations).set({ lastMessageAt: new Date() }).where(eq(conversations.id, conversationId));
     return messageId;
   });
-  // Клиенту из Telegram-бота — уведомление об ответе (не ждём: чат не должен тормозить из-за Telegram)
+  // Клиенту из Telegram-бота — ответ эксперта в бот (не ждём: чат не должен тормозить из-за Telegram)
   if (input.author === "expert" || input.author === "admin") {
-    void notifyClient(db, conversationId, { kind: "message", expertId: input.expertId ?? null });
+    void notifyClient(db, conversationId, { kind: "message", messageId: id });
   }
   return { ok: true, id };
 }
@@ -403,7 +405,7 @@ export async function messageViews(
     const expertId = asExpert ? conversation.expertId : m.expertId;
     const authorName =
       author === "client"
-        ? clientName
+        ? clientName + (viewer === "staff" && m.viaTelegram ? " · из Telegram" : "")
         : author === "expert"
           ? ((asExpert ? chatExpert?.name : expertName) ?? "Эксперт") +
             // Сотрудники видят, что это приветствие сайта, а не эксперт сам написал

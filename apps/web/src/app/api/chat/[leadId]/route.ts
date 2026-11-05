@@ -44,6 +44,8 @@ export async function GET(req: Request, ctx: RouteContext<"/api/chat/[leadId]">)
       expertStatus: expert ? expertStatus(expert, now) : "offline",
       typing,
       readUpTo: conversation.expertReadAt?.toISOString() ?? null,
+      // Подключил Telegram — страница убирает приглашение подключить
+      telegramConnected: lead.telegramUserId !== null,
     },
     { headers: noStore },
   );

@@ -355,8 +355,31 @@ export const messages = pgTable(
     operatorId: integer("operator_id").references(() => operators.id),
     /** Отправлено сайтом от имени эксперта (приветствие) — не считается его ответом в статистике. */
     automatic: boolean("automatic").notNull().default(false),
+    /** Клиент написал это из Telegram-бота, а не на сайте. */
+    viaTelegram: boolean("via_telegram").notNull().default(false),
   },
   (t) => [index("messages_conversation_idx").on(t.conversationId, t.id)],
+);
+
+/**
+ * Сообщения бота клиенту в Telegram и чат на сайте, к которому каждое относится: клиент отвечает в боте
+ * на сообщение эксперта — ответ уходит в тот же чат. withButtons — под сообщением ещё есть кнопка
+ * «Ответить на сайте» (у прежних сообщений её убираем, остаётся под последним).
+ */
+export const telegramMessages = pgTable(
+  "telegram_messages",
+  {
+    chatId: bigint("chat_id", { mode: "number" }).notNull(),
+    messageId: integer("message_id").notNull(),
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    siteMessageId: integer("site_message_id").references(() => messages.id, { onDelete: "set null" }),
+    expertId: integer("expert_id").references(() => experts.id),
+    withButtons: boolean("with_buttons").notNull().default(false),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.chatId, t.messageId] }), index("telegram_messages_chat_idx").on(t.chatId, t.createdAt)],
 );
 
 /** Фото в сообщении чата: JPEG, PNG или WebP, одно на сообщение. */

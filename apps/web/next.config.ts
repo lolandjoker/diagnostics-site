@@ -28,6 +28,8 @@ const nextConfig: NextConfig = {
   transpilePackages: ["@diag/engine"],
   // Драйверы базы грузятся из node_modules как есть, без упаковки сборщиком
   serverExternalPackages: ["pg", "@electric-sql/pglite"],
+  // Шрифт плашки эксперта для бота (lib/bot-card.tsx) читается с диска — взять его в сборку
+  outputFileTracingIncludes: { "/**": ["./assets/fonts/*.woff"] },
   // Фото эксперта и сертификаты загружаются через серверные действия, по нескольку файлов за раз
   // (до 10 штук по 5 МБ); по умолчанию лимит 1 МБ
   experimental: {

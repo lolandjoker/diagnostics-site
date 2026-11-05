@@ -1,8 +1,6 @@
 import { createHmac } from "node:crypto";
 import { createTestDb } from "@/db";
-import type { Db } from "@/db";
-import { messages } from "@/db/schema";
-import { markClientRead, startConversation } from "./chat";
+import { startConversation } from "./chat";
 import { createExpert, setExpertOnline } from "./experts";
 import { createLead } from "./leads";
 import {
@@ -14,9 +12,6 @@ import {
   leadFromLoginCode,
   linkCode,
   loginCode,
-  newMessagesLabel,
-  noticeText,
-  notifyClient,
   telegramConfig,
   verifyInitData,
   webhookSecret,
@@ -68,23 +63,6 @@ describe("данные из Telegram", () => {
     expect(webhookSecret(TOKEN)).not.toContain(TOKEN);
   });
 
-  it("текст уведомления: сколько новых сообщений и от какого эксперта, без самого текста", () => {
-    expect(noticeText({ kind: "message", expertId: 1 }, "Вера", "Анна")).toBe("💬 У вас 1 новое сообщение от эксперта Вера");
-    expect(noticeText({ kind: "message", expertId: 1 }, "Вера", "Анна", 3)).toBe("💬 У вас 3 новых сообщения от эксперта Вера");
-    expect([1, 2, 5, 11, 21, 22, 25, 112].map(newMessagesLabel)).toEqual([
-      "1 новое сообщение",
-      "2 новых сообщения",
-      "5 новых сообщений",
-      "11 новых сообщений",
-      "21 новое сообщение",
-      "22 новых сообщения",
-      "25 новых сообщений",
-      "112 новых сообщений",
-    ]);
-    expect(noticeText({ kind: "fullText" }, "Мария", "Анна")).toContain("Анна, ваш подробный разбор готов");
-    expect(noticeText({ kind: "call", expertId: 1 }, "Мария", "Анна")).toBe("📞 Мария звонит вам — откройте чат, чтобы ответить.");
-  });
-
   it("код привязки и код входа: подпись, срок, подделка", () => {
     const leadId = "0f8b7c1e-2d3a-4b5c-8d9e-0a1b2c3d4e5f";
     const code = linkCode(TOKEN, leadId);
@@ -112,16 +90,17 @@ describe("бот: привязка заявки с сайта, /start, /stop", (
 
     // Новый человек — приветствие и «Открыть»
     let reply = await botReply(db, cfg, tg, "/start", now);
-    expect(reply.buttons).toEqual([{ text: "Открыть", webApp: "https://example.com" }]);
+    expect(reply.buttons).toEqual([{ text: "Открыть", webApp: "https://example.com", icon: "moon" }]);
     // Испорченная ссылка — ничего не привязано
     reply = await botReply(db, cfg, tg, "/start lнеткода", now);
     expect(reply.text).toContain("Ссылка не подошла");
     expect(await leadForTelegramUser(db, tg)).toBeNull();
 
     reply = await botReply(db, cfg, tg, `/start ${linkCode(TOKEN, lead.id)}`, now);
-    expect(reply.text).toContain("Анна, Telegram подключён");
+    expect(reply.text).toContain("<b>Анна, Telegram подключён</b>");
+    expect(reply.linked).toBe(lead.id);
     expect(await leadForTelegramUser(db, tg)).toBe(lead.id);
-    expect(reply.buttons[0]).toEqual({ text: "Открыть разбор", webApp: `https://example.com/razbor/${lead.id}` });
+    expect(reply.buttons[0]).toEqual({ text: "Открыть разбор", webApp: `https://example.com/razbor/${lead.id}`, icon: "chat" });
     const site = reply.buttons[1];
     if (!site || !("url" in site)) throw new Error("нет кнопки «Открыть на сайте»");
     const code = new URL(site.url).searchParams.get("t") ?? "";
@@ -135,113 +114,12 @@ describe("бот: привязка заявки с сайта, /start, /stop", (
     await startConversation(db, lead, expert.id, new Date());
     reply = await botReply(db, cfg, tg, "привет", now);
     expect(reply.text).toContain("Здравствуйте, Анна!");
-    expect(reply.buttons[0]).toEqual({ text: "Открыть чат", webApp: `https://example.com/razbor/${lead.id}/chat` });
+    expect(reply.buttons[0]).toEqual({ text: "Открыть чат", webApp: `https://example.com/razbor/${lead.id}/chat`, icon: "chat" });
+    expect(reply.linked).toBeUndefined();
 
     reply = await botReply(db, cfg, tg, "/stop", now);
     expect(reply.text).toContain("Уведомления отключены");
     expect(await leadForTelegramUser(db, tg)).toBeNull();
     expect((await botReply(db, cfg, tg, "/stop", now)).text).toContain("и так не подключены");
-  });
-});
-
-describe("уведомления клиенту из бота", () => {
-  let db: Db;
-  let fetchMock: ReturnType<typeof vi.fn>;
-  let experts = 0;
-
-  beforeEach(async () => {
-    db = await createTestDb();
-    fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true, result: { message_id: 42 } }), { status: 200 }));
-  });
-
-  afterEach(() => {
-    vi.unstubAllEnvs();
-    vi.unstubAllGlobals();
-  });
-
-  async function chatFor(telegramUserId: number | null) {
-    const expert = await createExpert(db, { name: "Мария", login: `maria${++experts}`, password: "пароль-эксперта" });
-    if (!expert.ok) throw new Error(expert.error);
-    await setExpertOnline(db, expert.id, true, new Date());
-    const lead = await createLead(db, { name: "Анна", birthDate: "1990-03-15" }, new Date(), null, telegramUserId);
-    const started = await startConversation(db, lead, expert.id, new Date());
-    if (!started.ok) throw new Error(started.error);
-    // Бот включается после подготовки — приветствие при открытии чата уведомлений не шлёт
-    vi.stubEnv("TELEGRAM_BOT_TOKEN", TOKEN);
-    vi.stubEnv("SITE_DOMAIN", "example.com");
-    vi.stubGlobal("fetch", fetchMock);
-    return { lead, chat: started.conversation, expertId: expert.id };
-  }
-
-  type Sent = {
-    chat_id: number;
-    message_id?: number;
-    text: string;
-    reply_markup: { inline_keyboard: { text: string; web_app: { url: string } }[][] };
-  };
-  const call = (i: number) => {
-    const [url, init] = fetchMock.mock.calls[i] as [string, RequestInit];
-    return { method: url.split("/").pop(), body: JSON.parse(String(init.body)) as Sent };
-  };
-  const expertSays = (conversationId: string, expertId: number, at = new Date()) =>
-    db.insert(messages).values({ conversationId, author: "expert", expertId, body: "…", createdAt: at });
-
-  it("ответ эксперта — «У вас 1 новое сообщение» с кнопкой «Прочитать»; следующие меняют число", async () => {
-    const { lead, chat, expertId } = await chatFor(777000111);
-    expect(await leadForTelegramUser(db, 777000111)).toBe(lead.id);
-    expect(await leadForTelegramUser(db, 1)).toBeNull();
-
-    await expertSays(chat.id, expertId);
-    await notifyClient(db, chat.id, { kind: "message", expertId });
-    expect(call(0).method).toBe("sendMessage");
-    expect(call(0).body.chat_id).toBe(777000111);
-    expect(call(0).body.text).toBe("💬 У вас 1 новое сообщение от эксперта Мария");
-    expect(call(0).body.reply_markup.inline_keyboard[0]?.[0]).toEqual({
-      text: "Прочитать",
-      web_app: { url: `https://example.com/razbor/${lead.id}/chat?c=${chat.id}` },
-    });
-
-    // Ещё два сообщения, клиент не читал — то же уведомление, число растёт, нового звука нет
-    await expertSays(chat.id, expertId);
-    await notifyClient(db, chat.id, { kind: "message", expertId });
-    await expertSays(chat.id, expertId);
-    await notifyClient(db, chat.id, { kind: "message", expertId });
-    expect(call(2).method).toBe("editMessageText");
-    expect(call(2).body.message_id).toBe(42);
-    expect(call(2).body.text).toBe("💬 У вас 3 новых сообщения от эксперта Мария");
-
-    // Прочитал и ушёл — следующее сообщение приходит новым уведомлением
-    const read = new Date(Date.now() + 1000);
-    await markClientRead(db, chat.id, read);
-    await expertSays(chat.id, expertId, new Date(read.getTime() + 1000));
-    await notifyClient(db, chat.id, { kind: "message", expertId }, new Date(read.getTime() + 60_000));
-    expect(call(3).method).toBe("sendMessage");
-    expect(call(3).body.text).toBe("💬 У вас 1 новое сообщение от эксперта Мария");
-  });
-
-  it("эксперт звонит — бот зовёт ответить", async () => {
-    const { lead, chat, expertId } = await chatFor(777000111);
-    await notifyClient(db, chat.id, { kind: "call", expertId });
-    const body = JSON.parse(String((fetchMock.mock.calls[0] as [string, RequestInit])[1].body)) as {
-      text: string;
-      reply_markup: { inline_keyboard: { text: string; web_app: { url: string } }[][] };
-    };
-    expect(body.text).toBe("📞 Мария звонит вам — откройте чат, чтобы ответить.");
-    expect(body.reply_markup.inline_keyboard[0]?.[0]).toEqual({
-      text: "Ответить",
-      web_app: { url: `https://example.com/razbor/${lead.id}/chat?c=${chat.id}` },
-    });
-  });
-
-  it("клиент сейчас в чате или пришёл не из Telegram — не беспокоим", async () => {
-    const { chat, expertId } = await chatFor(777000111);
-    await markClientRead(db, chat.id, new Date());
-    await notifyClient(db, chat.id, { kind: "message", expertId });
-    expect(fetchMock).not.toHaveBeenCalled();
-
-    vi.unstubAllEnvs();
-    const site = await chatFor(null);
-    await notifyClient(db, site.chat.id, { kind: "fullText" });
-    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
