@@ -27,7 +27,20 @@ export const emojiSetName = (botUsername: string) => `taromba_icons_by_${botUser
 /** Без вариационного селектора: Telegram может вернуть «↩» вместо «↩️». */
 const bare = (s: string) => s.replace(/️/g, "");
 
-const ids = new Map<EmojiKey, string>();
+/**
+ * Значки — общие для всего процесса (globalThis): instrumentation.ts и обработчики запросов Next собирает
+ * отдельно, у каждого своя копия модуля — без этого набор, прочитанный при запуске, не видели бы сообщения.
+ */
+const holder = globalThis as unknown as { __diagBotEmoji?: { ids: Map<EmojiKey, string>; tried: number } };
+const state = (holder.__diagBotEmoji ??= { ids: new Map(), tried: 0 });
+const ids = state.ids;
+
+/** Пора ли (снова) читать набор: значков нет, а последняя попытка была давно. */
+export function botEmojiDue(now: number, retryMs: number): boolean {
+  if (ids.size > 0 || now - state.tried < retryMs) return false;
+  state.tried = now;
+  return true;
+}
 
 /** Значки из набора (getStickerSet): сопоставляем по эмодзи-заменителю. */
 export function setBotEmoji(stickers: { emoji?: unknown; custom_emoji_id?: unknown }[]): number {

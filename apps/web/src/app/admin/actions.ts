@@ -36,6 +36,8 @@ import {
 import { NO_METHOD, VARIATION_MODES, deleteVariation, getVariation, getVariationTexts, saveVariationTexts, setVariationMode } from "@/lib/variations";
 import type { VariationMode } from "@/lib/variations";
 import { TEXT_DEFS, saveTexts } from "@/lib/texts";
+import { sendTestBroadcast, startBroadcast, validateBroadcast } from "@/lib/broadcasts";
+import { telegramConfig } from "@/lib/telegram";
 import type { TextKey } from "@/lib/texts";
 import type { ActionResult } from "./ActionForm";
 
@@ -104,6 +106,33 @@ export async function deleteOperatorAction(form: FormData): Promise<void> {
   const id = int(form, "id");
   if (id !== null && form.get("confirm") === "on") await deleteOperator(await getDb(), id, new Date());
   refresh();
+}
+
+// --- Рассылки в Telegram-бот (только админ) ---
+
+export async function broadcastAction(_prev: ActionResult, form: FormData): Promise<ActionResult> {
+  await requireAdmin();
+  const cfg = telegramConfig();
+  if (!cfg) return fail("Telegram-бот не подключён");
+  const input = {
+    body: str(form, "body"),
+    buttonText: str(form, "button_text"),
+    buttonUrl: str(form, "button_url"),
+    gift: form.get("gift") === "on",
+  };
+  const error = validateBroadcast(input);
+  if (error) return fail(error);
+  const testId = str(form, "test_id").trim();
+  if (testId) {
+    if (!/^\d{3,15}$/.test(testId)) return fail("Telegram ID — только цифры");
+    return (await sendTestBroadcast(cfg, Number(testId), input))
+      ? done("Пробное сообщение отправлено — посмотрите в Telegram. Чтобы разослать всем, сотрите ID.")
+      : fail("Не ушло: этот человек ещё не открывал бота или заблокировал его");
+  }
+  if (form.get("confirm") !== "on") return fail("Отметьте «Отправить всем» — или впишите свой Telegram ID для пробы");
+  const { total } = await startBroadcast(await getDb(), cfg, input);
+  refresh();
+  return done(`Рассылка началась: ${total} получателей. Обновите страницу, чтобы увидеть, сколько ушло.`);
 }
 
 // --- Тексты сайта ---

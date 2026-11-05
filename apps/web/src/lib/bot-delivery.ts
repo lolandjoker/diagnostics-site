@@ -15,7 +15,7 @@ import { conversations, expertPhotos, experts, leads, messagePhotos, messages, t
 import { expertCardPng } from "./bot-card";
 import { em } from "./bot-emoji";
 import { expertStatus } from "./experts";
-import { type BotButton, type TelegramConfig, botApi, botCall, esc, keyboard, sentId, telegramConfig } from "./telegram";
+import { type BotButton, type TelegramConfig, botApi, botCall, ensureBotEmoji, esc, keyboard, sentId, telegramConfig } from "./telegram";
 
 /** Клиент смотрел чат совсем недавно (чат опрашивается раз в 3 секунды) — значит, видит его сейчас, в бот не шлём. */
 export const CLIENT_ACTIVE_MS = 10_000;
@@ -33,9 +33,13 @@ export type ClientNotice =
 /** Сообщения одного чата уходят в Telegram по очереди — в том же порядке, что на сайте. */
 const queues = new Map<string, Promise<void>>();
 
-function enqueue(key: string, job: () => Promise<void>): Promise<void> {
+export function enqueue(key: string, job: () => Promise<void>): Promise<void> {
+  const cfg = telegramConfig();
   const next = (queues.get(key) ?? Promise.resolve())
-    .then(job)
+    .then(async () => {
+      if (cfg) await ensureBotEmoji(cfg);
+      await job();
+    })
     .catch((err: unknown) => console.warn(`Telegram: ${err instanceof Error ? err.message : String(err)}`));
   queues.set(key, next);
   void next.then(() => {
@@ -59,7 +63,7 @@ export function splitText(text: string, limit = CHUNK_LIMIT): string[] {
   return out;
 }
 
-interface ChatContext {
+export interface ChatContext {
   conversationId: string;
   leadId: string;
   clientName: string;
@@ -69,7 +73,7 @@ interface ChatContext {
 }
 
 /** Чат на сайте → куда писать в Telegram. null — заявка не привязана, эксперт в архиве или клиент сейчас на сайте. */
-async function chatContext(db: Db, cfg: TelegramConfig, conversationId: string, now: Date, force: boolean): Promise<ChatContext | null> {
+export async function chatContext(db: Db, cfg: TelegramConfig, conversationId: string, now: Date, force: boolean): Promise<ChatContext | null> {
   const [row] = await db
     .select({
       leadId: leads.id,
@@ -99,15 +103,8 @@ async function chatContext(db: Db, cfg: TelegramConfig, conversationId: string, 
 /** Плашки уже загружены в Telegram — шлём по file_id, не рисуя заново. Ключ меняется вместе с плашкой. */
 const cardFiles = new Map<string, string>();
 
-async function sendCard(
-  db: Db,
-  cfg: TelegramConfig,
-  chatId: number,
-  expertId: number,
-  now: Date,
-  caption: string | null,
-  buttons: BotButton[],
-): Promise<number | null> {
+/** Плашка эксперта для отправки: file_id уже загруженной или свежая картинка (key — запомнить её file_id). */
+export async function expertCard(db: Db, expertId: number, now: Date): Promise<{ key: string; fileId?: string; png?: Buffer } | null> {
   const [e] = await db
     .select({ id: experts.id, name: experts.name, rating: experts.rating, online: experts.online, onlineUntil: experts.onlineUntil, busy: experts.busy })
     .from(experts)
@@ -119,28 +116,48 @@ async function sendCard(
     .where(eq(expertPhotos.expertId, expertId));
   const status = expertStatus(e, now);
   const key = [e.id, e.name, e.rating, status, photo?.updatedAt.getTime() ?? 0].join("|");
-  const fields = { chat_id: chatId, ...(caption && { caption, parse_mode: "HTML" }), ...keyboard(buttons) };
+  const fileId = cardFiles.get(key);
+  if (fileId) return { key, fileId };
+  return { key, png: await expertCardPng({ name: e.name, rating: e.rating, status, photo: photo ?? null }) };
+}
 
-  const cached = cardFiles.get(key);
-  if (cached) {
-    const id = sentId(await botCall(cfg.token, "sendPhoto", { ...fields, photo: cached }));
+/** Запомнить file_id плашки из ответа Telegram (sendPhoto или editMessageMedia). */
+export function rememberCardFile(key: string, sent: unknown): void {
+  const fileId = (sent as { photo?: { file_id?: string }[] } | null)?.photo?.at(-1)?.file_id;
+  if (!fileId) return;
+  if (cardFiles.size > 500) cardFiles.clear();
+  cardFiles.set(key, fileId);
+}
+
+export function forgetCardFile(key: string): void {
+  cardFiles.delete(key);
+}
+
+export async function sendCard(
+  db: Db,
+  cfg: TelegramConfig,
+  chatId: number,
+  expertId: number,
+  now: Date,
+  caption: string | null,
+  buttons: (BotButton | BotButton[])[],
+): Promise<number | null> {
+  const card = await expertCard(db, expertId, now);
+  if (!card) return null;
+  const fields = { chat_id: chatId, ...(caption && { caption, parse_mode: "HTML" }), ...keyboard(buttons) };
+  if (card.fileId) {
+    const id = sentId(await botCall(cfg.token, "sendPhoto", { ...fields, photo: card.fileId }));
     if (id !== null) return id;
-    cardFiles.delete(key);
+    forgetCardFile(card.key);
   }
-  const png = await expertCardPng({ name: e.name, rating: e.rating, status, photo: photo ?? null });
-  const sent = (await botCall(cfg.token, "sendPhoto", fields, { field: "photo", data: png, name: "expert.png", type: "image/png" })) as {
-    message_id?: number;
-    photo?: { file_id?: string }[];
-  } | null;
-  const fileId = sent?.photo?.at(-1)?.file_id;
-  if (fileId) {
-    if (cardFiles.size > 500) cardFiles.clear();
-    cardFiles.set(key, fileId);
-  }
+  const png = card.png ?? (await expertCard(db, expertId, now))?.png;
+  if (!png) return null;
+  const sent = await botCall(cfg.token, "sendPhoto", fields, { field: "photo", data: png, name: "expert.png", type: "image/png" });
+  rememberCardFile(card.key, sent);
   return sentId(sent);
 }
 
-async function sendText(cfg: TelegramConfig, chatId: number, html: string, buttons: BotButton[]): Promise<number | null> {
+export async function sendText(cfg: TelegramConfig, chatId: number, html: string, buttons: (BotButton | BotButton[])[]): Promise<number | null> {
   return sentId(
     await botCall(cfg.token, "sendMessage", {
       chat_id: chatId,
@@ -156,12 +173,12 @@ async function sendText(cfg: TelegramConfig, chatId: number, html: string, butto
  * Запомнить отправленное сообщение бота (ответ на него уйдёт в этот чат). С кнопками — у прежних сообщений
  * в Telegram кнопку убираем: «Ответить на сайте» остаётся только под последним.
  */
-async function remember(
+export async function remember(
   db: Db,
   cfg: TelegramConfig,
   ctx: ChatContext,
   messageId: number | null,
-  info: { siteMessageId?: number; expertId?: number; withButtons: boolean },
+  info: { siteMessageId?: number; expertId?: number; withButtons: boolean; purpose?: "reminder" | "review" },
 ): Promise<void> {
   if (messageId === null) return;
   if (info.withButtons) {
@@ -183,6 +200,7 @@ async function remember(
       siteMessageId: info.siteMessageId ?? null,
       expertId: info.expertId ?? null,
       withButtons: info.withButtons,
+      purpose: info.purpose ?? null,
     })
     .onConflictDoNothing();
 }

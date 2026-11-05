@@ -162,6 +162,13 @@
       "when": 1793887598010,
       "tag": "0022_telegram_chat",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1793888759399,
+      "tag": "0023_bot_extras",
+      "breakpoints": true
     }
   ]
 }

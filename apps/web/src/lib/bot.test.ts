@@ -2,14 +2,19 @@ import { eq } from "drizzle-orm";
 import type { Mock } from "vitest";
 import { createTestDb } from "@/db";
 import type { Db } from "@/db";
-import { messages, telegramMessages } from "@/db/schema";
+import { broadcasts, conversations, messages, reviews, telegramMessages, telegramStarts } from "@/db/schema";
 import { em, setBotEmoji } from "./bot-emoji";
 import { notifyClient, sendLatestToTelegram, splitText } from "./bot-delivery";
+import { REMIND_AFTER_MS, REVIEW_ASK_AFTER_MS, askReviews, remindUnread } from "./bot-chores";
+import { handleExpertCallback, showExperts } from "./bot-experts";
 import { handleClientMessage } from "./bot-inbox";
+import { handleCallback } from "./bot-reviews";
+import { botStats } from "./bot-stats";
+import { broadcastHtml, runBroadcast, validateBroadcast } from "./broadcasts";
 import { markClientRead, messageViews, startConversation } from "./chat";
 import { createExpert, setExpertOnline } from "./experts";
 import { createLead } from "./leads";
-import { keyboard } from "./telegram";
+import { botReply, keyboard, telegramStartSource } from "./telegram";
 
 const TOKEN = "123456789:AAHtestTOKENtestTOKENtestTOKENtest12";
 const TG = 777000111;
@@ -49,8 +54,12 @@ describe("переписка в Telegram-боте", () => {
   beforeEach(async () => {
     db = await createTestDb();
     nextId = 100;
-    fetchMock = vi.fn(async (url: string, _init?: RequestInit) => {
+    fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       const method = String(url).split("/").pop();
+      // Человек 13 заблокировал бота
+      if (typeof init?.body === "string" && (JSON.parse(init.body) as { chat_id?: number }).chat_id === 13) {
+        return new Response(JSON.stringify({ ok: false, description: "Forbidden: bot was blocked by the user" }), { status: 403 });
+      }
       const result =
         method === "sendPhoto"
           ? { message_id: ++nextId, photo: [{ file_id: "small" }, { file_id: `card-${nextId}` }] }
@@ -83,8 +92,11 @@ describe("переписка в Telegram-боте", () => {
   }
 
   /** Вызовы Bot API: метод и поля (JSON или multipart — объекты в multipart строкой JSON). */
+  // Чтение набора эмодзи (getMe, getStickerSet) — не в счёт
   const calls = () =>
-    fetchMock.mock.calls.map(([url, init]) => {
+    fetchMock.mock.calls
+      .filter(([url]) => !/\/(getMe|getStickerSet)$/.test(String(url)))
+      .map(([url, init]) => {
       const raw = (init as RequestInit).body;
       let body: Record<string, unknown> = {};
       if (raw instanceof FormData) {
@@ -214,5 +226,145 @@ describe("переписка в Telegram-боте", () => {
     const sent = calls();
     expect(sent[0]?.method).toBe("sendPhoto");
     expect(sent[0]?.body.caption).toContain("Здравствуйте! Напишите время рождения");
+  });
+
+  const hoursAgo = (h: number) => new Date(Date.now() - h * 60 * 60 * 1000);
+
+  it("эксперт ответил, клиент сутки не читал — одно напоминание; прочитал или ответил — нет", async () => {
+    const { lead, chat, expertId } = await chatFor(TG, "Мария");
+    await db.insert(messages).values({ conversationId: chat.id, author: "expert", expertId, body: "Как вы?", createdAt: hoursAgo(25) });
+    // Второй чат: клиент ответил после эксперта — напоминать не о чем
+    const other = await chatFor(TG, "Ольга");
+    await db.insert(messages).values([
+      { conversationId: other.chat.id, author: "expert", expertId: other.expertId, body: "?", createdAt: hoursAgo(30) },
+      { conversationId: other.chat.id, author: "client", body: "Да", createdAt: hoursAgo(29) },
+    ]);
+    // Третий: ответ свежий — ещё рано
+    const fresh = await chatFor(TG, "Вера");
+    await db.insert(messages).values({ conversationId: fresh.chat.id, author: "expert", expertId: fresh.expertId, body: "!", createdAt: hoursAgo(2) });
+
+    expect(await remindUnread(db, new Date())).toBe(1);
+    const sent = calls();
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.body.text).toBe("У вас непрочитанный ответ от эксперта <b>Мария</b>. Напишите прямо сюда или откройте чат.");
+    expect(sent[0]!.body.reply_markup).toEqual({
+      inline_keyboard: [[{ text: "Открыть чат", web_app: { url: `https://example.com/razbor/${lead.id}/chat?c=${chat.id}` } }]],
+    });
+    // Повторно о том же сообщении — нет
+    expect(await remindUnread(db, new Date())).toBe(0);
+    expect(REMIND_AFTER_MS).toBe(24 * 60 * 60 * 1000);
+  });
+
+  it("через полчаса после разбора — просьба оценить; кнопка ставит оценку, ответ — текст отзыва", async () => {
+    const { chat } = await chatFor(TG, "Мария");
+    const doneAt = new Date(Date.now() - REVIEW_ASK_AFTER_MS - 60_000);
+    await db.update(conversations).set({ fullTextSentAt: doneAt }).where(eq(conversations.id, chat.id));
+    await db.insert(messages).values({ conversationId: chat.id, author: "system", body: "Разбор", createdAt: doneAt });
+
+    expect(await askReviews(db, new Date())).toBe(1);
+    expect(await askReviews(db, new Date())).toBe(0);
+    const ask = calls()[0]!;
+    expect(ask.body.text).toContain("Как вам разбор эксперта <b>Мария</b>?");
+    const row = (ask.body.reply_markup as { inline_keyboard: { text: string; callback_data: string }[][] }).inline_keyboard[0]!;
+    expect(row.map((b) => b.text)).toEqual(["1", "2", "3", "4", "5"]);
+    expect(row[3]!.callback_data).toBe(`rv:${chat.id}:4`);
+    const askId = (await db.select().from(telegramMessages).where(eq(telegramMessages.purpose, "review")))[0]!.messageId;
+
+    // Чужой человек жмёт кнопку — отзыва нет
+    await handleCallback(db, cfg, { id: "q0", from: { id: 999 }, data: `rv:${chat.id}:1`, message: { message_id: askId, chat: { id: 999 } } });
+    expect(await db.select().from(reviews)).toHaveLength(0);
+
+    await handleCallback(db, cfg, { id: "q1", from: { id: TG }, data: `rv:${chat.id}:4`, message: { message_id: askId, chat: { id: TG } } });
+    let [review] = await db.select().from(reviews);
+    expect(review).toMatchObject({ conversationId: chat.id, stars: 4, body: "", authorName: "Анна" });
+    const edited = calls().find((c) => c.method === "editMessageText");
+    expect(edited?.body.text).toContain("Ваша оценка эксперту <b>Мария</b>: ★★★★☆");
+
+    const reply = await handleClientMessage(db, cfg, {
+      message_id: 5,
+      chat: { id: TG, type: "private" },
+      from: { id: TG },
+      text: "Очень точно, спасибо!",
+      reply_to_message: { message_id: askId },
+    });
+    expect(reply).toEqual({ handled: true, reply: "Спасибо! Отзыв об эксперте <b>Мария</b> сохранён." });
+    [review] = await db.select().from(reviews);
+    expect(review).toMatchObject({ stars: 4, body: "Очень точно, спасибо!" });
+    // Текст отзыва не ушёл в чат эксперту
+    expect((await db.select().from(messages).where(eq(messages.author, "client"))).length).toBe(0);
+  });
+
+  it("рассылка: текст с **жирным** и /stop, проверка полей, итог — дошло и не дошло", async () => {
+    await chatFor(TG);
+    expect(validateBroadcast({ body: " ", buttonText: "", buttonUrl: "", gift: false })).toBe("Напишите текст рассылки");
+    expect(validateBroadcast({ body: "Привет", buttonText: "Кнопка", buttonUrl: "", gift: false })).toBe("Для кнопки нужны и надпись, и адрес");
+    expect(validateBroadcast({ body: "Привет", buttonText: "Кнопка", buttonUrl: "http://x.ru", gift: false })).toBe(
+      "Адрес кнопки должен начинаться с https://",
+    );
+    const input = { body: "**Подарок** <для вас>", buttonText: "Забрать", buttonUrl: "https://taromba.com", gift: false };
+    expect(validateBroadcast(input)).toBeNull();
+    expect(broadcastHtml(input)).toBe("<b>Подарок</b> &lt;для вас&gt;\n\n<i>Отключить сообщения — /stop</i>");
+
+    const [b] = await db.insert(broadcasts).values({ body: input.body, total: 2 }).returning();
+    await runBroadcast(db, cfg, b!.id, [TG, 13], input);
+    const [after] = await db.select().from(broadcasts);
+    expect(after).toMatchObject({ sent: 1, failed: 1 });
+    expect(after!.finishedAt).not.toBeNull();
+    expect(calls()[0]!.body.reply_markup).toEqual({ inline_keyboard: [[{ text: "Забрать", url: "https://taromba.com" }]] });
+  });
+
+  it("ссылка на бота с источником: запоминается первое касание, «Открыть» — через короткий адрес", async () => {
+    const reply = await botReply(db, cfg, 4242, "/start r3", new Date());
+    expect(reply.buttons[0]).toEqual({ text: "Открыть", webApp: "https://example.com/r3", icon: "moon" });
+    await botReply(db, cfg, 4242, "/start karta", new Date());
+    expect(await telegramStartSource(db, 4242)).toBe("r3");
+    expect(await db.select().from(telegramStarts)).toHaveLength(1);
+    expect(await telegramStartSource(db, 1)).toBeNull();
+    // Несуществующий источник — не запоминается
+    await botReply(db, cfg, 4343, "/start rr", new Date());
+    expect(await telegramStartSource(db, 4343)).toBeNull();
+  });
+
+  it("сводка по боту", async () => {
+    const { chat } = await chatFor(TG);
+    await chatFor(TG);
+    await db.insert(messages).values({ conversationId: chat.id, author: "client", body: "из бота", viaTelegram: true });
+    const stats = await botStats(db, null);
+    expect(stats).toMatchObject({ subscribers: 1, linkedLeads: 2, repliedLeads: 1, repliedMessages: 1, reminders: 0, reviewAsks: 0 });
+  });
+
+  it("выбор эксперта в боте: карточка листается в том же сообщении, «Написать» открывает чат", async () => {
+    const { lead, expertId } = await chatFor(TG, "Мария | Таролог");
+    const second = await createExpert(db, { name: "Ольга | Астролог", login: "olga-pick", password: "пароль-эксперта" });
+    if (!second.ok) throw new Error(second.error);
+    await setExpertOnline(db, second.id, true, new Date());
+
+    await showExperts(db, cfg, TG, TG, 0);
+    let sent = calls();
+    expect(sent[0]!.method).toBe("sendPhoto");
+    expect(sent[0]!.body.caption).toContain("<b>Мария</b> · Таролог");
+    const kb = (sent[0]!.body.reply_markup as { inline_keyboard: { text: string; callback_data?: string }[][] }).inline_keyboard;
+    expect(kb[0]!.map((b) => b.text)).toEqual(["◀", "1 из 2", "▶"]);
+    // С Марией чат уже есть
+    expect(kb[1]![0]).toMatchObject({ text: "Продолжить чат", callback_data: `exw:${expertId}` });
+
+    expect(await handleExpertCallback(db, cfg, { id: "q", userId: TG, chatId: TG, messageId: 555, data: "ex:1" })).toBe(true);
+    sent = calls();
+    const edit = sent.find((c) => c.method === "editMessageMedia");
+    expect(edit?.body.message_id).toBe("555");
+    expect((edit?.body.media as { caption: string }).caption).toContain("<b>Ольга</b> · Астролог");
+
+    await handleExpertCallback(db, cfg, { id: "q2", userId: TG, chatId: TG, messageId: 555, data: `exw:${second.id}` });
+    const chats = await db.select().from(conversations).where(eq(conversations.leadId, lead.id));
+    expect(chats.map((c) => c.expertId).sort()).toEqual([expertId, second.id].sort());
+    const opened = calls().find((c) => c.method === "sendMessage");
+    expect(opened?.body.text).toContain("Чат с экспертом <b>Ольга</b> открыт");
+    // Следующее сообщение из бота уйдёт в новый чат
+    const reply = await handleClientMessage(db, cfg, { message_id: 9, chat: { id: TG, type: "private" }, from: { id: TG }, text: "Здравствуйте!" });
+    expect(reply).toEqual({ handled: true, reply: "Отправлено эксперту <b>Ольга</b>. Ответ придёт сюда." });
+
+    // Без заявки — сначала разбор
+    await handleExpertCallback(db, cfg, { id: "q3", userId: 31337, chatId: 31337, messageId: null, data: `exw:${second.id}` });
+    expect(calls().filter((c) => c.method === "sendMessage").at(-1)?.body.text).toContain("Сначала получите бесплатный разбор");
   });
 });

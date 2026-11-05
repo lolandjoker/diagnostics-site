@@ -4,7 +4,9 @@ import { getDb } from "@/db";
 import { calls } from "@/db/schema";
 import { FUNNEL_PERIODS, funnel, funnelStart, periodStart, trackingSince } from "@/lib/funnel";
 import type { FunnelPeriod } from "@/lib/funnel";
+import { botStats } from "@/lib/bot-stats";
 import { heardFromStats, sourceStats } from "@/lib/sources";
+import { botUsername, telegramConfig } from "@/lib/telegram";
 import { getTexts } from "@/lib/texts";
 
 const REF_TEXT_KEYS = [
@@ -37,7 +39,8 @@ export default async function DashboardPage(props: PageProps<"/admin">) {
   const db = await getDb();
   const tracking = await trackingSince(db);
   const since = periodStart(period, new Date());
-  const [steps, [callRow], sources, heard, sourceNames] = await Promise.all([
+  const cfg = telegramConfig();
+  const [steps, [callRow], sources, heard, sourceNames, bot, botName] = await Promise.all([
     tracking ? funnel(db, funnelStart(since, tracking)) : Promise.resolve([]),
     db
       .select({ n: count() })
@@ -46,6 +49,8 @@ export default async function DashboardPage(props: PageProps<"/admin">) {
     sourceStats(db, since),
     heardFromStats(db, since),
     getTexts(db, REF_TEXT_KEYS),
+    botStats(db, since),
+    cfg ? botUsername(cfg) : Promise.resolve(null),
   ]);
   const heardTotal = heard.reduce((sum, h) => sum + h.leads, 0);
   const top = Math.max(1, ...steps.map((s) => s.count));
@@ -115,7 +120,8 @@ export default async function DashboardPage(props: PageProps<"/admin">) {
         <p className="muted">
           По коротким адресам: сайт запоминает, по какому адресу человек зашёл впервые. «Открыли главную» — браузеры за
           период, остальное — заявки, созданные за период. Адреса taromba.com/r1 … /r10 — для других площадок, их
-          названия меняются в <Link href="/admin/texts">«Текстах сайта» → «Источники»</Link>.
+          названия меняются в <Link href="/admin/texts">«Текстах сайта» → «Источники»</Link>. Ссылка t.me/…?start=…
+          ведёт сразу в Telegram-бота — заявка из бота тоже попадёт в этот источник.
         </p>
         <div className="table-wrap">
           <table>
@@ -134,6 +140,7 @@ export default async function DashboardPage(props: PageProps<"/admin">) {
                   <td>
                     {(s.key && REF_TEXT_KEYS.includes(`source.${s.key}` as RefTextKey) && sourceNames[`source.${s.key}` as RefTextKey]) || s.label}
                     <div className="muted">{s.key ? `taromba.com/${s.key}` : "taromba.com и Telegram-бот"}</div>
+                    {s.key && botName && <div className="muted">t.me/{botName}?start={s.key}</div>}
                   </td>
                   <td>{s.visitors}</td>
                   <td>
@@ -173,6 +180,31 @@ export default async function DashboardPage(props: PageProps<"/admin">) {
               ))}
             </tbody>
           </table>
+        </div>
+      </section>
+
+      <section className="admin-section">
+        <h2>Telegram-бот</h2>
+        <p className="muted">
+          Подключены сейчас — за всё время (им уходят ответы экспертов и <Link href="/admin/rassylki">рассылки</Link>);
+          остальное — за период.
+        </p>
+        <div className="stats">
+          <div>
+            <b>{bot.subscribers}</b> подключены сейчас
+          </div>
+          <div>
+            <b>{bot.linkedLeads}</b> заявок с Telegram
+          </div>
+          <div>
+            <b>{bot.repliedLeads}</b> писали эксперту из бота <span className="muted">({bot.repliedMessages} сообщ.)</span>
+          </div>
+          <div>
+            <b>{bot.reminders}</b> напоминаний о непрочитанном
+          </div>
+          <div>
+            <b>{bot.reviewAsks}</b> просьб оценить эксперта
+          </div>
         </div>
       </section>
 

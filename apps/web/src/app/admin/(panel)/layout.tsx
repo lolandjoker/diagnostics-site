@@ -15,6 +15,7 @@ const NAV: { href: string; label: string; expertHref?: string; adminOnly?: boole
   { href: "/admin/experts", label: "Эксперты" },
   { href: "/admin/reviews", label: "Отзывы" },
   { href: "/admin/texts", label: "Тексты сайта", adminOnly: true },
+  { href: "/admin/rassylki", label: "Рассылки", adminOnly: true },
   { href: "/admin/operators", label: "Операторы", adminOnly: true },
 ];
 

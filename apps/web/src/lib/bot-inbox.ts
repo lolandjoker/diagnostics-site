@@ -6,7 +6,9 @@
 import { and, desc, eq, isNull } from "drizzle-orm";
 import type { Db } from "@/db";
 import { conversations, experts, leads, messages, telegramMessages } from "@/db/schema";
+import { splitExpertName } from "./bot-card";
 import { em } from "./bot-emoji";
+import { saveReviewText } from "./bot-reviews";
 import { MAX_CHAT_PHOTO_BYTES, postMessage } from "./chat";
 import { type TelegramConfig, botCall, esc } from "./telegram";
 import { clearTyping } from "./typing";
@@ -95,6 +97,14 @@ export async function handleClientMessage(db: Db, cfg: TelegramConfig, msg: Inco
   if (text.trim().startsWith("/")) return { handled: false };
 
   const replyTo = typeof msg.reply_to_message?.message_id === "number" ? msg.reply_to_message.message_id : null;
+  // Ответ на просьбу оценить эксперта — это текст отзыва, а не сообщение в чат
+  if (replyTo !== null && text.trim() !== "") {
+    const [asked] = await db
+      .select({ conversationId: telegramMessages.conversationId })
+      .from(telegramMessages)
+      .where(and(eq(telegramMessages.chatId, chatId), eq(telegramMessages.messageId, replyTo), eq(telegramMessages.purpose, "review")));
+    if (asked) return { handled: true, reply: await saveReviewText(db, asked.conversationId, userId, text) };
+  }
   const conversation = await targetConversation(db, chatId, userId, replyTo);
   if (!conversation) return { handled: false };
 
@@ -121,5 +131,5 @@ export async function handleClientMessage(db: Db, cfg: TelegramConfig, msg: Inco
   clearTyping(conversation.id, "client");
   return before
     ? { handled: true }
-    : { handled: true, reply: `${em("check")}Отправлено эксперту <b>${esc(conversation.expertName)}</b>. Ответ придёт сюда.` };
+    : { handled: true, reply: `${em("check")}Отправлено эксперту <b>${esc(splitExpertName(conversation.expertName).name)}</b>. Ответ придёт сюда.` };
 }
