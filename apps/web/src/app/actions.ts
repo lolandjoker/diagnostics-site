@@ -12,7 +12,7 @@ import {
   validateLead,
 } from "@/lib/leads";
 import { isHeardFrom, rememberedSource, setHeardFrom } from "@/lib/sources";
-import { telegramConfig, verifyInitData } from "@/lib/telegram";
+import { telegramConfig, telegramStartSource, verifyInitData } from "@/lib/telegram";
 import { pickVariation } from "@/lib/variations";
 
 export interface FormState {
@@ -39,7 +39,9 @@ export async function submitLead(_prev: FormState, form: FormData): Promise<Form
   const tgInitData = str(form.get("tg"));
   const telegramUser = tg && tgInitData ? verifyInitData(tgInitData, tg.token, now) : null;
   const db = await getDb();
-  const lead = await createLead(db, input, now, await pickVariation(db), telegramUser?.id ?? null, await rememberedSource());
+  // Источник: cookie короткого адреса, а в приложении бота — ссылка, по которой открыли бота
+  const source = (await rememberedSource()) ?? (telegramUser ? await telegramStartSource(db, telegramUser.id) : null);
+  const lead = await createLead(db, input, now, await pickVariation(db), telegramUser?.id ?? null, source);
   await rememberLead(lead.id);
   redirect(`/razbor/${lead.id}`);
 }

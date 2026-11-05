@@ -90,7 +90,10 @@ describe("бот: привязка заявки с сайта, /start, /stop", (
 
     // Новый человек — приветствие и «Открыть»
     let reply = await botReply(db, cfg, tg, "/start", now);
-    expect(reply.buttons).toEqual([{ text: "Открыть", webApp: "https://example.com", icon: "moon" }]);
+    expect(reply.buttons).toEqual([
+      { text: "Открыть", webApp: "https://example.com", icon: "moon" },
+      { text: "Выбрать эксперта", callback: "exl", icon: "star" },
+    ]);
     // Испорченная ссылка — ничего не привязано
     reply = await botReply(db, cfg, tg, "/start lнеткода", now);
     expect(reply.text).toContain("Ссылка не подошла");
@@ -101,7 +104,7 @@ describe("бот: привязка заявки с сайта, /start, /stop", (
     expect(reply.linked).toBe(lead.id);
     expect(await leadForTelegramUser(db, tg)).toBe(lead.id);
     expect(reply.buttons[0]).toEqual({ text: "Открыть разбор", webApp: `https://example.com/razbor/${lead.id}`, icon: "chat" });
-    const site = reply.buttons[1];
+    const site = reply.buttons.find((b) => "url" in b);
     if (!site || !("url" in site)) throw new Error("нет кнопки «Открыть на сайте»");
     const code = new URL(site.url).searchParams.get("t") ?? "";
     expect(new URL(site.url).pathname).toBe("/api/telegram/vhod");

@@ -309,6 +309,10 @@ export const conversations = pgTable(
     callRequestedAt: timestamp("call_requested_at", { withTimezone: true }),
     /** Когда клиент последний раз открывал этот чат — для счётчика непрочитанных в его списке чатов. */
     clientReadAt: timestamp("client_read_at", { withTimezone: true }),
+    /** Бот напомнил о непрочитанном ответе — о каком сообщении (одно напоминание на сообщение). */
+    reminderForMessageId: integer("reminder_for_message_id"),
+    /** Бот попросил оценить эксперта (через полчаса после подробного разбора); null — ещё не просил. */
+    reviewAskedAt: timestamp("review_asked_at", { withTimezone: true }),
   },
   (t) => [
     index("conversations_lead_idx").on(t.leadId, t.createdAt),
@@ -377,10 +381,35 @@ export const telegramMessages = pgTable(
     siteMessageId: integer("site_message_id").references(() => messages.id, { onDelete: "set null" }),
     expertId: integer("expert_id").references(() => experts.id),
     withButtons: boolean("with_buttons").notNull().default(false),
+    /** Зачем отправлено: null — переписка; reminder — напоминание; review — просьба оценить эксперта. */
+    purpose: text("purpose"),
     createdAt: createdAt(),
   },
   (t) => [primaryKey({ columns: [t.chatId, t.messageId] }), index("telegram_messages_chat_idx").on(t.chatId, t.createdAt)],
 );
+
+/**
+ * Откуда человек пришёл в бота: ссылка t.me/<бот>?start=<источник> (karta, r1 …). Первое касание —
+ * потом не меняется. Заявка из приложения бота берёт источник отсюда, если cookie источника нет.
+ */
+export const telegramStarts = pgTable("telegram_starts", {
+  telegramUserId: bigint("telegram_user_id", { mode: "number" }).primaryKey(),
+  source: text("source").notNull(),
+  createdAt: createdAt(),
+});
+
+/** Рассылка в бот всем, кто его подключил (из админки). total — кому отправляем, sent и failed — итог. */
+export const broadcasts = pgTable("broadcasts", {
+  id: serial("id").primaryKey(),
+  body: text("body").notNull(),
+  buttonText: text("button_text").notNull().default(""),
+  buttonUrl: text("button_url").notNull().default(""),
+  total: integer("total").notNull().default(0),
+  sent: integer("sent").notNull().default(0),
+  failed: integer("failed").notNull().default(0),
+  createdAt: createdAt(),
+  finishedAt: timestamp("finished_at", { withTimezone: true }),
+});
 
 /** Фото в сообщении чата: JPEG, PNG или WebP, одно на сообщение. */
 export const messagePhotos = pgTable("message_photos", {

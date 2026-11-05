@@ -14,8 +14,9 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { desc, eq } from "drizzle-orm";
 import type { Db } from "@/db";
-import { conversations, leads } from "@/db/schema";
-import { type EmojiKey, em, emojiId, emojiSetName, setBotEmoji } from "./bot-emoji";
+import { conversations, leads, telegramStarts } from "@/db/schema";
+import { type EmojiKey, botEmojiDue, em, emojiId, emojiSetName, setBotEmoji } from "./bot-emoji";
+import { isSource } from "./sources";
 
 export interface TelegramConfig {
   token: string;
@@ -78,6 +79,12 @@ export async function leadForTelegramUser(db: Db, telegramUserId: number): Promi
   return lead?.id ?? null;
 }
 
+/** Источник, по ссылке с которым человек впервые открыл бота (t.me/<бот>?start=<источник>); null — без ссылки. */
+export async function telegramStartSource(db: Db, telegramUserId: number): Promise<string | null> {
+  const [row] = await db.select({ source: telegramStarts.source }).from(telegramStarts).where(eq(telegramStarts.telegramUserId, telegramUserId));
+  return row && isSource(row.source) ? row.source : null;
+}
+
 /** Секрет вебхука: Telegram присылает его в заголовке — так видно, что запрос именно от Telegram. */
 export function webhookSecret(token: string): string {
   return createHmac("sha256", "telegram-webhook").update(token).digest("hex");
@@ -137,27 +144,28 @@ export function botUsername(cfg: TelegramConfig): Promise<string | null> {
   return username;
 }
 
-/** Кнопка под сообщением бота: webApp — страница сайта внутри Telegram, url — в браузере; icon — свой значок слева. */
-export type BotButton = ({ text: string; webApp: string } | { text: string; url: string }) & { icon?: EmojiKey };
+/**
+ * Кнопка под сообщением бота: webApp — страница сайта внутри Telegram, url — в браузере, callback — ответ
+ * боту без перехода (до 64 байт); icon — свой значок слева.
+ */
+export type BotButton = ({ text: string; webApp: string } | { text: string; url: string } | { text: string; callback: string }) & {
+  icon?: EmojiKey;
+};
 
-/** Кнопки под сообщением — каждая на своей строке. Значок — только если набор эмодзи загружен. */
-export const keyboard = (buttons: BotButton[]) =>
+const button = (b: BotButton) => {
+  const icon = b.icon ? emojiId(b.icon) : undefined;
+  return {
+    text: b.text,
+    ...("webApp" in b ? { web_app: { url: b.webApp } } : "url" in b ? { url: b.url } : { callback_data: b.callback }),
+    ...(icon && { icon_custom_emoji_id: icon }),
+  };
+};
+
+/** Кнопки под сообщением: кнопка — на своей строке, массив кнопок — одной строкой. Значок — если набор эмодзи загружен. */
+export const keyboard = (buttons: (BotButton | BotButton[])[]) =>
   buttons.length === 0
     ? {}
-    : {
-        reply_markup: {
-          inline_keyboard: buttons.map((b) => {
-            const icon = b.icon ? emojiId(b.icon) : undefined;
-            return [
-              {
-                text: b.text,
-                ...("webApp" in b ? { web_app: { url: b.webApp } } : { url: b.url }),
-                ...(icon && { icon_custom_emoji_id: icon }),
-              },
-            ];
-          }),
-        },
-      };
+    : { reply_markup: { inline_keyboard: buttons.map((b) => (Array.isArray(b) ? b.map(button) : [button(b)])) } };
 
 /** Номер отправленного сообщения в чате Telegram; null — не ушло. */
 export const sentId = (r: unknown) => {
@@ -166,7 +174,12 @@ export const sentId = (r: unknown) => {
 };
 
 /** Сообщение от бота (text — в разметке HTML). Возвращает его номер в чате или null, если не ушло. */
-export async function sendMessage(cfg: TelegramConfig, chatId: number, text: string, buttons: BotButton[] = []): Promise<number | null> {
+export async function sendMessage(
+  cfg: TelegramConfig,
+  chatId: number,
+  text: string,
+  buttons: (BotButton | BotButton[])[] = [],
+): Promise<number | null> {
   return sentId(
     await botCall(cfg.token, "sendMessage", {
       chat_id: chatId,
@@ -244,7 +257,7 @@ export async function configureBot(cfg: TelegramConfig): Promise<void> {
   await botApi(cfg.token, "setWebhook", {
     url: `${cfg.siteUrl}/api/telegram/webhook`,
     secret_token: webhookSecret(cfg.token),
-    allowed_updates: ["message"],
+    allowed_updates: ["message", "callback_query"],
   });
   await loadBotEmoji(cfg);
   await botApi(cfg.token, "setChatMenuButton", {
@@ -253,9 +266,18 @@ export async function configureBot(cfg: TelegramConfig): Promise<void> {
   await botApi(cfg.token, "setMyCommands", {
     commands: [
       { command: "start", description: "Открыть чат с экспертом" },
+      { command: "experts", description: "Выбрать эксперта" },
       { command: "stop", description: "Отключить уведомления" },
     ],
   });
+}
+
+/**
+ * Перед отправкой: значков ещё нет (только запустились или Telegram не ответил) — читаем набор,
+ * не чаще раза в 5 минут.
+ */
+export async function ensureBotEmoji(cfg: TelegramConfig): Promise<void> {
+  if (botEmojiDue(Date.now(), 5 * 60 * 1000)) await loadBotEmoji(cfg);
 }
 
 /** Свои эмодзи бота из его набора (bot-emoji.ts). Набора ещё нет — бот пишет без значков. */
@@ -296,7 +318,11 @@ export async function botReply(db: Db, cfg: TelegramConfig, telegramUserId: numb
     };
   }
 
-  const withCode = command === "/start" && arg !== "";
+  // t.me/<бот>?start=r3 — реклама с ссылкой на бота: запоминаем источник (первое касание),
+  // «Открыть» ведёт через короткий адрес — сайт тоже запомнит источник
+  const source = command === "/start" && isSource(arg) ? arg : null;
+  if (source) await db.insert(telegramStarts).values({ telegramUserId, source }).onConflictDoNothing();
+  const withCode = command === "/start" && arg !== "" && !source;
   let linked: string | null = null;
   if (withCode) {
     const leadId = leadFromLinkCode(cfg.token, arg);
@@ -306,7 +332,10 @@ export async function botReply(db: Db, cfg: TelegramConfig, telegramUserId: numb
   if (!leadId) {
     return {
       text: withCode ? `Ссылка не подошла — откройте её на сайте ещё раз.\n\n${welcomeText()}` : welcomeText(),
-      buttons: [{ text: "Открыть", webApp: cfg.siteUrl, icon: "moon" }],
+      buttons: [
+        { text: "Открыть", webApp: source ? `${cfg.siteUrl}/${source}` : cfg.siteUrl, icon: "moon" },
+        { text: "Выбрать эксперта", callback: "exl", icon: "star" },
+      ],
     };
   }
 
@@ -324,6 +353,7 @@ export async function botReply(db: Db, cfg: TelegramConfig, telegramUserId: numb
         webApp: `${cfg.siteUrl}/razbor/${leadId}${chat ? "/chat" : ""}`,
         icon: "chat",
       },
+      { text: "Выбрать эксперта", callback: "exl", icon: "star" },
       { text: "Открыть на сайте", url: `${cfg.siteUrl}/api/telegram/vhod?t=${loginCode(cfg.token, leadId, now)}`, icon: "globe" },
     ],
     ...(linked && { linked }),
