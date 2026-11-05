@@ -9,7 +9,7 @@ import type { Db } from "@/db";
 import type { Lead } from "./leads";
 import { MIN_AGE, ageOn, birthDateToIso, parseIsoDate } from "./leads";
 import { SAFETY, aiJson, clip, ruDate } from "./ai-reading";
-import { type QuizRow, attemptsLeft, lifePath, parseJson, saveQuiz } from "./quizzes";
+import { type QuizRow, nextAttemptAt, lifePath, parseJson, saveQuiz } from "./quizzes";
 
 export const SIGNS = ["Овен", "Телец", "Близнецы", "Рак", "Лев", "Дева", "Весы", "Скорпион", "Стрелец", "Козерог", "Водолей", "Рыбы"];
 const ELEMENTS = ["огонь", "земля", "воздух", "вода"] as const;
@@ -227,7 +227,7 @@ export function parseCompatInput(nameRaw: string, birthRaw: string, now: Date): 
 
 /** Посчитать и сохранить совместимость. */
 export async function runCompat(db: Db, lead: Lead, input: CompatInput, now: Date): Promise<QuizRow | { error: string }> {
-  if ((await attemptsLeft(db, lead.id, "compat", now)) <= 0) return { error: "На сегодня попытки закончились — приходите завтра" };
+  if (await nextAttemptAt(db, lead.id, "compat", now)) return { error: "Новую совместимость можно посчитать раз в 5 дней — а подробно разобрать пару можно с экспертом" };
   const scores = compatScores(lead.birthDate, input.partnerBirth);
   const { text, model } = await compatText(lead, input, scores);
   const result: CompatResult = { scores, text };

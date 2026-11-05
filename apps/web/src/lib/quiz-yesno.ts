@@ -10,7 +10,7 @@ import type { Lead } from "./leads";
 import { ARCANA } from "./arcana";
 import { SAFETY, aiJson, clip } from "./ai-reading";
 import { ANSWER_LABEL, QUESTION_MAX, QUESTION_MIN, type YesNo } from "./quiz-yesno-data";
-import { type QuizRow, attemptsLeft, parseJson, saveQuiz } from "./quizzes";
+import { type QuizRow, nextAttemptAt, parseJson, saveQuiz } from "./quizzes";
 
 export { ANSWER_LABEL, QUESTION_MAX, QUESTION_MIN };
 export type { YesNo };
@@ -120,7 +120,7 @@ export function cleanQuestion(raw: string): string | { error: string } {
 
 /** Задать вопрос и вытянуть карту. */
 export async function runYesNo(db: Db, lead: Lead, question: string, now: Date): Promise<QuizRow | { error: string }> {
-  if ((await attemptsLeft(db, lead.id, "yesno", now)) <= 0) return { error: "На сегодня вопросы закончились — карты лучше не переспрашивать. Приходите завтра" };
+  if (await nextAttemptAt(db, lead.id, "yesno", now)) return { error: "Карты отвечают на один вопрос в день — а разобрать вопрос подробнее можно с экспертом" };
   const card = randomInt(0, ARCANA.length);
   const c = ARCANA[card]!;
   const own = CARD_ANSWER[card]!;

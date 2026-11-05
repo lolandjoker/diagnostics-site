@@ -51,7 +51,7 @@ describe("квизы с ИИ", () => {
 
     // Слова поймали, а ИИ ответил как на обычный — его текст не берём
     reply = { sensitive: false, text: "Да, всё получится!", advice: "Верьте.", teaser: "?" };
-    const yn2 = await runYesNo(db, lead, "Я выздоровею после операции?", morning);
+    const yn2 = await runYesNo(db, lead, "Я выздоровею после операции?", new Date(morning.getTime() + 86_400_000));
     if ("error" in yn2) throw new Error(yn2.error);
     const v2 = yesNoView(yn2, true)!.result!;
     expect(v2.answer).toBeNull();

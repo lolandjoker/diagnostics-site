@@ -11,7 +11,7 @@ import { getLead } from "@/lib/leads";
 import { type ArchetypeView, archetypeView, runArchetype } from "@/lib/quiz-archetype";
 import { type CompatView, compatView, parseCompatInput, runCompat } from "@/lib/quiz-compat";
 import { type YesNoView, cleanQuestion, runYesNo, yesNoView } from "@/lib/quiz-yesno";
-import { type QuizRow, attemptsLeft } from "@/lib/quizzes";
+import { type QuizRow, nextAttemptAt } from "@/lib/quizzes";
 import { telegramLink } from "@/lib/telegram";
 
 type Fail = { error: string };
@@ -31,7 +31,7 @@ function finish(db: Awaited<ReturnType<typeof getDb>>, row: QuizRow) {
 const gone = { error: "Разбор не найден — откройте его заново" };
 const failed = { error: "Не получилось — попробуйте ещё раз" };
 
-export async function compatAction(leadId: string, partnerName: string, partnerBirth: string): Promise<{ view: CompatView; left: number } | Fail> {
+export async function compatAction(leadId: string, partnerName: string, partnerBirth: string): Promise<{ view: CompatView; next: string | null } | Fail> {
   const s = await start(leadId);
   if (!s) return gone;
   const now = new Date();
@@ -41,10 +41,10 @@ export async function compatAction(leadId: string, partnerName: string, partnerB
   if ("error" in row) return row;
   finish(s.db, row);
   const view = compatView(row, s.lead.birthDate, s.unlocked);
-  return view ? { view, left: await attemptsLeft(s.db, s.lead.id, "compat", now) } : failed;
+  return view ? { view, next: await nextAttemptAt(s.db, s.lead.id, "compat", now) } : failed;
 }
 
-export async function archetypeAction(leadId: string, answers: number[]): Promise<{ view: ArchetypeView; left: number } | Fail> {
+export async function archetypeAction(leadId: string, answers: number[]): Promise<{ view: ArchetypeView; next: string | null } | Fail> {
   const s = await start(leadId);
   if (!s) return gone;
   if (!Array.isArray(answers)) return { error: "Ответьте на все вопросы" };
@@ -53,10 +53,10 @@ export async function archetypeAction(leadId: string, answers: number[]): Promis
   if ("error" in row) return row;
   finish(s.db, row);
   const view = archetypeView(row, s.unlocked);
-  return view ? { view, left: await attemptsLeft(s.db, s.lead.id, "archetype", now) } : failed;
+  return view ? { view, next: await nextAttemptAt(s.db, s.lead.id, "archetype", now) } : failed;
 }
 
-export async function yesNoAction(leadId: string, question: string): Promise<{ view: YesNoView; left: number } | Fail> {
+export async function yesNoAction(leadId: string, question: string): Promise<{ view: YesNoView; next: string | null } | Fail> {
   const s = await start(leadId);
   if (!s) return gone;
   const q = cleanQuestion(String(question ?? ""));
@@ -66,6 +66,6 @@ export async function yesNoAction(leadId: string, question: string): Promise<{ v
   if ("error" in row) return row;
   finish(s.db, row);
   const view = yesNoView(row, s.unlocked);
-  return view ? { view, left: await attemptsLeft(s.db, s.lead.id, "yesno", now) } : failed;
+  return view ? { view, next: await nextAttemptAt(s.db, s.lead.id, "yesno", now) } : failed;
 }
 

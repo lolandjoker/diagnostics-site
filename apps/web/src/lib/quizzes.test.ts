@@ -8,7 +8,7 @@ import { ARCHETYPES, archetypeFor, archetypeView, runArchetype } from "./quiz-ar
 import { compatScores, compatView, parseCompatInput, runCompat, zodiac } from "./quiz-compat";
 import { archetypeStoryPng } from "./quiz-images";
 import { CARD_ANSWER, cleanQuestion, isSensitiveQuestion, runYesNo, yesNoView } from "./quiz-yesno";
-import { attemptsLeft, lifePath } from "./quizzes";
+import { lifePath, nextAttemptAt } from "./quizzes";
 
 const TOKEN = "123456789:AAHtestTOKENtestTOKENtestTOKENtest12";
 const cfg = { token: TOKEN, siteUrl: "https://example.com" };
@@ -57,7 +57,7 @@ describe("квизы клуба", () => {
     expect(parseCompatInput("  Иван  ", "2.7.1988", morning)).toEqual({ partnerName: "Иван", partnerBirth: "1988-07-02" });
   });
 
-  it("совместимость без ИИ: заготовки; без Telegram проценты закрыты; лимит в день", async () => {
+  it("совместимость без ИИ: заготовки; без Telegram проценты закрыты; снова — через 5 дней", async () => {
     const lead = await createLead(db, { name: "Анна", birthDate: "1990-03-15" }, morning, null);
     const row = await runCompat(db, lead, { partnerName: "Иван", partnerBirth: "1988-07-02" }, morning);
     if ("error" in row) throw new Error(row.error);
@@ -67,11 +67,12 @@ describe("квизы клуба", () => {
     expect(open.result!.text.summary).toContain("Рыбы и Рак");
     expect(compatView(row, lead.birthDate, false)!.result).toBeNull();
 
-    for (let i = 0; i < 4; i++) await runCompat(db, lead, { partnerName: "", partnerBirth: "1985-01-01" }, morning);
-    expect(await attemptsLeft(db, lead.id, "compat", morning)).toBe(0);
+    // Посчитано 5 ноября — снова с полуночи 10 ноября по Москве
+    expect(await nextAttemptAt(db, lead.id, "compat", morning)).toBe("2026-11-09T21:00:00.000Z");
     expect(await runCompat(db, lead, { partnerName: "", partnerBirth: "1985-01-01" }, morning)).toHaveProperty("error");
-    // Назавтра — снова можно
-    expect(await attemptsLeft(db, lead.id, "compat", new Date(morning.getTime() + 24 * 3600_000))).toBe(5);
+    expect(await runCompat(db, lead, { partnerName: "", partnerBirth: "1985-01-01" }, new Date("2026-11-09T20:59:00Z"))).toHaveProperty("error");
+    expect(await nextAttemptAt(db, lead.id, "compat", new Date("2026-11-09T21:00:00Z"))).toBeNull();
+    expect(await runCompat(db, lead, { partnerName: "", partnerBirth: "1985-01-01" }, new Date("2026-11-09T21:00:00Z"))).not.toHaveProperty("error");
   });
 
   it("архетип: самый частый ответ, ничья — по числу судьбы; без Telegram название закрыто", async () => {
@@ -87,6 +88,9 @@ describe("квизы клуба", () => {
     expect(await runArchetype(db, lead, [1, 1], morning)).toEqual({ error: "Ответьте на все вопросы" });
     const row = await runArchetype(db, lead, [1, 1, 1, 0, 3], morning);
     if ("error" in row) throw new Error(row.error);
+    // Снова — через 30 дней
+    expect(await runArchetype(db, lead, [0, 0, 0, 0, 0], new Date(morning.getTime() + 29 * 86_400_000))).toHaveProperty("error");
+    expect(await nextAttemptAt(db, lead.id, "archetype", new Date(morning.getTime() + 30 * 86_400_000))).toBeNull();
     const v = archetypeView(row, true)!;
     expect(v.result).toMatchObject({ key: "luna", archetype: { name: "Луна" } });
     expect(v.result!.personal).toContain(ARCHETYPES.luna.about);
@@ -111,13 +115,14 @@ describe("квизы клуба", () => {
     expect(v.result!.answer).toBe(CARD_ANSWER[v.card]);
     expect(yesNoView(row, false)!.result).toBeNull();
 
-    const sens = await runYesNo(db, lead, "Я выздоровею после операции?", morning);
+    // Один вопрос в день
+    expect(await runYesNo(db, lead, "Ещё один вопрос?", morning)).toHaveProperty("error");
+    const tomorrow = new Date(morning.getTime() + 86_400_000);
+    const sens = await runYesNo(db, lead, "Я выздоровею после операции?", tomorrow);
     if ("error" in sens) throw new Error(sens.error);
     const sv = yesNoView(sens, true)!;
     expect(sv.result!.answer).toBeNull();
     expect(sv.result!.text).toContain("врача");
-    await runYesNo(db, lead, "Ещё один вопрос?", morning);
-    expect(await runYesNo(db, lead, "И ещё один вопрос?", morning)).toHaveProperty("error");
   });
 
   describe("в бот", () => {
@@ -168,14 +173,14 @@ describe("квизы клуба", () => {
       expect(sent[0]!.body.text).toContain("Иван — Рак");
       expect(sent[0]!.body.text).toContain(`<b>Чувства — ${s.feelings}%.</b>`);
       const kb = (sent[0]!.body.reply_markup as { inline_keyboard: { text: string; callback_data?: string; web_app?: { url: string } }[][] }).inline_keyboard;
-      expect(kb[0]!.map((b) => b.text)).toEqual(["Ещё пара", "Выбрать эксперта"]);
+      expect(kb[0]!.map((b) => b.text)).toEqual(["Открыть на сайте", "Выбрать эксперта"]);
       expect(kb[0]![0]!.web_app?.url).toBe(`https://example.com/razbor/${lead.id}/sovmestimost`);
     });
 
     it("без Telegram — не шлём; подключил — приходит последний результат каждого квиза", async () => {
       const lead = await createLead(db, { name: "Анна", birthDate: "1990-03-15" }, morning, null);
-      const first = await runYesNo(db, lead, "Первый вопрос?", morning);
-      const last = await runYesNo(db, lead, "Второй вопрос?", new Date(morning.getTime() + 60_000));
+      const first = await runYesNo(db, lead, "Первый вопрос?", new Date(morning.getTime() - 86_400_000));
+      const last = await runYesNo(db, lead, "Второй вопрос?", morning);
       const arch = await runArchetype(db, lead, [1, 1, 1, 0, 3], morning);
       if ("error" in first || "error" in last || "error" in arch) throw new Error("квиз не прошёл");
       await deliverQuiz(db, last, morning);
