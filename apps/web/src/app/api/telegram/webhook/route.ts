@@ -1,19 +1,24 @@
 /**
- * Сообщения, которые люди пишут боту (Telegram присылает их сюда, адрес задаёт configureBot).
+ * Сообщения и нажатия кнопок, которые люди шлют боту (Telegram присылает их сюда, адрес задаёт configureBot).
  * - Ответ эксперту (текст или фото от человека с привязанной заявкой и чатом) — в чат на сайте (bot-inbox).
  * - /experts и кнопки карточек экспертов — выбрать эксперта и открыть с ним чат (bot-experts).
  * - Нажатие кнопки оценки эксперта — отзыв (bot-reviews).
  * - Остальное решает botReply: /start <код> привязывает заявку с сайта (и последнее сообщение эксперта
  *   сразу приходит в бот), /stop отвязывает, новым — кнопка «Открыть».
+ *
+ * Telegram отвечаем 200 сразу, а обновление разбираем после ответа (after): Telegram не ждёт отрисовку
+ * плашек и не держит следующие обновления. Обновления одного человека — по очереди, в порядке прихода.
  */
 import { timingSafeEqual } from "node:crypto";
+import { after } from "next/server";
 import { getDb } from "@/db";
-import { sendLatestToTelegram } from "@/lib/bot-delivery";
-import { type IncomingMessage, handleClientMessage } from "@/lib/bot-inbox";
+import { enqueue, sendLatestToTelegram, warmExpertCards } from "@/lib/bot-delivery";
 import { handleExpertCallback, showExperts } from "@/lib/bot-experts";
+import { type IncomingMessage, handleClientMessage } from "@/lib/bot-inbox";
 import { type IncomingCallback, handleCallback } from "@/lib/bot-reviews";
+import { selectableExperts } from "@/lib/chat";
 import { jsonBody } from "@/lib/http";
-import { botReply, ensureBotEmoji, sendMessage, telegramConfig, webhookSecret } from "@/lib/telegram";
+import { type TelegramConfig, botApi, botReply, sendMessage, telegramConfig, webhookSecret } from "@/lib/telegram";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +28,68 @@ function sameSecret(a: string, b: string): boolean {
   return x.length === y.length && timingSafeEqual(x, y);
 }
 
+/** Нажатие кнопки. Что-то сломалось — всё равно отвечаем на нажатие, чтобы «часики» на кнопке не висели. */
+async function onCallback(cfg: TelegramConfig, callback: IncomingCallback): Promise<void> {
+  try {
+    await handleButton(cfg, callback);
+  } catch (err) {
+    if (typeof callback.id === "string") await botApi(cfg.token, "answerCallbackQuery", { callback_query_id: callback.id });
+    throw err;
+  }
+}
+
+async function handleButton(cfg: TelegramConfig, callback: IncomingCallback): Promise<void> {
+  const db = await getDb();
+  const userId = callback.from?.id;
+  const data = typeof callback.data === "string" ? callback.data : "";
+  const chatId = callback.message?.chat?.id;
+  const messageId = callback.message?.message_id;
+  const expertButton =
+    typeof callback.id === "string" &&
+    typeof userId === "number" &&
+    (await handleExpertCallback(db, cfg, {
+      id: callback.id,
+      userId,
+      chatId: typeof chatId === "number" ? chatId : null,
+      messageId: typeof messageId === "number" ? messageId : null,
+      data,
+    }));
+  if (!expertButton) await handleCallback(db, cfg, callback);
+}
+
+async function onMessage(cfg: TelegramConfig, message: IncomingMessage, chatId: number, userId: number): Promise<void> {
+  const db = await getDb();
+  const command = typeof message.text === "string" ? message.text.trim().split(/\s+/, 1)[0] : "";
+  if (command === "/experts") {
+    await showExperts(db, cfg, chatId, userId, 0);
+    return;
+  }
+  const inbox = await handleClientMessage(db, cfg, message);
+  if (inbox.handled) {
+    if (inbox.reply) await sendMessage(cfg, chatId, inbox.reply);
+    return;
+  }
+  const text = typeof message.text === "string" ? message.text : "";
+  const reply = await botReply(db, cfg, userId, text, new Date());
+  await sendMessage(cfg, chatId, reply.text, reply.buttons);
+  if (reply.linked) await sendLatestToTelegram(db, cfg, reply.linked);
+}
+
+/**
+ * Первая плашка после запуска рисуется ~1,5 с (отрисовщик загружает свои модули и шрифт), следующие — ~40 мс.
+ * На первом же обращении к боту рисуем плашки всех экспертов в фоне — карточки потом открываются сразу.
+ */
+let warmed = false;
+function warmUp(): void {
+  if (warmed) return;
+  warmed = true;
+  void getDb()
+    .then(async (db) => warmExpertCards(db, (await selectableExperts(db, new Date())).map((e) => e.id), new Date()))
+    .catch(() => {
+      warmed = false;
+    });
+}
+
 export async function POST(req: Request) {
   const cfg = telegramConfig();
   if (!cfg) return new Response(null, { status: 404 });
@@ -30,53 +97,23 @@ export async function POST(req: Request) {
     return new Response(null, { status: 401 });
   }
   const update = await jsonBody(req);
-  await ensureBotEmoji(cfg);
   const callback = update?.callback_query as IncomingCallback | undefined;
-  if (callback) {
-    try {
-      const db = await getDb();
-      const userId = callback.from?.id;
-      const data = typeof callback.data === "string" ? callback.data : "";
-      const chatId = callback.message?.chat?.id;
-      const messageId = callback.message?.message_id;
-      const expertButton =
-        typeof callback.id === "string" &&
-        typeof userId === "number" &&
-        (await handleExpertCallback(db, cfg, {
-          id: callback.id,
-          userId,
-          chatId: typeof chatId === "number" ? chatId : null,
-          messageId: typeof messageId === "number" ? messageId : null,
-          data,
-        }));
-      if (!expertButton) await handleCallback(db, cfg, callback);
-    } catch (err) {
-      console.warn(`Кнопка бота: ${err instanceof Error ? err.message : String(err)}`);
-    }
-    return new Response(null, { status: 200 });
-  }
   const message = update?.message as IncomingMessage | undefined;
+  const userId = callback?.from?.id ?? message?.from?.id;
   const chatId = message?.chat?.id;
-  const userId = message?.from?.id;
-  // Только личные чаты: в группах кнопка, открывающая сайт, не работает
-  if (message && typeof chatId === "number" && typeof userId === "number" && message.chat?.type === "private") {
-    const db = await getDb();
-    try {
-      const command = typeof message.text === "string" ? message.text.trim().split(/\s+/, 1)[0] : "";
-      const inbox = command === "/experts" ? null : await handleClientMessage(db, cfg, message);
-      if (!inbox) {
-        await showExperts(db, cfg, chatId, userId, 0);
-      } else if (inbox.handled) {
-        if (inbox.reply) await sendMessage(cfg, chatId, inbox.reply);
-      } else {
-        const text = typeof message.text === "string" ? message.text : "";
-        const reply = await botReply(db, cfg, userId, text, new Date());
-        await sendMessage(cfg, chatId, reply.text, reply.buttons);
-        if (reply.linked) await sendLatestToTelegram(db, cfg, reply.linked);
-      }
-    } catch (err) {
-      console.warn(`Сообщение боту: ${err instanceof Error ? err.message : String(err)}`);
-    }
+
+  warmUp();
+  // enqueue сам подгружает свои эмодзи бота и пишет ошибки в лог
+  if (callback && typeof userId === "number") {
+    after(() => enqueue(`tg:${userId}`, () => onCallback(cfg, callback)));
+  } else if (
+    message &&
+    typeof chatId === "number" &&
+    typeof userId === "number" &&
+    // Только личные чаты: в группах кнопка, открывающая сайт, не работает
+    message.chat?.type === "private"
+  ) {
+    after(() => enqueue(`tg:${userId}`, () => onMessage(cfg, message, chatId, userId)));
   }
   // Telegram ждёт 200 — иначе будет повторять доставку
   return new Response(null, { status: 200 });

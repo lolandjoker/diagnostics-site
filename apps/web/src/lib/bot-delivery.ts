@@ -30,8 +30,11 @@ export type ClientNotice =
   | { kind: "call"; expertId: number | null }
   | { kind: "fullText"; messageId: number };
 
-/** Сообщения одного чата уходят в Telegram по очереди — в том же порядке, что на сайте. */
-const queues = new Map<string, Promise<void>>();
+/**
+ * Сообщения одного чата уходят в Telegram по очереди — в том же порядке, что на сайте. Очереди общие для
+ * процесса (globalThis): ответ эксперта и ответ из бота приходят через разные обработчики запросов.
+ */
+const queues = ((globalThis as unknown as { __diagBotQueues?: Map<string, Promise<void>> }).__diagBotQueues ??= new Map());
 
 export function enqueue(key: string, job: () => Promise<void>): Promise<void> {
   const cfg = telegramConfig();
@@ -100,37 +103,101 @@ export async function chatContext(db: Db, cfg: TelegramConfig, conversationId: s
   };
 }
 
-/** Плашки уже загружены в Telegram — шлём по file_id, не рисуя заново. Ключ меняется вместе с плашкой. */
-const cardFiles = new Map<string, string>();
+/**
+ * Плашки: готовые картинки (png) и их file_id в Telegram — общие для процесса (globalThis), чтобы каждый
+ * обработчик запросов не рисовал заново. Ключ меняется вместе с плашкой (имя, рейтинг, статус, фото).
+ * Одну и ту же плашку одновременно рисуем один раз (rendering).
+ */
+const cardCache = ((globalThis as unknown as { __diagBotCards?: CardCache }).__diagBotCards ??= {
+  files: new Map(),
+  pngs: new Map(),
+  rendering: new Map(),
+});
+interface CardCache {
+  files: Map<string, string>;
+  pngs: Map<string, Buffer>;
+  rendering: Map<string, Promise<Buffer | null>>;
+}
+const CARD_CACHE_LIMIT = 300;
 
-/** Плашка эксперта для отправки: file_id уже загруженной или свежая картинка (key — запомнить её file_id). */
-export async function expertCard(db: Db, expertId: number, now: Date): Promise<{ key: string; fileId?: string; png?: Buffer } | null> {
+export interface ExpertCardRef {
+  key: string;
+  /** Уже загружена в Telegram — шлём по file_id. */
+  fileId?: string;
+  /** Картинка (из памяти или нарисовать — фото эксперта читается из базы только тут). */
+  png: () => Promise<Buffer | null>;
+}
+
+/** Плашка эксперта для отправки. Лёгкий запрос: без самого фото, только когда оно обновлялось. */
+export async function expertCard(db: Db, expertId: number, now: Date): Promise<ExpertCardRef | null> {
   const [e] = await db
-    .select({ id: experts.id, name: experts.name, rating: experts.rating, online: experts.online, onlineUntil: experts.onlineUntil, busy: experts.busy })
+    .select({
+      id: experts.id,
+      name: experts.name,
+      rating: experts.rating,
+      online: experts.online,
+      onlineUntil: experts.onlineUntil,
+      busy: experts.busy,
+      photoAt: expertPhotos.updatedAt,
+    })
     .from(experts)
+    .leftJoin(expertPhotos, eq(expertPhotos.expertId, experts.id))
     .where(eq(experts.id, expertId));
   if (!e) return null;
-  const [photo] = await db
-    .select({ mime: expertPhotos.mime, data: expertPhotos.data, updatedAt: expertPhotos.updatedAt })
-    .from(expertPhotos)
-    .where(eq(expertPhotos.expertId, expertId));
   const status = expertStatus(e, now);
-  const key = [e.id, e.name, e.rating, status, photo?.updatedAt.getTime() ?? 0].join("|");
-  const fileId = cardFiles.get(key);
-  if (fileId) return { key, fileId };
-  return { key, png: await expertCardPng({ name: e.name, rating: e.rating, status, photo: photo ?? null }) };
+  const key = [e.id, e.name, e.rating, status, e.photoAt?.getTime() ?? 0].join("|");
+  const png = () => {
+    const ready = cardCache.pngs.get(key);
+    if (ready) return Promise.resolve(ready);
+    let job = cardCache.rendering.get(key);
+    if (!job) {
+      job = (async () => {
+        const [photo] = e.photoAt
+          ? await db.select({ mime: expertPhotos.mime, data: expertPhotos.data }).from(expertPhotos).where(eq(expertPhotos.expertId, e.id))
+          : [];
+        const out = await expertCardPng({ name: e.name, rating: e.rating, status, photo: photo ?? null });
+        if (cardCache.pngs.size > CARD_CACHE_LIMIT) cardCache.pngs.clear();
+        cardCache.pngs.set(key, out);
+        return out;
+      })()
+        .catch((err: unknown) => {
+          console.warn(`Плашка эксперта: ${err instanceof Error ? err.message : String(err)}`);
+          return null;
+        })
+        .finally(() => cardCache.rendering.delete(key));
+      cardCache.rendering.set(key, job);
+    }
+    return job;
+  };
+  const fileId = cardCache.files.get(key);
+  return { key, ...(fileId && { fileId }), png };
+}
+
+/** Нарисовать плашки заранее (в фоне), чтобы следующая карточка открылась сразу. */
+export function warmExpertCards(db: Db, expertIds: number[], now: Date): void {
+  for (const id of expertIds) {
+    void expertCard(db, id, now)
+      .then((c) => (c && !c.fileId ? c.png() : null))
+      .catch(() => {});
+  }
 }
 
 /** Запомнить file_id плашки из ответа Telegram (sendPhoto или editMessageMedia). */
 export function rememberCardFile(key: string, sent: unknown): void {
   const fileId = (sent as { photo?: { file_id?: string }[] } | null)?.photo?.at(-1)?.file_id;
   if (!fileId) return;
-  if (cardFiles.size > 500) cardFiles.clear();
-  cardFiles.set(key, fileId);
+  if (cardCache.files.size > CARD_CACHE_LIMIT) cardCache.files.clear();
+  cardCache.files.set(key, fileId);
+}
+
+/** Забыть все плашки (для тестов: у каждого теста своя база). */
+export function clearCardCache(): void {
+  cardCache.files.clear();
+  cardCache.pngs.clear();
 }
 
 export function forgetCardFile(key: string): void {
-  cardFiles.delete(key);
+  cardCache.files.delete(key);
 }
 
 export async function sendCard(
@@ -150,7 +217,7 @@ export async function sendCard(
     if (id !== null) return id;
     forgetCardFile(card.key);
   }
-  const png = card.png ?? (await expertCard(db, expertId, now))?.png;
+  const png = await card.png();
   if (!png) return null;
   const sent = await botCall(cfg.token, "sendPhoto", fields, { field: "photo", data: png, name: "expert.png", type: "image/png" });
   rememberCardFile(card.key, sent);
