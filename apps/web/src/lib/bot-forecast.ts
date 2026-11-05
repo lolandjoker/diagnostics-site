@@ -13,7 +13,7 @@ import { ARCANA } from "./arcana";
 import { arcanaBacksPng, arcanaCardPng } from "./arcana-image";
 import { em } from "./bot-emoji";
 import { sendText } from "./bot-delivery";
-import { type DailyCard, cardStreak, daysLabel, drawDailyCard, todayCard } from "./club";
+import { type DailyCard, cardSections, cardStreak, daysLabel, drawDailyCard, todayCard } from "./club";
 import { moscowNow, personalDay } from "./numerology";
 import { type BotButton, type TelegramConfig, botApi, botCall, esc, ensureBotEmoji, keyboard, sentId, telegramConfig } from "./telegram";
 
@@ -84,18 +84,23 @@ export async function sendMorningCard(db: Db, cfg: TelegramConfig, telegramUserI
 }
 
 /** Карта дня с расшифровкой — в бот. */
-async function sendCardReading(cfg: TelegramConfig, telegramUserId: number, leadId: string, row: DailyCard, now: Date, intro = ""): Promise<void> {
+async function sendCardReading(db: Db, cfg: TelegramConfig, telegramUserId: number, leadId: string, row: DailyCard, now: Date, intro = ""): Promise<void> {
   const c = ARCANA[row.card] ?? ARCANA[0]!;
-  const head = `${intro}<b>${esc(c.n)} · ${esc(c.name)}</b>\n\n`;
-  const tail = "\n\n<i>Хотите разобрать подробнее — напишите эксперту прямо сюда.</i>";
-  const buttons = keyboard([[{ text: "Мой день", webApp: dayUrl(cfg, leadId), icon: "moon" }, { text: "Выбрать эксперта", callback: "exl", icon: "star" }]]);
-  const short = row.text.length <= CAPTION_LIMIT - 200;
+  const [lead] = await db.select({ birthDate: leads.birthDate }).from(leads).where(eq(leads.id, leadId));
+  const s = cardSections(row, lead?.birthDate ?? "2000-01-01");
+  const head = `${intro}<b>${esc(c.n)} · ${esc(c.name)}</b>`;
+  const body =
+    `${esc(s.main)}\n\n<b>В любви.</b> ${esc(s.love)}\n<b>В делах и деньгах.</b> ${esc(s.work)}\n` +
+    `<b>Совет дня.</b> ${esc(s.tip)}\n\n${em("sparkle")}<b>Что карта скрывает.</b> <i>${esc(s.teaser)}</i>\n\n` +
+    "Напишите эксперту прямо сюда — он разберёт карту по вашей дате рождения.";
+  const rows: (BotButton | BotButton[])[] = [[{ text: "Мой день", webApp: dayUrl(cfg, leadId), icon: "moon" }, { text: "Выбрать эксперта", callback: "exl", icon: "star" }]];
+  const short = head.length + body.length <= CAPTION_LIMIT;
   await sendPhoto(cfg, telegramUserId, `card:${row.card}:${row.day}`, () => arcanaCardPng(row.card, now), {
-    caption: short ? head + esc(row.text) + tail : head.trim(),
+    caption: short ? `${head}\n\n${body}` : head,
     parse_mode: "HTML",
-    ...(short ? buttons : {}),
+    ...(short ? keyboard(rows) : {}),
   });
-  if (!short) await sendText(cfg, telegramUserId, esc(row.text) + tail, [[{ text: "Мой день", webApp: dayUrl(cfg, leadId), icon: "moon" }, { text: "Выбрать эксперта", callback: "exl", icon: "star" }]]);
+  if (!short) await sendText(cfg, telegramUserId, body, rows);
 }
 
 async function setForecast(db: Db, telegramUserId: number, on: boolean, extra: Partial<typeof telegramUsers.$inferInsert> = {}) {
@@ -114,7 +119,7 @@ export async function joinClub(db: Db, cfg: TelegramConfig, leadId: string, now 
   if (!lead?.tg) return;
   await setForecast(db, lead.tg, true, { forecastSentOn: moscowNow(now).date });
   const row = await todayCard(db, leadId, now);
-  if (row) await sendCardReading(cfg, lead.tg, leadId, row, now, `${em("sparkle")}Ваша карта дня\n`);
+  if (row) await sendCardReading(db, cfg, lead.tg, leadId, row, now, `${em("sparkle")}Ваша карта дня\n`);
   else await sendMorningCard(db, cfg, lead.tg, now);
 }
 
@@ -208,7 +213,7 @@ async function subscribe(db: Db, cfg: TelegramConfig, telegramUserId: number, no
   await setForecast(db, telegramUserId, true, { forecastSentOn: moscowNow(now).date });
   await sendText(cfg, telegramUserId, `${em("check")}Готово! Карта дня будет приходить каждое утро после ${FORECAST_HOUR}:00 по Москве.`, []);
   const row = await todayCard(db, lead.id, now);
-  if (row) await sendCardReading(cfg, telegramUserId, lead.id, row, now, "Сегодняшняя карта уже вытянута:\n");
+  if (row) await sendCardReading(db, cfg, telegramUserId, lead.id, row, now, "Сегодняшняя карта уже вытянута:\n");
   else await sendMorningCard(db, cfg, telegramUserId, now);
 }
 
@@ -231,7 +236,7 @@ export async function handleForecastCallback(db: Db, cfg: TelegramConfig, q: Cal
     void botApi(cfg.token, "sendChatAction", { chat_id: q.userId, action: "upload_photo" });
     const before = await todayCard(db, lead.id, now);
     const row = before ?? (await drawDailyCard(db, lead.id, Number(card[1]), now));
-    if (row) await sendCardReading(cfg, q.userId, lead.id, row, now, before ? "Сегодня ваша карта уже вытянута:\n" : "");
+    if (row) await sendCardReading(db, cfg, q.userId, lead.id, row, now, before ? "Сегодня ваша карта уже вытянута:\n" : "");
     return true;
   }
   if (q.data !== "fc:1" && q.data !== "fc:0") return false;

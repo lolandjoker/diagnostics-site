@@ -27,7 +27,9 @@ export const dynamic = "force-dynamic";
  */
 export default async function ClientChatPage(props: PageProps<"/razbor/[id]/chat">) {
   const { id } = await props.params;
-  const { c } = await props.searchParams;
+  const { c, q: ask } = await props.searchParams;
+  // Вопрос из «Моего дня» («Спросить эксперта об этой карте») — в поле ввода, отправляет сам человек
+  const draft = typeof ask === "string" ? ask.slice(0, 300) : undefined;
   const db = await getDb();
   const lead = await getLead(db, id);
   // Заявки нет (удалена или чужой адрес из истории браузера) — к форме на главной
@@ -80,6 +82,7 @@ export default async function ClientChatPage(props: PageProps<"/razbor/[id]/chat
       </div>
       <div className="messenger__chat">
         <ChatThread
+          draft={draft}
           key={conversation.id}
           url={`/api/chat/${lead.id}${q}`}
           typingUrl={`/api/chat/${lead.id}/typing${q}`}

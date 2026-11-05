@@ -35,8 +35,16 @@ describe("карта дня", () => {
     expect(again).toMatchObject({ card: first!.card, position: 3 });
     expect(await db.select().from(dailyCards)).toHaveLength(1);
 
-    expect(cardView(first!, false)).toEqual({ card: first!.card, position: 3, text: null });
-    expect(cardView(first!, true).text).toBe(first!.text);
+    // 15.03.1990, 05.11.2026 — личный день 8
+    expect(cardView(first!, false, "1990-03-15")).toEqual({ card: first!.card, position: 3, day: 8, sections: null });
+    const c = ARCANA[first!.card]!;
+    expect(cardView(first!, true, "1990-03-15").sections).toEqual({
+      main: c.advice,
+      love: c.love,
+      work: c.work,
+      tip: c.tip,
+      teaser: `«${c.name}» в ваш личный день 8 — сочетание, которое стоит разобрать подробнее. Что именно оно значит для вас в ближайшие недели, можно понять только по вашей дате рождения.`,
+    });
   });
 
   it("серия — дни подряд по сегодня (или по вчера, если сегодня ещё не тянули)", async () => {
@@ -113,6 +121,8 @@ describe("карта дня в боте", () => {
     const reading = sent.filter((c) => c.method === "sendPhoto").at(-1)!;
     expect(reading.body.caption).toContain(`<b>${ARCANA[row!.card]!.n} · ${ARCANA[row!.card]!.name}</b>`);
     expect(reading.body.caption).toContain(ARCANA[row!.card]!.advice);
+    expect(reading.body.caption).toContain(`<b>В любви.</b> ${ARCANA[row!.card]!.love}`);
+    expect(reading.body.caption).toContain("<b>Что карта скрывает.</b>");
 
     // Уже тянул сегодня — утреннее сообщение не нужно
     expect(await sendMorningCard(db, cfg, TG, morning)).toBe(false);

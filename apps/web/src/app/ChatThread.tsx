@@ -146,6 +146,7 @@ export function ChatThread({
   notice,
   telegramInvite,
   offlineNotice,
+  draft,
   prompt,
   suggestions = [],
   typingUrl,
@@ -171,6 +172,8 @@ export function ChatThread({
   notice?: ReactNode;
   /** Клиенту: после первого сообщения — окно с приглашением в Telegram-бот (если ещё не подключён). */
   telegramInvite?: TelegramInvite | undefined;
+  /** Текст в поле ввода при открытии (например, вопрос о карте дня из «Моего дня»). */
+  draft?: string | undefined;
   /** Клиенту: эксперт не в сети, а он ждёт ответа — плашка под перепиской. */
   offlineNotice?: OfflineNotice | undefined;
   /** Карточка над подсказками и полем ввода (например, «Откуда вы о нас узнали?»). */
@@ -190,7 +193,7 @@ export function ChatThread({
   const [readUpTo, setReadUpTo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
-  const [text, setText] = useState("");
+  const [text, setText] = useState(draft ?? "");
   const [photo, setPhoto] = useState<{ file: File; preview: string } | null>(null);
   const [zoom, setZoom] = useState<string | null>(null);
   const [telegramConnected, setTelegramConnected] = useState(false);

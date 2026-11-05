@@ -1,0 +1,1 @@
+ALTER TABLE "daily_cards" ADD COLUMN "details" text;
