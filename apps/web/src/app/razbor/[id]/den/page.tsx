@@ -10,13 +10,14 @@ import { telegramLink } from "@/lib/telegram";
 import { ClientTabs } from "../../../ClientTabs";
 import { ClubCard } from "../../../ClubCard";
 import { DailyCardPicker } from "../../../DailyCardPicker";
+import { QuizTiles } from "../../../QuizTiles";
 
 export const dynamic = "force-dynamic";
 
 const dayTitle = new Intl.DateTimeFormat("ru-RU", { timeZone: "Europe/Moscow", weekday: "long", day: "numeric", month: "long" });
 
 /**
- * «Мой день» — дом «Клуба Таромбы»: карта дня, серия, карточка клуба и путь к эксперту.
+ * «Мой день» — дом «Клуба Таромбы»: карта дня, серия, карточка клуба, квизы и путь к эксперту.
  * Сюда же попадает вернувшийся на taromba.com и открывший бота кнопкой «Открыть».
  */
 export default async function MyDayPage(props: PageProps<"/razbor/[id]/den">) {
@@ -72,6 +73,8 @@ export default async function MyDayPage(props: PageProps<"/razbor/[id]/den">) {
           <ClubCard connected={!!telegram?.connected} telegramHref={telegram && !telegram.connected ? telegram.href : null} />
         </aside>
       </div>
+
+      <QuizTiles db={db} leadId={lead.id} birthDate={lead.birthDate} unlocked={unlocked} />
 
       <section className="den__expert">
         {chat && expert ? (

@@ -211,6 +211,12 @@ export default async function DashboardPage(props: PageProps<"/admin">) {
           <div>
             <b>{bot.reviewAsks}</b> просьб оценить эксперта
           </div>
+          <div>
+            <b>{bot.quizzes}</b> квизов клуба пройдено <span className="muted">({bot.quizPeople} чел.)</span>
+          </div>
+          <div>
+            <b>{bot.quizzesWaiting}</b> человек прошли квиз, но не подключили Telegram
+          </div>
         </div>
       </section>
 

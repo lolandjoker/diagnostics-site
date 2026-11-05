@@ -17,6 +17,7 @@ import { getDb } from "@/db";
 import { enqueue, sendLatestToTelegram, warmExpertCards } from "@/lib/bot-delivery";
 import { handleExpertCallback, showExperts } from "@/lib/bot-experts";
 import { handleForecastCallback, joinClub, stopForecast, toggleForecast } from "@/lib/bot-forecast";
+import { sendPendingQuizzes } from "@/lib/bot-quizzes";
 import { type IncomingMessage, handleClientMessage } from "@/lib/bot-inbox";
 import { type IncomingCallback, handleCallback } from "@/lib/bot-reviews";
 import { selectableExperts } from "@/lib/chat";
@@ -103,6 +104,8 @@ async function onMessage(cfg: TelegramConfig, message: IncomingMessage, chatId: 
     await sendLatestToTelegram(db, cfg, reply.linked);
     // Вступил в Клуб Таромбы с сайта — карта дня по утрам и сегодняшняя сразу
     await joinClub(db, cfg, reply.linked);
+    // …и результаты квизов, пройденных до подключения
+    await sendPendingQuizzes(db, cfg, reply.linked);
   }
 }
 

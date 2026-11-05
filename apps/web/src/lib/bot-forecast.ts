@@ -37,12 +37,12 @@ async function latestLead(db: Db, telegramUserId: number) {
   return lead ?? null;
 }
 
-const dayUrl = (cfg: TelegramConfig, leadId: string) => `${cfg.siteUrl}/razbor/${leadId}/den`;
+export const dayUrl = (cfg: TelegramConfig, leadId: string) => `${cfg.siteUrl}/razbor/${leadId}/den`;
 
 /** Картинки уже в Telegram — по file_id (общие для процесса). Рубашки одни; карта — на свою дату. */
 const files = ((globalThis as unknown as { __diagCardFiles?: Map<string, string> }).__diagCardFiles ??= new Map());
 
-async function sendPhoto(
+export async function sendPhoto(
   cfg: TelegramConfig,
   chatId: number,
   key: string,

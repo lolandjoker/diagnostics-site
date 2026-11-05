@@ -4051,6 +4051,7 @@ body.no-scroll {
 
 .daily__block {
   display: grid;
+  align-content: start;
   gap: 6px;
   padding: 14px 16px;
   border: 1px solid var(--line);
@@ -4129,5 +4130,517 @@ body.no-scroll {
   .daily.is-fresh .daily__block,
   .daily.is-fresh .daily__secret {
     animation: none;
+  }
+}
+
+/* --- Квизы «Клуба Таромбы»: совместимость, архетип, «Да или нет» --- */
+
+.page--quiz {
+  max-width: 760px;
+}
+
+.quiz__back {
+  display: inline-block;
+  margin-bottom: 10px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  text-decoration: none;
+}
+
+.quiz__back:hover {
+  color: var(--gold);
+}
+
+.quiz__head {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 18px;
+}
+
+.quiz__head h1 {
+  margin: 0;
+}
+
+.quiz__head p {
+  margin: 0;
+  max-width: 60ch;
+  color: var(--muted);
+}
+
+.quiz__head .eyebrow,
+.quiz .eyebrow {
+  font-size: 0.75rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gold);
+  font-weight: 700;
+}
+
+.quiz__left {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  text-align: center;
+}
+
+.compat,
+.arch,
+.yn {
+  display: grid;
+  gap: 14px;
+  width: 100%;
+  max-width: 540px;
+  margin: 0 auto;
+}
+
+/* Только что пройденный квиз: блоки появляются по очереди */
+.compat.is-fresh .daily__block,
+.compat.is-fresh .daily__secret,
+.arch.is-fresh .daily__block,
+.arch.is-fresh .daily__secret,
+.yn.is-fresh .daily__block,
+.yn.is-fresh .daily__secret {
+  animation: daily-in 0.6s ease both;
+  animation-delay: calc(0.6s + var(--d, 0) * 0.3s);
+}
+
+/* Совместимость */
+.compat__form {
+  display: grid;
+  gap: 12px;
+}
+
+.compat__self {
+  margin: 0;
+  color: var(--muted);
+}
+
+.compat__self b {
+  color: var(--text);
+}
+
+.compat__result {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+}
+
+.compat__result > .daily__block,
+.compat__result > .daily__pair,
+.compat__result > .daily__secret {
+  justify-self: stretch;
+}
+
+.compat__pair {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.compat__sign {
+  display: grid;
+  place-content: center;
+  width: 104px;
+  height: 104px;
+  padding: 6px;
+  border: 1px solid rgba(217, 182, 111, 0.4);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.04);
+  text-align: center;
+}
+
+.compat__sign b {
+  color: #f1d796;
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+}
+
+.compat__sign small {
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.3;
+}
+
+.compat__ring {
+  position: relative;
+  width: 172px;
+  height: 172px;
+}
+
+.compat__ring svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.compat__num {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  text-align: center;
+}
+
+.compat__num b {
+  color: #f1d796;
+  font-family: var(--font-display);
+  font-size: 2.9rem;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.compat__num span {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.compat__bars {
+  display: grid;
+  gap: 9px;
+  width: 100%;
+  max-width: 400px;
+}
+
+.compat__bar {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr) 42px;
+  gap: 10px;
+  align-items: center;
+  font-size: 0.88rem;
+}
+
+.compat__bar i {
+  display: block;
+  height: 7px;
+  overflow: hidden;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.compat__bar i span {
+  display: block;
+  height: 100%;
+  border-radius: 7px;
+  background: linear-gradient(90deg, var(--gold), #f1d796);
+  animation: compat-bar 1.2s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.compat__bar i span.is-locked {
+  background: rgba(217, 182, 111, 0.35);
+  filter: blur(3px);
+  animation: none;
+}
+
+@keyframes compat-bar {
+  from {
+    width: 0;
+  }
+}
+
+.compat__bar em {
+  color: var(--muted);
+  font-style: normal;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Архетип */
+.arch__progress {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.arch__progress span {
+  display: block;
+  height: 100%;
+  background: var(--gold);
+  transition: width 0.4s ease;
+}
+
+.arch__q {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  line-height: 1.2;
+  animation: daily-in 0.4s ease both;
+}
+
+.arch__opts {
+  display: grid;
+  gap: 8px;
+}
+
+.arch__opts button {
+  padding: 13px 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.2s,
+    background 0.2s;
+}
+
+.arch__opts button:hover,
+.arch__opts button:focus-visible {
+  border-color: var(--gold);
+  background: var(--gold-soft);
+  outline: none;
+}
+
+.arch__back {
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+
+.arch__wait {
+  margin: 24px 0;
+  color: var(--gold);
+  text-align: center;
+  animation: daily-pulse 1.4s ease-in-out infinite;
+}
+
+.arch--done {
+  justify-items: center;
+  text-align: center;
+}
+
+.arch--done > .daily__block,
+.arch--done > .daily__pair,
+.arch--done > .daily__secret,
+.arch--done > .arch__story {
+  justify-self: stretch;
+  text-align: left;
+}
+
+.arch--done > .daily__secret {
+  text-align: center;
+}
+
+.arch__card {
+  width: 150px;
+  aspect-ratio: 5 / 8;
+  overflow: hidden;
+  border-radius: 12px;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.5);
+}
+
+.arch__card svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.arch__card.is-flip {
+  animation: arch-flip 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes arch-flip {
+  from {
+    opacity: 0;
+    transform: perspective(900px) rotateY(90deg) scale(0.9);
+  }
+}
+
+.arch__tagline {
+  margin: -4px 0 0;
+  color: var(--muted);
+}
+
+.arch--done .eyebrow {
+  margin-bottom: -6px;
+}
+
+.arch__story {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.arch__story img {
+  flex: none;
+  width: 110px;
+  height: auto;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+
+.arch__story > div {
+  display: grid;
+  gap: 6px;
+}
+
+.arch__story span {
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.arch__share {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* Да или нет */
+.yn__hint {
+  margin: 0;
+  color: var(--muted);
+}
+
+.yn__question {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+  font-style: italic;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.yn__card {
+  justify-self: center;
+  width: 140px;
+  aspect-ratio: 5 / 8;
+  perspective: 900px;
+}
+
+.yn__card.is-open .daily__in {
+  transform: rotateY(180deg);
+}
+
+.yn__reading {
+  display: grid;
+  gap: 12px;
+  animation: daily-in 0.5s ease both;
+}
+
+.yn__reading > .eyebrow {
+  text-align: center;
+}
+
+.yn__answer {
+  margin: -4px 0 2px;
+  color: #f1d796;
+  font-family: var(--font-display);
+  font-size: 3.2rem;
+  font-weight: 600;
+  line-height: 1;
+  text-align: center;
+}
+
+.yn__answer--no {
+  color: #e0c3c3;
+}
+
+.yn__answer--maybe {
+  color: #d7cfe8;
+  font-size: 2.4rem;
+}
+
+.yn__answer--locked {
+  filter: blur(8px);
+  user-select: none;
+}
+
+/* Плитки квизов в «Моём дне» */
+.qtiles {
+  margin-top: 18px;
+}
+
+.qtiles__title {
+  margin: 0 0 10px;
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.qtiles__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 10px;
+}
+
+.qtile {
+  display: grid;
+  align-content: start;
+  gap: 5px;
+  padding: 16px;
+  border: 1px solid rgba(217, 182, 111, 0.3);
+  border-radius: 18px;
+  background: linear-gradient(160deg, rgba(42, 32, 71, 0.8), rgba(23, 18, 42, 0.6));
+  color: inherit;
+  text-decoration: none;
+  transition:
+    border-color 0.2s,
+    transform 0.2s;
+}
+
+.qtile:hover,
+.qtile:focus-visible {
+  border-color: var(--gold);
+  transform: translateY(-2px);
+  outline: none;
+}
+
+.qtile svg {
+  color: var(--gold);
+}
+
+.qtile b {
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+  font-weight: 600;
+}
+
+.qtile span {
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.qtile small {
+  margin-top: 4px;
+  color: #f1d796;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .compat.is-fresh .daily__block,
+  .compat.is-fresh .daily__secret,
+  .arch.is-fresh .daily__block,
+  .arch.is-fresh .daily__secret,
+  .yn.is-fresh .daily__block,
+  .yn.is-fresh .daily__secret,
+  .arch__card.is-flip,
+  .compat__bar i span {
+    animation: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .qtile {
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: 14px;
+    padding: 14px;
+  }
+
+  .qtile svg {
+    grid-row: span 3;
+    margin-top: 2px;
   }
 }

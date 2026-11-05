@@ -331,7 +331,7 @@ describe("переписка в Telegram-боте", () => {
     await chatFor(TG);
     await db.insert(messages).values({ conversationId: chat.id, author: "client", body: "из бота", viaTelegram: true });
     const stats = await botStats(db, null);
-    expect(stats).toMatchObject({ subscribers: 1, linkedLeads: 2, repliedLeads: 1, repliedMessages: 1, reminders: 0, reviewAsks: 0 });
+    expect(stats).toMatchObject({ subscribers: 1, linkedLeads: 2, repliedLeads: 1, repliedMessages: 1, reminders: 0, reviewAsks: 0, quizzes: 0, quizzesWaiting: 0 });
   });
 
   it("выбор эксперта в боте: карточка листается в том же сообщении, «Написать» открывает чат", async () => {

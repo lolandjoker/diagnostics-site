@@ -17,6 +17,7 @@ import { conversations, funnelEvents, leads, messages } from "@/db/schema";
 export const SOURCES = {
   karta: "TikTok · Твоя карта",
   tayna: "TikTok · Необъяснимое",
+  arhetip: "Сторис · Ваш архетип",
   r1: "Ссылка 1",
   r2: "Ссылка 2",
   r3: "Ссылка 3",

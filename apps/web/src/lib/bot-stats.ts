@@ -1,7 +1,7 @@
 /** Telegram-бот в «Сводке»: сколько подключили, отвечают ли из бота, что бот отправил сам (за период). */
-import { and, count, countDistinct, eq, gte, isNotNull } from "drizzle-orm";
+import { and, count, countDistinct, eq, gte, isNotNull, isNull } from "drizzle-orm";
 import type { Db } from "@/db";
-import { conversations, leads, messages, telegramMessages } from "@/db/schema";
+import { clubQuizzes, conversations, leads, messages, telegramMessages } from "@/db/schema";
 
 export interface BotStats {
   /** Сейчас подключены (могут получать сообщения и рассылки) — за всё время. */
@@ -14,10 +14,15 @@ export interface BotStats {
   /** Что бот отправил сам: напоминания и просьбы оценить эксперта. */
   reminders: number;
   reviewAsks: number;
+  /** Квизы клуба за период: сколько раз прошли и сколько человек. */
+  quizzes: number;
+  quizPeople: number;
+  /** Результаты, которые ждут подключения Telegram (за период). */
+  quizzesWaiting: number;
 }
 
 export async function botStats(db: Db, since: Date | null): Promise<BotStats> {
-  const [subscribers, linked, replied, reminders, asks] = await Promise.all([
+  const [subscribers, linked, replied, reminders, asks, quizzes, waiting] = await Promise.all([
     db.select({ n: countDistinct(leads.telegramUserId) }).from(leads).where(isNotNull(leads.telegramUserId)),
     db
       .select({ n: count() })
@@ -36,6 +41,14 @@ export async function botStats(db: Db, since: Date | null): Promise<BotStats> {
       .select({ n: count() })
       .from(telegramMessages)
       .where(and(eq(telegramMessages.purpose, "review"), since ? gte(telegramMessages.createdAt, since) : undefined)),
+    db
+      .select({ n: count(), people: countDistinct(clubQuizzes.leadId) })
+      .from(clubQuizzes)
+      .where(since ? gte(clubQuizzes.createdAt, since) : undefined),
+    db
+      .select({ n: countDistinct(clubQuizzes.leadId) })
+      .from(clubQuizzes)
+      .where(and(isNull(clubQuizzes.sentAt), since ? gte(clubQuizzes.createdAt, since) : undefined)),
   ]);
   return {
     subscribers: Number(subscribers[0]?.n ?? 0),
@@ -44,5 +57,8 @@ export async function botStats(db: Db, since: Date | null): Promise<BotStats> {
     repliedMessages: Number(replied[0]?.messagesN ?? 0),
     reminders: Number(reminders[0]?.n ?? 0),
     reviewAsks: Number(asks[0]?.n ?? 0),
+    quizzes: Number(quizzes[0]?.n ?? 0),
+    quizPeople: Number(quizzes[0]?.people ?? 0),
+    quizzesWaiting: Number(waiting[0]?.n ?? 0),
   };
 }
