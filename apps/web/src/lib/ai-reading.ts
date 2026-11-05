@@ -1,11 +1,9 @@
 /**
- * Расшифровки «Клуба Таромбы» пишет Claude Opus 5.5 — по имени, дате рождения, личному дню и карте.
- * Ответ — строго по схеме (structured outputs): блоки «Главное сегодня», «В любви», «В делах и деньгах»,
- * «Совет дня» и «Что карта скрывает» — открытый вопрос, который интересно разобрать с экспертом.
- * Ключ — ANTHROPIC_API_KEY в .env сервера. Нет ключа, отказ модели или ошибка — null: вызывающий берёт
- * запасные тексты карты (lib/arcana.ts), чтобы человек всё равно получил расшифровку.
+ * Тексты «Клуба Таромбы» пишет Claude Opus 5.5: карта дня, совместимость, архетип, «Да или нет».
+ * Ответ — строго по схеме (structured outputs). Ключ — ANTHROPIC_API_KEY в .env сервера. Нет ключа, отказ
+ * модели или ошибка — null: вызывающий берёт запасные тексты, чтобы человек всё равно получил результат.
  * Отказ классификатора (stop_reason "refusal") Anthropic сам повторяет на запасной модели (fallbacks: "default").
- * В запрос уходят только имя и дата рождения из заявки — ни телефона, ни переписки.
+ * В запрос уходят только имена, даты рождения и то, что человек сам написал в квизе, — ни телефона, ни переписки.
  */
 import Anthropic from "@anthropic-ai/sdk";
 import type { Arcana } from "./arcana";
@@ -22,6 +20,13 @@ export interface CardSections {
   teaser: string;
 }
 
+/** Общие правила для всех текстов клуба. */
+export const SAFETY = `- На «вы», тепло, спокойно и поддерживающе, живым языком, без пафоса и мистического тумана.
+- Говори о склонностях и возможностях, а не о гарантированных событиях.
+- Не предсказывай болезни, смерть, беременность, несчастья и измены; не давай медицинских, юридических и финансовых указаний; не пугай.
+- Если пол человека не ясен из имени, строй фразы так, чтобы они подходили всем.
+- Без эмодзи и разметки.`;
+
 const SYSTEM = `Ты пишешь расшифровку «карты дня» для сервиса Таромба (таро, астрология, нумерология).
 Человек сам вытянул одну карту из старших арканов; ты объясняешь, что она значит для его сегодняшнего дня.
 
@@ -33,11 +38,8 @@ const SYSTEM = `Ты пишешь расшифровку «карты дня» �
 - teaser — «Что карта скрывает»: одно-два предложения, которые открывают интересный вопрос — что эта карта в сочетании с личным днём может значить лично для человека в ближайшее время. Вопрос должен вызывать желание разобрать его подробно с экспертом по дате рождения. Не утверждай, что эксперт уже что-то знает или видит, и не обещай конкретных событий.
 
 Как писать:
-- На «вы», тепло, спокойно и поддерживающе, живым языком, без пафоса и мистического тумана.
 - Опирайся на смысл карты и на личный день по нумерологии; пиши конкретно, а не общими словами.
-- Говори о склонностях и возможностях дня, а не о гарантированных событиях.
-- Не предсказывай болезни, смерть, беременность, несчастья и измены; не давай медицинских, юридических и финансовых указаний; не пугай.
-- Без эмодзи и разметки.`;
+${SAFETY}`;
 
 const SCHEMA = {
   type: "object",
@@ -62,9 +64,49 @@ function anthropic(): Anthropic | null {
   return client;
 }
 
-/** Есть ли ключ — расшифровки пишет ИИ. */
+/** Есть ли ключ — тексты пишет ИИ. */
 export function readingsByAi(): boolean {
   return anthropic() !== null;
+}
+
+/** Строка из ответа ИИ: без пробелов по краям и не длиннее max. */
+export const clip = (s: unknown, max = MAX_FIELD) => {
+  const t = typeof s === "string" ? s.trim() : "";
+  return t.length > max ? `${t.slice(0, max).trimEnd()}…` : t;
+};
+
+/** ГГГГ-ММ-ДД → ДД.ММ.ГГГГ (для запроса к ИИ). */
+export const ruDate = (iso: string) => iso.split("-").reverse().join(".");
+
+/** Запрос к ИИ с ответом строго по JSON-схеме. null — без ключа, отказ, обрыв или ошибка. */
+export async function aiJson(opts: {
+  system: string;
+  prompt: string;
+  schema: Record<string, unknown>;
+  label: string;
+}): Promise<{ data: Record<string, unknown>; model: string } | null> {
+  const c = anthropic();
+  if (!c) return null;
+  try {
+    const res = await c.beta.messages.create({
+      model: READING_MODEL,
+      max_tokens: 6000,
+      betas: ["server-side-fallback-2026-07-01"],
+      fallbacks: "default",
+      output_config: { effort: "low", format: { type: "json_schema", schema: opts.schema } },
+      system: opts.system,
+      messages: [{ role: "user", content: opts.prompt }],
+    });
+    if (res.stop_reason === "refusal" || res.stop_reason === "max_tokens") return null;
+    const raw = res.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");
+    const data = JSON.parse(raw) as unknown;
+    if (!data || typeof data !== "object" || Array.isArray(data)) return null;
+    return { data: data as Record<string, unknown>, model: res.model };
+  } catch (err) {
+    if (err instanceof Anthropic.APIError) console.warn(`${opts.label} (ИИ): ${err.status ?? ""} ${err.message}`);
+    else console.warn(`${opts.label} (ИИ): ${err instanceof Error ? err.message : String(err)}`);
+    return null;
+  }
 }
 
 export interface ReadingInput {
@@ -74,48 +116,24 @@ export interface ReadingInput {
   card: Arcana;
 }
 
-const clip = (s: unknown) => {
-  const t = typeof s === "string" ? s.trim() : "";
-  return t.length > MAX_FIELD ? `${t.slice(0, MAX_FIELD).trimEnd()}…` : t;
-};
-
 /** Расшифровка карты дня по блокам от ИИ; null — без ИИ (берите запасные тексты). */
 export async function writeReading(input: ReadingInput): Promise<{ sections: CardSections; model: string } | null> {
-  const c = anthropic();
-  if (!c) return null;
-  const [y, m, d] = input.birthDate.split("-");
-  try {
-    const res = await c.beta.messages.create({
-      model: READING_MODEL,
-      max_tokens: 6000,
-      betas: ["server-side-fallback-2026-07-01"],
-      fallbacks: "default",
-      output_config: { effort: "low", format: { type: "json_schema", schema: SCHEMA } },
-      system: SYSTEM,
-      messages: [
-        {
-          role: "user",
-          content:
-            `Имя: ${input.name}\nДата рождения: ${d}.${m}.${y}\nЛичный день по нумерологии: ${input.personalDay}\n` +
-            `Карта дня: ${input.card.n} «${input.card.name}» (смыслы: ${input.card.keywords}).\n\nНапиши расшифровку карты дня.`,
-        },
-      ],
-    });
-    if (res.stop_reason === "refusal" || res.stop_reason === "max_tokens") return null;
-    const raw = res.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    const sections: CardSections = {
-      main: clip(parsed.main),
-      love: clip(parsed.love),
-      work: clip(parsed.work),
-      tip: clip(parsed.tip),
-      teaser: clip(parsed.teaser),
-    };
-    if (!sections.main) return null;
-    return { sections, model: res.model };
-  } catch (err) {
-    if (err instanceof Anthropic.APIError) console.warn(`Расшифровка ИИ: ${err.status ?? ""} ${err.message}`);
-    else console.warn(`Расшифровка ИИ: ${err instanceof Error ? err.message : String(err)}`);
-    return null;
-  }
+  const ai = await aiJson({
+    system: SYSTEM,
+    schema: SCHEMA,
+    label: "Карта дня",
+    prompt:
+      `Имя: ${input.name}\nДата рождения: ${ruDate(input.birthDate)}\nЛичный день по нумерологии: ${input.personalDay}\n` +
+      `Карта дня: ${input.card.n} «${input.card.name}» (смыслы: ${input.card.keywords}).\n\nНапиши расшифровку карты дня.`,
+  });
+  if (!ai) return null;
+  const sections: CardSections = {
+    main: clip(ai.data.main),
+    love: clip(ai.data.love),
+    work: clip(ai.data.work),
+    tip: clip(ai.data.tip),
+    teaser: clip(ai.data.teaser),
+  };
+  if (!sections.main) return null;
+  return { sections, model: ai.model };
 }

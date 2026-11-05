@@ -471,6 +471,29 @@ export const dailyCards = pgTable(
   (t) => [primaryKey({ columns: [t.leadId, t.day] })],
 );
 
+/**
+ * «Клуб Таромбы»: квизы — совместимость пары (compat), тест «Ваш архетип» (archetype), «Да или нет» (yesno).
+ * input и result — JSON (lib/quizzes.ts); day — день по Москве (лимит попыток в день); model — кто писал текст
+ * (null — запасной); sentAt — когда результат ушёл в бот (null — Telegram ещё не подключён: уйдёт при подключении).
+ */
+export const clubQuizzes = pgTable(
+  "club_quizzes",
+  {
+    id: serial("id").primaryKey(),
+    leadId: uuid("lead_id")
+      .notNull()
+      .references(() => leads.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    day: date("day", { mode: "string" }).notNull(),
+    input: text("input").notNull(),
+    result: text("result").notNull(),
+    model: text("model"),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [index("club_quizzes_lead_idx").on(t.leadId, t.kind, t.createdAt)],
+);
+
 /** Рассылка в бот всем, кто его подключил (из админки). total — кому отправляем, sent и failed — итог. */
 export const broadcasts = pgTable("broadcasts", {
   id: serial("id").primaryKey(),

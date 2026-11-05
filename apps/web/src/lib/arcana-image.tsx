@@ -10,7 +10,7 @@ import { ARCANA, arcanaBackSvg, arcanaSymbolSvg } from "./arcana";
 type Font = { name: string; data: ArrayBuffer; weight: 500 | 600 | 700; style: "normal" };
 let fonts: Promise<Font[]> | null = null;
 
-function loadFonts(): Promise<Font[]> {
+export function loadFonts(): Promise<Font[]> {
   const file = async (name: string, family: string, weight: Font["weight"]): Promise<Font> => {
     const buf = await readFile(path.join(process.cwd(), "assets/fonts", name));
     return { name: family, data: buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength), weight, style: "normal" };
@@ -26,12 +26,12 @@ function loadFonts(): Promise<Font[]> {
   return fonts;
 }
 
-const svgUri = (svg: string) => `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
+export const svgUri = (svg: string) => `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
 const GOLD = "#d9b66f";
 const dateLabel = new Intl.DateTimeFormat("ru-RU", { timeZone: "Europe/Moscow", day: "numeric", month: "long" });
 
-/** Плашка карты дня, 1200×600. */
-export async function arcanaCardPng(index: number, now: Date): Promise<Buffer> {
+/** Плашка карты, 1200×600; label — строка над названием (по умолчанию «Карта дня · дата»). */
+export async function arcanaCardPng(index: number, now: Date, label?: string): Promise<Buffer> {
   const c = ARCANA[index] ?? ARCANA[0]!;
   const res = new ImageResponse(
     (
@@ -69,7 +69,7 @@ export async function arcanaCardPng(index: number, now: Date): Promise<Buffer> {
         </div>
         <div style={{ display: "flex", flexDirection: "column", marginLeft: 70, flexGrow: 1, minWidth: 0 }}>
           <div style={{ fontSize: 26, fontWeight: 700, color: GOLD, letterSpacing: 5 }}>
-            {`КАРТА ДНЯ · ${dateLabel.format(now).toUpperCase()}`}
+            {label ?? `КАРТА ДНЯ · ${dateLabel.format(now).toUpperCase()}`}
           </div>
           <div style={{ fontFamily: "Cormorant", fontSize: 96, color: "#f1d796", lineHeight: 1.05, marginTop: 18 }}>{c.name}</div>
           <div style={{ fontSize: 30, color: "#c9bfd8", marginTop: 22, lineHeight: 1.4 }}>{c.keywords}</div>
