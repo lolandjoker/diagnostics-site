@@ -96,34 +96,38 @@ export function ClientChatList({
           );
         })}
       </ul>
-      <Link className="chats__more" href={`/razbor/${leadId}/eksperty`}>
-        <span>
-          Познакомиться с другим экспертом
-          <small>Отзывы, рейтинг — написать можно любому</small>
-        </span>
-        <span aria-hidden="true">→</span>
-      </Link>
-      {telegram &&
-        (telegram.connected ? (
-          <p className="chats__tg">🔔 Ответы эксперта приходят в Telegram</p>
-        ) : (
-          <a className="chats__more chats__more--ghost" href={telegram.href} target="_blank" rel="noopener noreferrer">
-            <span>
-              🔔 Получать ответы в Telegram
-              <small>Бот напишет, когда эксперт ответит</small>
-            </span>
-            <span aria-hidden="true">→</span>
-          </a>
-        ))}
-      {editsLeft > 0 && (
-        <Link className="chats__more chats__more--ghost" href={`/razbor/${leadId}/izmenit`}>
+      {/* Действия — отдельно от переписок: тонкая линия и подпись «Ещё» */}
+      <div className="chats__actions">
+        <div className="chats__subtitle">Ещё</div>
+        <Link className="chats__more" href={`/razbor/${leadId}/eksperty`}>
           <span>
-            Изменить дату рождения
-            <small>Осталось изменений: {editsLeft}</small>
+            Познакомиться с другим экспертом
+            <small>Отзывы, рейтинг — написать можно любому</small>
           </span>
           <span aria-hidden="true">→</span>
         </Link>
-      )}
+        {telegram &&
+          (telegram.connected ? (
+            <p className="chats__tg">🔔 Ответы эксперта приходят в Telegram</p>
+          ) : (
+            <a className="chats__more chats__more--ghost" href={telegram.href} target="_blank" rel="noopener noreferrer">
+              <span>
+                🔔 Получать ответы в Telegram
+                <small>Бот напишет, когда эксперт ответит</small>
+              </span>
+              <span aria-hidden="true">→</span>
+            </a>
+          ))}
+        {editsLeft > 0 && (
+          <Link className="chats__more chats__more--ghost" href={`/razbor/${leadId}/izmenit`}>
+            <span>
+              Изменить дату рождения
+              <small>Осталось изменений: {editsLeft}</small>
+            </span>
+            <span aria-hidden="true">→</span>
+          </Link>
+        )}
+      </div>
     </nav>
   );
 }

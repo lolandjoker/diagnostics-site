@@ -2551,6 +2551,21 @@ td.actions {
   text-decoration: none;
 }
 
+.chats__actions {
+  flex: none;
+  margin-top: 6px;
+  border-top: 1px solid var(--line);
+}
+
+.chats__subtitle {
+  padding: 12px 20px 0;
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .chats__tg {
   margin: 0 12px 12px;
   color: var(--muted);
