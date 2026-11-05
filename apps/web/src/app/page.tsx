@@ -18,7 +18,8 @@ export default async function HomePage(props: PageProps<"/">) {
   const rememberedId = fresh === "1" ? null : await rememberedLeadId();
   const remembered = rememberedId ? await getLead(db, rememberedId) : null;
   if (remembered) {
-    redirect((await conversationForLead(db, remembered.id)) ? `/razbor/${remembered.id}/chat` : `/razbor/${remembered.id}`);
+    // С чатом — в «Мой день» (карта дня, серия, путь к эксперту), без чата — к разбору
+    redirect((await conversationForLead(db, remembered.id)) ? `/razbor/${remembered.id}/den` : `/razbor/${remembered.id}`);
   }
 
   const t = await getTexts(db, ["home.title", "home.subtitle", "home.button"]);

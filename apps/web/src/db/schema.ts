@@ -448,6 +448,27 @@ export const telegramUsers = pgTable("telegram_users", {
   createdAt: createdAt(),
 });
 
+/**
+ * «Клуб Таромбы»: карта дня — одна на заявку в день (по Москве). position — какую из пяти рубашек выбрали,
+ * card — номер старшего аркана (0–21, lib/arcana.ts), text — расшифровка (ИИ или запасная из колоды),
+ * model — какая модель написала текст; null — запасной текст. По подряд идущим дням считается серия.
+ */
+export const dailyCards = pgTable(
+  "daily_cards",
+  {
+    leadId: uuid("lead_id")
+      .notNull()
+      .references(() => leads.id, { onDelete: "cascade" }),
+    day: date("day", { mode: "string" }).notNull(),
+    position: integer("position").notNull(),
+    card: integer("card").notNull(),
+    text: text("text").notNull(),
+    model: text("model"),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.leadId, t.day] })],
+);
+
 /** Рассылка в бот всем, кто его подключил (из админки). total — кому отправляем, sent и failed — итог. */
 export const broadcasts = pgTable("broadcasts", {
   id: serial("id").primaryKey(),

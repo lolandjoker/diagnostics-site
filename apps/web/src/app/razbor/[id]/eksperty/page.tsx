@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ClientTabs } from "../../../ClientTabs";
 import { redirect } from "next/navigation";
 import { getDb } from "@/db";
 import { clientChats, conversationForLead, selectableExperts } from "@/lib/chat";
@@ -44,7 +45,8 @@ export default async function ExpertsPage(props: PageProps<"/razbor/[id]/ekspert
 
   return (
     <>
-      <main className="page">
+      <main className={chat ? "page has-tabs" : "page"}>
+        {chat && <ClientTabs leadId={lead.id} current="eksperty" hasChats />}
         <p className="page__links">
           {chat ? <Link href={`/razbor/${lead.id}/chat`}>← Вернуться в чат</Link> : <Link href={`/razbor/${lead.id}`}>← К разбору</Link>}
           {lead.edits < MAX_LEAD_EDITS && <Link href={`/razbor/${lead.id}/izmenit`}>Изменить дату рождения</Link>}

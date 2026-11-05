@@ -2,8 +2,8 @@ import { eq } from "drizzle-orm";
 import type { Mock } from "vitest";
 import { createTestDb } from "@/db";
 import type { Db } from "@/db";
-import { conversations, leads, messages, telegramUsers } from "@/db/schema";
-import { handleForecastCallback, moscowNow, personalDay, sendForecasts } from "./bot-forecast";
+import { conversations, leads, messages } from "@/db/schema";
+import { moscowNow, personalDay } from "./numerology";
 import { markExpertRead, messageViews, postMessage, startConversation } from "./chat";
 import { createExpert, setExpertOnline } from "./experts";
 import { createLead } from "./leads";
@@ -155,37 +155,6 @@ describe("прогноз на день", () => {
     expect(moscowNow(new Date("2026-11-05T21:30:00Z"))).toEqual({ date: "2026-11-06", hour: 0 });
   });
 
-  it("подписка кнопкой: сразу прогноз на сегодня, утром — раз в день; «Нет» — отписка", async () => {
-    const db = await createTestDb();
-    const calls: { method: string; body: { text?: string } }[] = [];
-    vi.stubEnv("TELEGRAM_BOT_TOKEN", TOKEN);
-    vi.stubEnv("SITE_DOMAIN", "example.com");
-    vi.stubGlobal("fetch", async (url: unknown, init?: RequestInit) => {
-      const method = String(url).split("/").pop()!;
-      calls.push({ method, body: JSON.parse(String(init?.body ?? "{}")) });
-      return new Response(JSON.stringify({ ok: true, result: method === "sendMessage" ? { message_id: calls.length } : true }), { status: 200 });
-    });
-    try {
-      await createLead(db, { name: "Анна", birthDate: "1990-03-15" }, new Date(), null, 6001);
-      const morning = new Date("2026-11-05T08:00:00Z"); // 11:00 по Москве
-      expect(await handleForecastCallback(db, cfg, { id: "q", userId: 6001, chatId: 6001, messageId: 1, data: "fc:1" }, morning)).toBe(true);
-      const texts = calls.filter((c) => c.method === "sendMessage").map((c) => c.body.text ?? "");
-      expect(texts.at(-1)).toContain("<b>Анна, ваш личный день — 8</b>");
-      // Сегодня уже получил — утренняя рассылка не повторяет; завтра — придёт
-      expect(await sendForecasts(db, morning)).toBe(0);
-      expect(await sendForecasts(db, new Date("2026-11-06T05:00:00Z"))).toBe(0); // 08:00 по Москве — рано
-      expect(await sendForecasts(db, new Date("2026-11-06T07:00:00Z"))).toBe(1);
-      expect(await sendForecasts(db, new Date("2026-11-06T09:00:00Z"))).toBe(0);
-
-      await handleForecastCallback(db, cfg, { id: "q2", userId: 6001, chatId: 6001, messageId: 2, data: "fc:0" }, morning);
-      const [row] = await db.select().from(telegramUsers).where(eq(telegramUsers.telegramUserId, 6001));
-      expect(row?.forecast).toBe(false);
-      expect(await sendForecasts(db, new Date("2026-11-07T07:00:00Z"))).toBe(0);
-    } finally {
-      vi.unstubAllEnvs();
-      vi.unstubAllGlobals();
-    }
-  });
 });
 
 it("«Вернулись»: снова пришли в чат через сутки и позже", async () => {

@@ -3486,3 +3486,495 @@ body.no-scroll {
   text-decoration: none;
   white-space: nowrap;
 }
+
+/* --- «Мой день» и «Клуб Таромбы» --- */
+
+.page--den {
+  max-width: 1040px;
+}
+
+.den__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px 24px;
+  margin-bottom: 18px;
+}
+
+.den__head h1 {
+  margin: 4px 0 0;
+}
+
+.den__head .eyebrow,
+.club .eyebrow,
+.daily .eyebrow {
+  font-size: 0.75rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gold);
+  font-weight: 700;
+}
+
+.den__streak {
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.den__dots {
+  display: flex;
+  gap: 6px;
+}
+
+.den__dots i {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+}
+
+.den__dots i.is-done {
+  border-color: var(--gold);
+  background: var(--gold);
+}
+
+.den__dots i.is-today {
+  border: 2px solid var(--gold);
+}
+
+.den__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 18px;
+  align-items: start;
+}
+
+@media (max-width: 860px) {
+  .den__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .den__streak {
+    justify-items: start;
+  }
+}
+
+.den__main {
+  min-width: 0;
+  padding: 22px 16px;
+  border: 1px solid rgba(217, 182, 111, 0.35);
+  border-radius: 24px;
+  background: radial-gradient(120% 90% at 50% 0%, #2a2047 0%, rgba(23, 18, 42, 0.6) 70%);
+}
+
+.den__expert {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 18px;
+  margin-top: 18px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--gold-soft);
+}
+
+.den__expert span {
+  flex: 1 1 260px;
+}
+
+/* Карта дня — веер из пяти рубашек */
+.daily {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+}
+
+.daily__hint {
+  margin: 0;
+  color: var(--muted);
+  text-align: center;
+}
+
+.daily__fan {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+  height: 250px;
+}
+
+.daily__card {
+  --w: 116px;
+  position: absolute;
+  left: calc(50% - var(--w) / 2);
+  bottom: 0;
+  width: var(--w);
+  aspect-ratio: 5 / 8;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  perspective: 900px;
+  transform-origin: 50% 115%;
+  transform: rotate(calc(var(--i) * 13deg)) translateY(calc(abs(var(--i)) * 6px));
+  transition:
+    transform 0.55s cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 0.4s ease;
+}
+
+@supports not (width: abs(-1px)) {
+  .daily__card {
+    transform: rotate(calc(var(--i) * 13deg));
+  }
+}
+
+.daily__card:not(:disabled):hover {
+  translate: 0 -12px;
+}
+
+.daily__card:disabled {
+  cursor: default;
+}
+
+.daily__card:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 4px;
+  border-radius: 10px;
+}
+
+.daily.is-done .daily__card:not(.is-chosen),
+.daily__fan:has(.is-waiting) .daily__card:not(.is-chosen) {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.daily__card.is-chosen {
+  z-index: 5;
+  transform: translateY(-14px) rotate(0deg) scale(1.3);
+}
+
+.daily__card.is-waiting .daily__in {
+  animation: daily-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes daily-pulse {
+  50% {
+    filter: drop-shadow(0 0 18px rgba(217, 182, 111, 0.55));
+  }
+}
+
+.daily__in {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transition: transform 0.9s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.daily__card.is-open .daily__in {
+  transform: rotateY(180deg);
+}
+
+.daily__side {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: 10px;
+  backface-visibility: hidden;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+
+.daily__side svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.daily__face {
+  transform: rotateY(180deg);
+}
+
+.daily__reading {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  max-width: 520px;
+  text-align: center;
+  animation: daily-in 0.5s ease both;
+}
+
+@keyframes daily-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+.daily__name {
+  margin: 0;
+  color: #f1d796;
+  font-family: var(--font-display);
+  font-size: 2rem;
+  font-weight: 600;
+}
+
+.daily__text {
+  margin: 0;
+  min-height: 4.5em;
+  font-size: 1.02rem;
+  line-height: 1.6;
+}
+
+.daily__next {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.daily__locked {
+  display: grid;
+  gap: 14px;
+}
+
+.daily__blur {
+  margin: 0;
+  max-height: 4.8em;
+  overflow: hidden;
+  filter: blur(5px);
+  user-select: none;
+  line-height: 1.6;
+  mask-image: linear-gradient(180deg, #000 30%, transparent);
+}
+
+.daily__unlock {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid rgba(217, 182, 111, 0.35);
+  border-radius: 16px;
+  background: rgba(23, 18, 42, 0.7);
+}
+
+.daily__unlock b {
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+}
+
+.daily__unlock span {
+  max-width: 34ch;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+@media (max-width: 420px) {
+  .daily__card {
+    --w: 96px;
+  }
+
+  .daily__fan {
+    height: 215px;
+  }
+}
+
+/* «Клуб Таромбы» */
+.club {
+  position: relative;
+  display: grid;
+  gap: 12px;
+  padding: 20px;
+  overflow: hidden;
+  border: 1px solid var(--gold);
+  border-radius: 22px;
+  background: linear-gradient(160deg, #2a2047, var(--surface));
+}
+
+.club::after {
+  content: "";
+  position: absolute;
+  top: -70px;
+  right: -70px;
+  width: 200px;
+  height: 200px;
+  border: 1px solid rgba(217, 182, 111, 0.22);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.club__title {
+  margin: 0;
+  color: #f1d796;
+  font-family: var(--font-display);
+  font-size: 1.9rem;
+  font-weight: 600;
+}
+
+.club__perks {
+  display: grid;
+  gap: 9px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.92rem;
+}
+
+.club__perks li {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.club__perks svg {
+  flex: none;
+  margin-top: 1px;
+  color: var(--gold);
+}
+
+.club__perks li.is-soon {
+  color: var(--muted);
+}
+
+.club__perks small {
+  color: var(--gold);
+}
+
+.club__go {
+  justify-self: start;
+}
+
+.club__ok {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 0;
+  color: var(--ok);
+  font-size: 0.88rem;
+}
+
+/* Меню клиента: на компьютере — строка, на телефоне — нижняя панель */
+.ctabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 22px;
+}
+
+.ctabs__item {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  text-decoration: none;
+}
+
+.ctabs__item:hover {
+  color: var(--text);
+}
+
+.ctabs__item.is-current {
+  border-color: var(--gold);
+  background: var(--gold-soft);
+  color: #f1d796;
+  font-weight: 700;
+}
+
+.ctabs__icon {
+  position: relative;
+  display: inline-flex;
+}
+
+.ctabs__icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.ctabs__dot {
+  position: absolute;
+  top: -2px;
+  right: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--gold);
+}
+
+@media (max-width: 860px) {
+  .ctabs {
+    position: fixed;
+    inset: auto 0 0;
+    z-index: 40;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0;
+    margin: 0;
+    padding: 4px max(4px, env(safe-area-inset-right, 0px)) calc(4px + env(safe-area-inset-bottom, 0px)) max(4px, env(safe-area-inset-left, 0px));
+    border-top: 1px solid var(--line);
+    background: rgba(17, 12, 32, 0.96);
+    backdrop-filter: blur(10px);
+  }
+
+  .ctabs__item {
+    display: grid;
+    justify-items: center;
+    gap: 3px;
+    padding: 6px 2px 4px;
+    border: 0;
+    border-radius: 12px;
+    font-size: 0.7rem;
+  }
+
+  .ctabs__item.is-current {
+    background: none;
+  }
+
+  .ctabs__icon svg {
+    width: 22px;
+    height: 22px;
+  }
+
+  .has-tabs {
+    padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .daily__card,
+  .daily__in,
+  .daily__reading {
+    transition: none;
+    animation: none;
+  }
+}
+
+.chats__day {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--gold);
+  border-radius: 16px;
+  background: linear-gradient(160deg, #2a2047, transparent);
+  color: #f1d796;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.chats__day span:nth-child(2) {
+  flex: 1;
+}
+
+.chats__day small {
+  display: block;
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 0.75rem;
+}
