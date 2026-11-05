@@ -4,7 +4,7 @@ import { createTestDb } from "@/db";
 import type { Db } from "@/db";
 import { broadcasts, conversations, messages, reviews, telegramMessages, telegramStarts } from "@/db/schema";
 import { em, setBotEmoji } from "./bot-emoji";
-import { notifyClient, sendLatestToTelegram, splitText } from "./bot-delivery";
+import { clearCardCache, notifyClient, sendLatestToTelegram, splitText } from "./bot-delivery";
 import { REMIND_AFTER_MS, REVIEW_ASK_AFTER_MS, askReviews, remindUnread } from "./bot-chores";
 import { handleExpertCallback, showExperts } from "./bot-experts";
 import { handleClientMessage } from "./bot-inbox";
@@ -53,6 +53,7 @@ describe("переписка в Telegram-боте", () => {
 
   beforeEach(async () => {
     db = await createTestDb();
+    clearCardCache();
     nextId = 100;
     fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       const method = String(url).split("/").pop();
@@ -366,5 +367,23 @@ describe("переписка в Telegram-боте", () => {
     // Без заявки — сначала разбор
     await handleExpertCallback(db, cfg, { id: "q3", userId: 31337, chatId: 31337, messageId: null, data: `exw:${second.id}` });
     expect(calls().filter((c) => c.method === "sendMessage").at(-1)?.body.text).toContain("Сначала получите бесплатный разбор");
+  });
+
+  it("кнопки не «висят»: на нажатие отвечаем сразу, номер карточки ничего не делает, плашка второй раз — по file_id", async () => {
+    await chatFor(TG, "Мария | Таролог");
+    expect(await handleExpertCallback(db, cfg, { id: "n1", userId: TG, chatId: TG, messageId: 1, data: "exn" })).toBe(true);
+    expect(calls().map((c) => c.method)).toEqual(["answerCallbackQuery"]);
+
+    await handleExpertCallback(db, cfg, { id: "l1", userId: TG, chatId: TG, messageId: 1, data: "exl" });
+    let sent = calls();
+    // Сначала ответ на нажатие, потом карточка
+    expect(sent.slice(1).map((c) => c.method)).toEqual(["answerCallbackQuery", "sendPhoto"]);
+    expect(sent[2]!.body.photo).toBe("<file>");
+
+    await showExperts(db, cfg, TG, TG, 0);
+    sent = calls();
+    expect(sent.at(-1)).toMatchObject({ method: "sendPhoto" });
+    // Уже загруженная плашка — по file_id из ответа Telegram, без новой картинки
+    expect(String(sent.at(-1)!.body.photo)).toMatch(/^card-/);
   });
 });

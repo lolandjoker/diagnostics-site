@@ -34,6 +34,17 @@ export interface TelegramInvite {
   later: string;
 }
 
+/**
+ * Эксперт не в сети, а клиент ждёт ответа (последнее сообщение — его): честно говорим, что ответ будет позже,
+ * и как его не пропустить. text — без Telegram (с кнопкой подключить), connectedText — Telegram подключён.
+ */
+export interface OfflineNotice {
+  text: string;
+  connectedText: string;
+  telegramHref?: string | undefined;
+  button: string;
+}
+
 export interface ChatLabels {
   placeholder: string;
   send: string;
@@ -134,6 +145,7 @@ export function ChatThread({
   call,
   notice,
   telegramInvite,
+  offlineNotice,
   prompt,
   suggestions = [],
   typingUrl,
@@ -159,6 +171,8 @@ export function ChatThread({
   notice?: ReactNode;
   /** Клиенту: после первого сообщения — окно с приглашением в Telegram-бот (если ещё не подключён). */
   telegramInvite?: TelegramInvite | undefined;
+  /** Клиенту: эксперт не в сети, а он ждёт ответа — плашка под перепиской. */
+  offlineNotice?: OfflineNotice | undefined;
   /** Карточка над подсказками и полем ввода (например, «Откуда вы о нас узнали?»). */
   prompt?: ReactNode;
   /** Подсказки-вопросы: видны, пока человек ничего не написал в этом чате; нажал — вопрос отправлен. */
@@ -459,6 +473,17 @@ export function ChatThread({
           </div>
         )}
       </div>
+
+      {offlineNotice && status === "offline" && !typing && items.length > 0 && isOwn(items[items.length - 1]!) && (
+        <p className="chat__offline" role="status">
+          <span>{telegramConnected || !offlineNotice.telegramHref ? offlineNotice.connectedText : offlineNotice.text}</span>
+          {!telegramConnected && offlineNotice.telegramHref && (
+            <a href={offlineNotice.telegramHref} target="_blank" rel="noopener noreferrer">
+              {offlineNotice.button} →
+            </a>
+          )}
+        </p>
+      )}
 
       {error && (
         <p className="form__error chat__error" role="alert">

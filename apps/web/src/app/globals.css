@@ -3444,3 +3444,45 @@ body.no-scroll {
     opacity: 0;
   }
 }
+
+/* «Уведомления в Telegram» в шапке панели сотрудника */
+.staff-tg {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.875rem;
+}
+
+.staff-tg__ok {
+  color: #2f8f5b;
+  font-weight: 600;
+}
+
+.staff-tg__go {
+  font-weight: 700;
+}
+
+/* Эксперт не в сети, клиент ждёт ответа — честно говорим, как его не пропустить */
+.chat__offline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px 12px;
+  margin: 4px 12px 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--gold-soft);
+  color: var(--muted);
+  font-size: 0.875rem;
+  text-align: center;
+}
+
+.chat__offline a {
+  color: var(--gold);
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}

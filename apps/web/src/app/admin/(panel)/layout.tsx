@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { getDb } from "@/db";
 import { requireStaff } from "@/lib/staff-auth";
+import { staffTelegramStatus } from "@/lib/staff-telegram";
+import { StaffTelegramLink } from "../../StaffTelegramLink";
 import { logout } from "../auth-actions";
 import { expertLogout } from "../../expert/actions";
 
@@ -22,6 +25,8 @@ const NAV: { href: string; label: string; expertHref?: string; adminOnly?: boole
 export default async function PanelLayout({ children }: { children: ReactNode }) {
   const staff = await requireStaff();
   const expert = staff.kind === "expert";
+  const ref = expert ? { kind: "expert" as const, staffId: staff.expert.id } : { kind: "admin" as const, staffId: 0 };
+  const tg = await staffTelegramStatus(await getDb(), ref);
   return (
     <div className="admin">
       <header className="admin__header">
@@ -33,9 +38,12 @@ export default async function PanelLayout({ children }: { children: ReactNode })
           ))}
           {expert && <span className="muted">{staff.expert.name}</span>}
         </nav>
-        <form action={expert ? expertLogout : logout}>
-          <button className="link-button">Выйти</button>
-        </form>
+        <div className="row">
+          <StaffTelegramLink kind={ref.kind} connected={tg.connected} name={tg.name} />
+          <form action={expert ? expertLogout : logout}>
+            <button className="link-button">Выйти</button>
+          </form>
+        </div>
       </header>
       <main>{children}</main>
     </div>

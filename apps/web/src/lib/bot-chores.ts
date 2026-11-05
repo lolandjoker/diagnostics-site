@@ -3,12 +3,14 @@
  * - напоминание: эксперт ответил (или пришёл подробный разбор), а клиент сутки не открывал чат и не ответил —
  *   одно мягкое напоминание на каждое такое сообщение, не позже чем через двое суток;
  * - просьба оценить эксперта: через полчаса после подробного разбора, один раз на чат и только если отзыва
- *   ещё нет. Оценка — кнопками 1–5, слова — ответом на сообщение (lib/bot-reviews.ts).
+ *   ещё нет. Оценка — кнопками 1–5, слова — ответом на сообщение (lib/bot-reviews.ts);
+ * - личный прогноз на день: предложение подписаться и утренняя рассылка подписчикам (lib/bot-forecast.ts).
  */
 import { and, eq, exists, gt, inArray, isNotNull, isNull, lt, lte, ne, notExists, or, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { conversations, experts, leads, messages, reviews } from "@/db/schema";
 import { em } from "./bot-emoji";
+import { askForecast, sendForecasts } from "./bot-forecast";
 import { chatContext, enqueue, remember, sendText } from "./bot-delivery";
 import { type BotButton, esc, telegramConfig } from "./telegram";
 
@@ -128,7 +130,7 @@ export async function askReviews(db: Db, now: Date): Promise<number> {
 
 /** Всё плановое разом; ошибки — в лог, следующая попытка через минуту. */
 export async function runBotChores(db: Db, now = new Date()): Promise<void> {
-  for (const job of [remindUnread, askReviews]) {
+  for (const job of [remindUnread, askReviews, askForecast, sendForecasts]) {
     try {
       await job(db, now);
     } catch (err) {

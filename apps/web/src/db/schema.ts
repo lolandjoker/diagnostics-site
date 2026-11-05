@@ -398,6 +398,56 @@ export const telegramStarts = pgTable("telegram_starts", {
   createdAt: createdAt(),
 });
 
+/**
+ * Telegram сотрудника для уведомлений о сообщениях клиентов: админ (staffId 0), эксперт или оператор.
+ * Привязка — одноразовой ссылкой из панели сотрудника: t.me/<бот>?start=st_<код>, код живёт 15 минут,
+ * в базе — только его хеш. Привязанный может отвечать клиенту прямо из Telegram (ответом на уведомление).
+ */
+export const staffTelegram = pgTable(
+  "staff_telegram",
+  {
+    id: serial("id").primaryKey(),
+    kind: text("kind", { enum: ["admin", "expert", "operator"] }).notNull(),
+    staffId: integer("staff_id").notNull().default(0),
+    telegramUserId: bigint("telegram_user_id", { mode: "number" }),
+    /** Имя в Telegram (как подписан аккаунт) — показать в панели, к какому аккаунту привязано. */
+    telegramName: text("telegram_name").notNull().default(""),
+    tokenHash: text("token_hash"),
+    tokenExpiresAt: timestamp("token_expires_at", { withTimezone: true }),
+    linkedAt: timestamp("linked_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("staff_telegram_staff_idx").on(t.kind, t.staffId), index("staff_telegram_user_idx").on(t.telegramUserId)],
+);
+
+/** Уведомления сотрудникам в Telegram: ответ на уведомление уходит клиенту в этот чат. */
+export const staffNotices = pgTable(
+  "staff_notices",
+  {
+    chatId: bigint("chat_id", { mode: "number" }).notNull(),
+    messageId: integer("message_id").notNull(),
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    staffLinkId: integer("staff_link_id")
+      .notNull()
+      .references(() => staffTelegram.id, { onDelete: "cascade" }),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.chatId, t.messageId] })],
+);
+
+/** Клиенты в боте: подписка на личный прогноз на день (по дате рождения последней заявки). */
+export const telegramUsers = pgTable("telegram_users", {
+  telegramUserId: bigint("telegram_user_id", { mode: "number" }).primaryKey(),
+  forecast: boolean("forecast").notNull().default(false),
+  /** День (по Москве), за который прогноз уже отправлен. */
+  forecastSentOn: date("forecast_sent_on", { mode: "string" }),
+  /** Когда бот предложил подписаться (один раз). */
+  forecastAskedAt: timestamp("forecast_asked_at", { withTimezone: true }),
+  createdAt: createdAt(),
+});
+
 /** Рассылка в бот всем, кто его подключил (из админки). total — кому отправляем, sent и failed — итог. */
 export const broadcasts = pgTable("broadcasts", {
   id: serial("id").primaryKey(),

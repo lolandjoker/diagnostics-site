@@ -17,7 +17,7 @@ import { clearTyping } from "./typing";
 export interface IncomingMessage {
   message_id?: unknown;
   chat?: { id?: unknown; type?: unknown };
-  from?: { id?: unknown };
+  from?: { id?: unknown; first_name?: unknown; username?: unknown };
   text?: unknown;
   caption?: unknown;
   photo?: unknown;
@@ -67,7 +67,7 @@ async function targetConversation(db: Db, chatId: number, telegramUserId: number
 }
 
 /** Самое большое фото не больше MAX_CHAT_PHOTO_BYTES — скачать у Telegram. */
-async function downloadPhoto(cfg: TelegramConfig, sizes: unknown): Promise<Buffer | null> {
+export async function downloadPhoto(cfg: TelegramConfig, sizes: unknown): Promise<Buffer | null> {
   if (!Array.isArray(sizes)) return null;
   const fit = (sizes as { file_id?: unknown; file_size?: unknown }[])
     .filter((p) => typeof p.file_id === "string" && (typeof p.file_size !== "number" || p.file_size <= MAX_CHAT_PHOTO_BYTES))
