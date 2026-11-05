@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getDb } from "@/db";
+import { conversationForLead } from "@/lib/chat";
 import { MAX_LEAD_EDITS, RESULT_LOADING_MS, getLead } from "@/lib/leads";
 import { birthPortrait } from "@/lib/portrait";
 import { fillTemplate, getTexts } from "@/lib/texts";
 import { typograph } from "@/lib/typograph";
 import { variationFor } from "@/lib/variations";
+import { ClientTabs } from "../../ClientTabs";
 import { Footer } from "../../Footer";
 import { Portrait } from "../../Portrait";
 import { PriceTag } from "../../PriceTag";
@@ -34,10 +36,13 @@ export default async function ResultPage(props: PageProps<"/razbor/[id]">) {
   const vars = { name: lead.name };
   const variation = await variationFor(db, lead.variationId);
   const editsLeft = MAX_LEAD_EDITS - lead.edits;
+  // Меню — когда чат уже есть: новичка не уводим с пути «разбор → эксперт»
+  const chat = await conversationForLead(db, lead.id);
 
   return (
     <>
-      <main className="page">
+      <main className={chat ? "page has-tabs" : "page"}>
+        {chat && <ClientTabs leadId={lead.id} current="razbor" hasChats />}
         <h1>{fillTemplate(t["result.title"], vars)}</h1>
         {t["result.intro"] && <p className="lead text">{typograph(fillTemplate(t["result.intro"], vars))}</p>}
 

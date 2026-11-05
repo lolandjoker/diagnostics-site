@@ -1,10 +1,10 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getDb } from "@/db";
 import { clientChats } from "@/lib/chat";
 import { MAX_LEAD_EDITS, getLead } from "@/lib/leads";
 import { telegramLink } from "@/lib/telegram";
 import { ClientChatList } from "../../../ClientChatList";
+import { ClientTabs } from "../../../ClientTabs";
 
 export const dynamic = "force-dynamic";
 
@@ -18,10 +18,8 @@ export default async function ClientChatsPage(props: PageProps<"/razbor/[id]/cha
   const [chats, telegram] = await Promise.all([clientChats(db, lead.id), telegramLink(lead)]);
   if (chats.length === 0) redirect(`/razbor/${lead.id}/eksperty`);
   return (
-    <main className="page page--chats">
-      <p>
-        <Link href={`/razbor/${lead.id}`}>← К разбору</Link>
-      </p>
+    <main className="page page--chats has-tabs">
+      <ClientTabs leadId={lead.id} current="chaty" hasChats />
       <h1>Переписки</h1>
       <ClientChatList leadId={lead.id} currentId={null} initial={chats} editsLeft={MAX_LEAD_EDITS - lead.edits} telegram={telegram} />
     </main>

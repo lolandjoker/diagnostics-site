@@ -176,6 +176,13 @@
       "when": 1793891649961,
       "tag": "0024_staff_telegram",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1793895700983,
+      "tag": "0025_daily_cards",
+      "breakpoints": true
     }
   ]
 }
