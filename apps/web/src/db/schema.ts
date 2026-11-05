@@ -464,6 +464,8 @@ export const dailyCards = pgTable(
     card: integer("card").notNull(),
     text: text("text").notNull(),
     model: text("model"),
+    /** Блоки расшифровки (JSON: love, work, tip, teaser); null — старая запись, только text. */
+    details: text("details"),
     createdAt: createdAt(),
   },
   (t) => [primaryKey({ columns: [t.leadId, t.day] })],

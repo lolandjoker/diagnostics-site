@@ -8,7 +8,7 @@ import { and, desc, eq } from "drizzle-orm";
 import type { Db } from "@/db";
 import { dailyCards, leads } from "@/db/schema";
 import { ARCANA } from "./arcana";
-import { writeReading } from "./ai-reading";
+import { type CardSections, writeReading } from "./ai-reading";
 import { moscowNow, personalDay } from "./numerology";
 
 export type DailyCard = typeof dailyCards.$inferSelect;
@@ -41,9 +41,18 @@ export async function drawDailyCard(db: Db, leadId: string, position: number, no
   const card = randomInt(0, ARCANA.length);
   const arcana = ARCANA[card]!;
   const ai = await writeReading({ name: lead.name, birthDate: lead.birthDate, personalDay: personalDay(lead.birthDate, day), card: arcana });
+  const s = ai?.sections;
   await db
     .insert(dailyCards)
-    .values({ leadId, day, position, card, text: ai?.text ?? arcana.advice, model: ai?.model ?? null })
+    .values({
+      leadId,
+      day,
+      position,
+      card,
+      text: s?.main ?? arcana.advice,
+      details: s ? JSON.stringify({ love: s.love, work: s.work, tip: s.tip, teaser: s.teaser }) : null,
+      model: ai?.model ?? null,
+    })
     .onConflictDoNothing();
   return todayCard(db, leadId, now);
 }
@@ -81,13 +90,45 @@ export function daysLabel(n: number): string {
   return `${n} дней`;
 }
 
-/** Что показать человеку: без Telegram текст закрыт — его не отдаём даже в разметку страницы. */
+/** «Что карта скрывает», если ИИ не писал: вопрос по карте и личному дню — его интересно разобрать с экспертом. */
+export function teaserFallback(cardName: string, day: number): string {
+  return `«${cardName}» в ваш личный день ${day} — сочетание, которое стоит разобрать подробнее. Что именно оно значит для вас в ближайшие недели, можно понять только по вашей дате рождения.`;
+}
+
+/** Блоки расшифровки: от ИИ (details) или запасные тексты карты. */
+export function cardSections(row: DailyCard, birthDate: string): CardSections {
+  const c = ARCANA[row.card] ?? ARCANA[0]!;
+  let d: Partial<CardSections> = {};
+  if (row.details) {
+    try {
+      d = JSON.parse(row.details) as Partial<CardSections>;
+    } catch {
+      d = {};
+    }
+  }
+  return {
+    main: row.text,
+    love: d.love || c.love,
+    work: d.work || c.work,
+    tip: d.tip || c.tip,
+    teaser: d.teaser || teaserFallback(c.name, personalDay(birthDate, row.day)),
+  };
+}
+
+/** Что показать человеку: без Telegram расшифровка закрыта — её не отдаём даже в разметку страницы. */
 export interface DailyCardView {
   card: number;
   position: number;
-  text: string | null;
+  /** Личный день по нумерологии — «Число дня». */
+  day: number;
+  sections: CardSections | null;
 }
 
-export function cardView(row: DailyCard, unlocked: boolean): DailyCardView {
-  return { card: row.card, position: row.position, text: unlocked ? row.text : null };
+export function cardView(row: DailyCard, unlocked: boolean, birthDate: string): DailyCardView {
+  return {
+    card: row.card,
+    position: row.position,
+    day: personalDay(birthDate, row.day),
+    sections: unlocked ? cardSections(row, birthDate) : null,
+  };
 }

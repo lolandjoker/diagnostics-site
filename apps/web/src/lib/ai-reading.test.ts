@@ -22,7 +22,20 @@ describe("расшифровка от ИИ", () => {
         type: "message",
         role: "assistant",
         model: "claude-opus-5-5",
-        content: refuse ? [] : [{ type: "text", text: "Анна, сегодня Звезда напоминает о надежде." }],
+        content: refuse
+          ? []
+          : [
+              {
+                type: "text",
+                text: JSON.stringify({
+                  main: "Анна, сегодня Звезда напоминает о надежде.",
+                  love: "Доверьтесь близким.",
+                  work: "Запишите идеи.",
+                  tip: "Сделайте маленький шаг.",
+                  teaser: "Что Звезда значит для вашего ближайшего месяца?",
+                }),
+              },
+            ],
         stop_reason: refuse ? "refusal" : "end_turn",
         stop_sequence: null,
         usage: { input_tokens: 10, output_tokens: 20 },
@@ -34,10 +47,16 @@ describe("расшифровка от ИИ", () => {
     const lead = await createLead(db, { name: "Анна", birthDate: "1990-03-15" }, morning, null);
     const row = await drawDailyCard(db, lead.id, 2, morning);
     expect(row).toMatchObject({ text: "Анна, сегодня Звезда напоминает о надежде.", model: "claude-opus-5-5" });
+    expect(JSON.parse(row!.details!)).toEqual({
+      love: "Доверьтесь близким.",
+      work: "Запишите идеи.",
+      tip: "Сделайте маленький шаг.",
+      teaser: "Что Звезда значит для вашего ближайшего месяца?",
+    });
     const req = requests[0]!;
     expect(req.url).toContain("api.anthropic.com/v1/messages");
     expect(req.headers.get("anthropic-beta")).toContain("server-side-fallback-2026-07-01");
-    expect(req.body).toMatchObject({ model: "claude-opus-5-5", fallbacks: "default", output_config: { effort: "low" } });
+    expect(req.body).toMatchObject({ model: "claude-opus-5-5", fallbacks: "default", output_config: { effort: "low", format: { type: "json_schema" } } });
     const prompt = JSON.stringify(req.body.messages);
     expect(prompt).toContain("Имя: Анна");
     expect(prompt).toContain("15.03.1990");
@@ -45,6 +64,6 @@ describe("расшифровка от ИИ", () => {
     refuse = true;
     const other = await createLead(db, { name: "Ира", birthDate: "1991-01-01" }, morning, null);
     const fallback = await drawDailyCard(db, other.id, 1, morning);
-    expect(fallback).toMatchObject({ model: null, text: ARCANA[fallback!.card]!.advice });
+    expect(fallback).toMatchObject({ model: null, details: null, text: ARCANA[fallback!.card]!.advice });
   });
 });

@@ -3994,3 +3994,140 @@ body.no-scroll {
   font-weight: 500;
   font-size: 0.75rem;
 }
+
+/* Расшифровка карты дня по блокам */
+.daily__reading {
+  text-align: left;
+}
+
+.daily__reading > .eyebrow,
+.daily__name,
+.daily__next {
+  text-align: center;
+}
+
+.daily__keys {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.daily__keys li {
+  padding: 3px 10px;
+  border: 1px solid rgba(217, 182, 111, 0.35);
+  border-radius: 999px;
+  color: #e7d3a4;
+  font-size: 0.78rem;
+}
+
+.daily__num {
+  margin: 2px 0 6px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.daily__num b {
+  color: #f1d796;
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+}
+
+.daily__pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+@media (max-width: 560px) {
+  .daily__pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.daily__block {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.daily__block h3 {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 0;
+  color: var(--gold);
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.daily__block p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.daily__block--main p {
+  font-size: 1.04rem;
+}
+
+.daily__tip {
+  border-color: rgba(217, 182, 111, 0.45);
+  background: var(--gold-soft);
+}
+
+.daily__secret {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  margin-top: 4px;
+  padding: 20px 18px;
+  border: 1px solid var(--gold);
+  border-radius: 18px;
+  background: radial-gradient(120% 120% at 50% 0%, rgba(217, 182, 111, 0.16), rgba(23, 18, 42, 0.6) 70%);
+  text-align: center;
+}
+
+.daily__secret p {
+  margin: 0;
+  max-width: 46ch;
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-style: italic;
+  line-height: 1.4;
+}
+
+.daily__secret small,
+.daily__secret--locked span {
+  max-width: 40ch;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.daily__secret--locked b {
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+}
+
+/* Только что открытая карта: блоки появляются по очереди */
+.daily.is-fresh .daily__block,
+.daily.is-fresh .daily__secret {
+  animation: daily-in 0.6s ease both;
+  animation-delay: calc(0.5s + var(--d, 0) * 0.35s);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .daily.is-fresh .daily__block,
+  .daily.is-fresh .daily__secret {
+    animation: none;
+  }
+}

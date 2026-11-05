@@ -62,8 +62,10 @@ export default async function MyDayPage(props: PageProps<"/razbor/[id]/den">) {
         <section className="den__main" aria-label="Карта дня">
           <DailyCardPicker
             leadId={lead.id}
-            initial={row ? cardView(row, unlocked) : null}
+            initial={row ? cardView(row, unlocked, lead.birthDate) : null}
             telegramHref={unlocked ? null : (telegram?.href ?? null)}
+            askHref={chat ? `/razbor/${lead.id}/chat?c=${chat.id}` : `/razbor/${lead.id}/eksperty`}
+            expertName={expert ? splitExpertName(expert.name).name : null}
           />
         </section>
         <aside className="den__side">

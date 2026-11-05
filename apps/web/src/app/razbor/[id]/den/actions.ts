@@ -14,5 +14,5 @@ export async function drawCardAction(leadId: string, position: number): Promise<
   if (!row) return { error: "Не получилось вытянуть карту — попробуйте ещё раз" };
   // Расшифровка — только с подключённым Telegram (бот выключен — открываем всем)
   const telegram = await telegramLink(lead);
-  return cardView(row, !telegram || telegram.connected);
+  return cardView(row, !telegram || telegram.connected, lead.birthDate);
 }
