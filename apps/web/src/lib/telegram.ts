@@ -267,6 +267,7 @@ export async function configureBot(cfg: TelegramConfig): Promise<void> {
     commands: [
       { command: "start", description: "Открыть чат с экспертом" },
       { command: "experts", description: "Выбрать эксперта" },
+      { command: "forecast", description: "Прогноз на день: включить или отключить" },
       { command: "stop", description: "Отключить уведомления" },
     ],
   });

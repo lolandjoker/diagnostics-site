@@ -13,6 +13,7 @@ import type { MessageAuthor } from "@/db/schema";
 import { detectImageMime, expertPhotoUrls, expertStatus, getExpert, isOnline, listExperts } from "./experts";
 import type { Lead } from "./leads";
 import { notifyClient } from "./bot-delivery";
+import { notifyStaff } from "./staff-telegram";
 import { fillTemplate, getTexts } from "./texts";
 
 export type Conversation = typeof conversations.$inferSelect;
@@ -340,6 +341,8 @@ export async function postMessage(db: Db, conversationId: string, input: PostInp
   if (input.author === "expert" || input.author === "admin") {
     void notifyClient(db, conversationId, { kind: "message", messageId: id });
   }
+  // Сотрудникам с привязанным Telegram — новое сообщение клиента
+  if (input.author === "client") void notifyStaff(db, conversationId, id);
   return { ok: true, id };
 }
 

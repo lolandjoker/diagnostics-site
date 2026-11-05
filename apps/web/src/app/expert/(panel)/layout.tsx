@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { getDb } from "@/db";
 import { requireExpert } from "@/lib/expert-auth";
+import { staffTelegramStatus } from "@/lib/staff-telegram";
+import { StaffTelegramLink } from "../../StaffTelegramLink";
 import { expertStatus } from "@/lib/experts";
 import type { ExpertStatus } from "@/lib/experts";
 import { expertLogout, setMyStatus } from "../actions";
@@ -12,6 +15,7 @@ export const metadata: Metadata = { title: "Панель эксперта" };
 export default async function ExpertLayout({ children }: { children: ReactNode }) {
   const expert = await requireExpert();
   const current = expertStatus(expert, new Date());
+  const tg = await staffTelegramStatus(await getDb(), { kind: "expert", staffId: expert.id });
   const options: [ExpertStatus, string][] = [
     ["online", "В сети"],
     ["busy", "Занят"],
@@ -28,6 +32,7 @@ export default async function ExpertLayout({ children }: { children: ReactNode }
           <span className="muted">{expert.name}</span>
         </nav>
         <div className="row">
+          <StaffTelegramLink kind="expert" connected={tg.connected} name={tg.name} />
           <form action={setMyStatus} className="status-switch" aria-label="Мой статус">
             {options.map(([status, label]) => (
               <button

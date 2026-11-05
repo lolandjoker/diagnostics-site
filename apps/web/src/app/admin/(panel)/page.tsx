@@ -121,7 +121,9 @@ export default async function DashboardPage(props: PageProps<"/admin">) {
           По коротким адресам: сайт запоминает, по какому адресу человек зашёл впервые. «Открыли главную» — браузеры за
           период, остальное — заявки, созданные за период. Адреса taromba.com/r1 … /r10 — для других площадок, их
           названия меняются в <Link href="/admin/texts">«Текстах сайта» → «Источники»</Link>. Ссылка t.me/…?start=…
-          ведёт сразу в Telegram-бота — заявка из бота тоже попадёт в этот источник.
+          ведёт сразу в Telegram-бота — заявка из бота тоже попадёт в этот источник. «Вернулись» — снова пришли в
+          чат (открыли его или написали, на сайте или из бота) через сутки и позже после заявки; свежие заявки
+          вернуться ещё не успели.
         </p>
         <div className="table-wrap">
           <table>
@@ -132,6 +134,7 @@ export default async function DashboardPage(props: PageProps<"/admin">) {
                 <th>Заявки</th>
                 <th>Начали чат</th>
                 <th>Написали эксперту</th>
+                <th title="Снова пришли в чат (на сайте или из бота) через сутки и позже">Вернулись</th>
               </tr>
             </thead>
             <tbody>
@@ -150,6 +153,9 @@ export default async function DashboardPage(props: PageProps<"/admin">) {
                     {s.chats} <span className="muted">{pct(s.chats, s.leads)}</span>
                   </td>
                   <td>{s.wrote}</td>
+                  <td>
+                    {s.returned} <span className="muted">{pct(s.returned, s.leads)}</span>
+                  </td>
                 </tr>
               ))}
             </tbody>

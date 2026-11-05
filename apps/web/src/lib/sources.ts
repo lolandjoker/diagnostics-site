@@ -9,7 +9,7 @@
  * → «Источники» (source.r1 …). Новый источник: ключ в SOURCES и папка app/<ключ>/route.ts
  * с `export const GET = sourceEntry("<ключ>")`.
  */
-import { and, count, countDistinct, eq, gte, isNotNull, isNull } from "drizzle-orm";
+import { and, count, countDistinct, eq, exists, gt, gte, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { cookies } from "next/headers";
 import type { Db } from "@/db";
 import { conversations, funnelEvents, leads, messages } from "@/db/schema";
@@ -116,7 +116,12 @@ export interface SourceRow {
   leads: number;
   chats: number;
   wrote: number;
+  /** Вернулись через сутки и позже: открыли чат или написали (на сайте или из бота) — RETURN_AFTER после заявки. */
+  returned: number;
 }
+
+/** «Вернулся» — снова пришёл в чат не раньше чем через сутки после заявки. */
+export const RETURN_AFTER_HOURS = 24;
 
 /**
  * Воронка по источникам за период (since; null — за всё время). Как в общей воронке: «Открыли главную» —
@@ -124,7 +129,8 @@ export interface SourceRow {
  */
 export async function sourceStats(db: Db, since: Date | null): Promise<SourceRow[]> {
   const leadsInPeriod = since ? gte(leads.createdAt, since) : undefined;
-  const [visitorRows, leadRows, chatRows, wroteRows] = await Promise.all([
+  const later = sql`${leads.createdAt} + make_interval(hours => ${RETURN_AFTER_HOURS})`;
+  const [visitorRows, leadRows, chatRows, wroteRows, returnedRows] = await Promise.all([
     db
       .select({ key: funnelEvents.source, n: countDistinct(funnelEvents.visitorId) })
       .from(funnelEvents)
@@ -144,12 +150,32 @@ export async function sourceStats(db: Db, since: Date | null): Promise<SourceRow
       .innerJoin(leads, eq(leads.id, conversations.leadId))
       .where(and(eq(messages.author, "client"), leadsInPeriod))
       .groupBy(leads.source),
+    db
+      .select({ key: leads.source, n: countDistinct(leads.id) })
+      .from(conversations)
+      .innerJoin(leads, eq(leads.id, conversations.leadId))
+      .where(
+        and(
+          leadsInPeriod,
+          or(
+            gt(conversations.clientReadAt, later),
+            exists(
+              db
+                .select({ id: messages.id })
+                .from(messages)
+                .where(and(eq(messages.conversationId, conversations.id), eq(messages.author, "client"), gt(messages.createdAt, later))),
+            ),
+          ),
+        ),
+      )
+      .groupBy(leads.source),
   ]);
   const byKey = (rows: { key: string | null; n: number }[]) => new Map(rows.map((r) => [r.key, Number(r.n)]));
   const visitors = byKey(visitorRows);
   const leadCounts = byKey(leadRows);
   const chats = byKey(chatRows);
   const wrote = byKey(wroteRows);
+  const returned = byKey(returnedRows);
   const keys: (SourceKey | null)[] = [...(Object.keys(SOURCES) as SourceKey[]), null];
   return keys.map((key) => ({
     key,
@@ -158,6 +184,7 @@ export async function sourceStats(db: Db, since: Date | null): Promise<SourceRow
     leads: leadCounts.get(key) ?? 0,
     chats: chats.get(key) ?? 0,
     wrote: wrote.get(key) ?? 0,
+    returned: returned.get(key) ?? 0,
   }));
 }
 

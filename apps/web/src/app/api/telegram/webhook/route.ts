@@ -2,6 +2,8 @@
  * Сообщения и нажатия кнопок, которые люди шлют боту (Telegram присылает их сюда, адрес задаёт configureBot).
  * - Ответ эксперту (текст или фото от человека с привязанной заявкой и чатом) — в чат на сайте (bot-inbox).
  * - /experts и кнопки карточек экспертов — выбрать эксперта и открыть с ним чат (bot-experts).
+ * - /forecast и кнопки «Да / Нет» — подписка на личный прогноз на день (bot-forecast).
+ * - /start st_<код> — сотрудник подключает Telegram для уведомлений; ответ на уведомление — клиенту (staff-telegram).
  * - Нажатие кнопки оценки эксперта — отзыв (bot-reviews).
  * - Остальное решает botReply: /start <код> привязывает заявку с сайта (и последнее сообщение эксперта
  *   сразу приходит в бот), /stop отвязывает, новым — кнопка «Открыть».
@@ -14,10 +16,12 @@ import { after } from "next/server";
 import { getDb } from "@/db";
 import { enqueue, sendLatestToTelegram, warmExpertCards } from "@/lib/bot-delivery";
 import { handleExpertCallback, showExperts } from "@/lib/bot-experts";
+import { handleForecastCallback, stopForecast, toggleForecast } from "@/lib/bot-forecast";
 import { type IncomingMessage, handleClientMessage } from "@/lib/bot-inbox";
 import { type IncomingCallback, handleCallback } from "@/lib/bot-reviews";
 import { selectableExperts } from "@/lib/chat";
 import { jsonBody } from "@/lib/http";
+import { consumeStaffLink, handleStaffReply, unlinkStaffTelegramUser } from "@/lib/staff-telegram";
 import { type TelegramConfig, botApi, botReply, sendMessage, telegramConfig, webhookSecret } from "@/lib/telegram";
 
 export const dynamic = "force-dynamic";
@@ -44,24 +48,47 @@ async function handleButton(cfg: TelegramConfig, callback: IncomingCallback): Pr
   const data = typeof callback.data === "string" ? callback.data : "";
   const chatId = callback.message?.chat?.id;
   const messageId = callback.message?.message_id;
-  const expertButton =
-    typeof callback.id === "string" &&
-    typeof userId === "number" &&
-    (await handleExpertCallback(db, cfg, {
+  if (typeof callback.id === "string" && typeof userId === "number") {
+    const q = {
       id: callback.id,
       userId,
       chatId: typeof chatId === "number" ? chatId : null,
       messageId: typeof messageId === "number" ? messageId : null,
       data,
-    }));
-  if (!expertButton) await handleCallback(db, cfg, callback);
+    };
+    if ((await handleExpertCallback(db, cfg, q)) || (await handleForecastCallback(db, cfg, q))) return;
+  }
+  await handleCallback(db, cfg, callback);
 }
 
 async function onMessage(cfg: TelegramConfig, message: IncomingMessage, chatId: number, userId: number): Promise<void> {
   const db = await getDb();
-  const command = typeof message.text === "string" ? message.text.trim().split(/\s+/, 1)[0] : "";
+  const [command = "", arg = ""] = typeof message.text === "string" ? message.text.trim().split(/\s+/, 2) : [];
   if (command === "/experts") {
     await showExperts(db, cfg, chatId, userId, 0);
+    return;
+  }
+  if (command === "/forecast") {
+    await toggleForecast(db, cfg, userId);
+    return;
+  }
+  // Сотрудник подключает Telegram по ссылке из своей панели
+  if (command === "/start") {
+    const name = [message.from?.first_name, message.from?.username && `@${String(message.from.username)}`].filter((x) => typeof x === "string").join(" ");
+    const staff = await consumeStaffLink(db, arg, { id: userId, name }, new Date());
+    if (staff) {
+      await sendMessage(cfg, chatId, staff);
+      return;
+    }
+  }
+  if (command === "/stop") {
+    await unlinkStaffTelegramUser(db, userId);
+    await stopForecast(db, userId);
+  }
+  // Ответ сотрудника на уведомление — клиенту
+  const staffReply = await handleStaffReply(db, cfg, message);
+  if (staffReply.handled) {
+    if (staffReply.reply) await sendMessage(cfg, chatId, staffReply.reply);
     return;
   }
   const inbox = await handleClientMessage(db, cfg, message);

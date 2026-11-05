@@ -6,6 +6,7 @@ import { expertPhotoUrls, formatRating, getExpert } from "@/lib/experts";
 import { expertGallery } from "@/lib/gallery";
 import { MAX_LEAD_EDITS, getLead } from "@/lib/leads";
 import { HEARD_FROM } from "@/lib/sources";
+import { splitExpertName } from "@/lib/expert-name";
 import { telegramLink } from "@/lib/telegram";
 import { replyTimeLabel, replyTimes } from "@/lib/reply-time";
 import { expertReviews, reviewsCount } from "@/lib/reviews";
@@ -50,6 +51,8 @@ export default async function ClientChatPage(props: PageProps<"/razbor/[id]/chat
       "chat.tg_invite_title",
       "chat.tg_invite_text",
       "chat.tg_invite_button",
+      "chat.offline_wait",
+      "chat.offline_wait_tg",
     ]),
     telegramLink(lead),
   ]);
@@ -103,6 +106,15 @@ export default async function ClientChatPage(props: PageProps<"/razbor/[id]/chat
             !lead.heardFrom &&
             lead.telegramUserId === null && <HeardFromPoll leadId={lead.id} options={HEARD_FROM} />
           }
+          offlineNotice={{
+            text: fillTemplate(t["chat.offline_wait"], { expert: splitExpertName(expert?.name ?? "").name || "Эксперт" }),
+            // Бот выключен — без призыва подключить Telegram
+            connectedText: telegram
+              ? fillTemplate(t["chat.offline_wait_tg"], { expert: splitExpertName(expert?.name ?? "").name || "Эксперт" })
+              : `${splitExpertName(expert?.name ?? "").name || "Эксперт"} сейчас не в сети и ответит, как только появится.`,
+            telegramHref: telegram && !telegram.connected ? telegram.href : undefined,
+            button: t["chat.tg_invite_button"],
+          }}
           telegramInvite={
             telegram && !telegram.connected
               ? {

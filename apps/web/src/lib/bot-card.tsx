@@ -7,7 +7,10 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { ImageResponse } from "next/og";
 import sharp from "sharp";
+import { splitExpertName } from "./expert-name";
 import type { ExpertStatus } from "./experts";
+
+export { splitExpertName };
 
 export const CARD_WIDTH = 1200;
 export const CARD_HEIGHT = 240;
@@ -45,10 +48,6 @@ const STATUS: Record<ExpertStatus, { label: string; color: string } | null> = {
 
 const GOLD = "#e2bf78";
 
-export function splitExpertName(full: string): { name: string; role: string } {
-  const i = full.indexOf("|");
-  return i < 0 ? { name: full.trim(), role: "" } : { name: full.slice(0, i).trim(), role: full.slice(i + 1).trim() };
-}
 
 /** PNG плашки эксперта. */
 export async function expertCardPng(e: CardExpert): Promise<Buffer> {
