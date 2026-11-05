@@ -1,12 +1,15 @@
 import { eq } from "drizzle-orm";
 import { createTestDb } from "@/db";
 import type { Db } from "@/db";
-import { experts, variations } from "@/db/schema";
+import { conversations, experts, variations } from "@/db/schema";
 import {
   CLIENT_MESSAGES_PER_MINUTE,
   FULL_TEXT_DELAY_MS,
+  GREETING_DELAY_MS,
+  GREETING_TYPING_MS,
   MAX_CHAT_PHOTO_BYTES,
   deliverDueFullTexts,
+  fullTextTyping,
   getMessagePhoto,
   inbox,
   markExpertRead,
@@ -262,7 +265,7 @@ describe("чат", () => {
     expect(await startConversation(db, l, res.id, new Date())).toMatchObject({ ok: false });
   });
 
-  it("подробная диагностика эксперта приходит через 3 минуты, один раз, подписана как разбор", async () => {
+  it("приветствие через 17 с, подробная диагностика через 3:17 — по одному разу", async () => {
     const v = await newVariation("А");
     await saveVariationTexts(db, v.id, { shortText: "к", fullText: "старый текст 2 — не используется" });
     const expertId = await onlineExpert();
@@ -272,15 +275,40 @@ describe("чат", () => {
     if (!res.ok) throw new Error(res.error);
     const start = res.conversation.createdAt.getTime();
 
-    await deliverDueFullTexts(db, new Date(start + FULL_TEXT_DELAY_MS - 5000), res.conversation.id);
+    const at = (ms: number) => new Date(start + ms);
+    const typing = async (ms: number) => {
+      const [c] = await db.select().from(conversations).where(eq(conversations.id, res.conversation.id));
+      return fullTextTyping(db, c!, at(ms));
+    };
+    // 0–2 с — тишина, потом «печатает…»
+    expect(await typing(1000)).toBe(false);
+    expect(await typing(GREETING_TYPING_MS + 500)).toBe(true);
+
+    await deliverDueFullTexts(db, at(GREETING_DELAY_MS - 1000), res.conversation.id);
     expect(await messageViews(db, res.conversation, 0, "client")).toHaveLength(0);
 
-    const due = new Date(start + FULL_TEXT_DELAY_MS + 1000);
+    // 17 с — приветствие от имени эксперта; два опроса разом не отправят его дважды
+    const greetAt = at(GREETING_DELAY_MS + 500);
+    await Promise.all([deliverDueFullTexts(db, greetAt, res.conversation.id), deliverDueFullTexts(db, greetAt)]);
+    let client = await messageViews(db, res.conversation, 0, "client");
+    expect(client).toHaveLength(1);
+    expect(client[0]).toMatchObject({ author: "expert", authorName: "Мария" });
+    expect(client[0]!.body).toMatch(/^Здравствуйте! Ваша диагностика будет готова в течение 3-4 минут/);
+    const staff = await messageViews(db, res.conversation, 0, "staff");
+    expect(staff[0]!.authorName).toBe("Мария · автоприветствие");
+    // После приветствия снова «печатает…» — до самой диагностики
+    expect(await typing(GREETING_DELAY_MS + 1000)).toBe(true);
+
+    await deliverDueFullTexts(db, at(FULL_TEXT_DELAY_MS - 5000), res.conversation.id);
+    expect(await messageViews(db, res.conversation, 0, "client")).toHaveLength(1);
+
+    const due = at(FULL_TEXT_DELAY_MS + 1000);
     await Promise.all([deliverDueFullTexts(db, due, res.conversation.id), deliverDueFullTexts(db, due)]);
     await deliverDueFullTexts(db, new Date(due.getTime() + 60_000));
-    const client = await messageViews(db, res.conversation, 0, "client");
-    expect(client).toHaveLength(1);
-    expect(client[0]).toMatchObject({ author: "system", authorName: "Подробный разбор", body: "Qwerty, подробно от Марии" });
+    client = await messageViews(db, res.conversation, 0, "client");
+    expect(client).toHaveLength(2);
+    expect(client[1]).toMatchObject({ author: "system", authorName: "Подробный разбор", body: "Qwerty, подробно от Марии" });
+    expect(await typing(FULL_TEXT_DELAY_MS + 2000)).toBe(false);
 
     const again = await startConversation(db, l, expertId, new Date());
     expect(again.ok && again.conversation.id).toBe(res.conversation.id);

@@ -133,7 +133,7 @@ describe("«печатает…»", () => {
     if (!a.ok || !b.ok) throw new Error("не открылся чат");
     const typing = async (id: string) => {
       const [c] = await db.select().from(conversations).where(eq(conversations.id, id));
-      return fullTextTyping(db, c!);
+      return fullTextTyping(db, c!, new Date(c!.createdAt.getTime() + 5000));
     };
     // С начала чата и до самой отправки — «печатает…», но только в первом: диагностика придёт туда
     expect(await typing(a.conversation.id)).toBe(true);
@@ -157,6 +157,9 @@ describe("«печатает…»", () => {
     expect(await typing(c.conversation.id)).toBe(false);
     await deliverDueFullTexts(db, new Date(Date.now() + FULL_TEXT_DELAY_MS + 1000), c.conversation.id);
     expect(await db.select().from(messages).where(eq(messages.author, "system"))).toHaveLength(1);
+    // Приветствие — только в первом чате, куда пришла диагностика
+    const greetings = await db.select().from(messages).where(eq(messages.automatic, true));
+    expect(greetings.map((m) => m.conversationId)).toEqual([a.conversation.id]);
   });
 
   it("у первого эксперта диагностика не заполнена — она придёт во второй чат", async () => {
@@ -167,8 +170,9 @@ describe("«печатает…»", () => {
     const a = await startConversation(db, lead, maria, t0);
     const b = await startConversation(db, lead, olga, new Date(t0.getTime() + 1000));
     if (!a.ok || !b.ok) throw new Error("не открылся чат");
-    expect(await fullTextTyping(db, a.conversation)).toBe(false);
-    expect(await fullTextTyping(db, b.conversation)).toBe(true);
+    const later = new Date(b.conversation.createdAt.getTime() + 5000);
+    expect(await fullTextTyping(db, a.conversation, later)).toBe(false);
+    expect(await fullTextTyping(db, b.conversation, later)).toBe(true);
     await deliverDueFullTexts(db, new Date(t0.getTime() + FULL_TEXT_DELAY_MS + 2000), a.conversation.id);
     const sys = await db.select().from(messages).where(eq(messages.author, "system"));
     expect(sys.map((m) => m.conversationId)).toEqual([b.conversation.id]);

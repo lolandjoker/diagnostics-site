@@ -3360,3 +3360,87 @@ body.no-scroll {
   margin-top: 8px;
   text-decoration: none;
 }
+
+/* Окно «Подключите Telegram» после первого сообщения клиента */
+.tg-invite {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(6, 4, 14, 0.72);
+  backdrop-filter: blur(4px);
+  animation: tg-invite-in 0.2s ease-out;
+}
+
+.tg-invite__card {
+  width: 100%;
+  max-width: 380px;
+  padding: 28px 24px 18px;
+  border: 1px solid rgba(217, 182, 111, 0.35);
+  border-radius: 22px;
+  background: linear-gradient(160deg, #231a3d 0%, var(--surface) 60%);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+  text-align: center;
+}
+
+.tg-invite__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  margin-bottom: 14px;
+  border: 1px solid rgba(217, 182, 111, 0.45);
+  border-radius: 50%;
+  background: var(--gold-soft);
+  color: var(--gold);
+}
+
+.tg-invite__title {
+  margin: 0 0 8px;
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  font-weight: 600;
+  line-height: 1.15;
+}
+
+.tg-invite__text {
+  margin: 0 0 20px;
+  color: var(--muted);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+.tg-invite__go {
+  display: block;
+  padding: 13px 18px;
+  border-radius: 14px;
+  background: var(--gold);
+  color: #1a1328;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.tg-invite__go:hover {
+  filter: brightness(1.06);
+}
+
+.tg-invite__later {
+  margin-top: 6px;
+  padding: 10px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+@keyframes tg-invite-in {
+  from {
+    opacity: 0;
+  }
+}

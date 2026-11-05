@@ -7,14 +7,15 @@
  *   бот проверяет код и запоминает пользователя. /stop — отвязать.
  * - Из бота можно войти на сайт в браузере: кнопка «Открыть на сайте» ведёт на /api/telegram/vhod
  *   с подписанным кодом (loginCode) — сайт запоминает заявку в cookie.
- * - Ответил эксперт (или админ от его имени), звонит эксперт или пришёл подробный разбор — бот пишет
- *   человеку с кнопкой «Открыть чат».
+ * - Переписка в боте: сообщения эксперта приходят в бот целиком, ответы из бота — в чат на сайте
+ *   (lib/bot-delivery.ts и lib/bot-inbox.ts).
  * Без TELEGRAM_BOT_TOKEN и SITE_DOMAIN в .env всё это выключено, сайт работает как обычно.
  */
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { and, desc, eq, gt, inArray, sql } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import type { Db } from "@/db";
-import { conversations, experts, leads, messages } from "@/db/schema";
+import { conversations, leads } from "@/db/schema";
+import { type EmojiKey, em, emojiId, emojiSetName, setBotEmoji } from "./bot-emoji";
 
 export interface TelegramConfig {
   token: string;
@@ -82,15 +83,32 @@ export function webhookSecret(token: string): string {
   return createHmac("sha256", "telegram-webhook").update(token).digest("hex");
 }
 
-/** Вызов Bot API: result из ответа или null при ошибке. Токен — в адресе запроса, поэтому адрес нигде не пишем в лог. */
-async function botCall(token: string, method: string, body: object): Promise<unknown> {
+/** Текст для parse_mode HTML: экранируем &, < и >. */
+export const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+/**
+ * Вызов Bot API: result из ответа или null при ошибке. Токен — в адресе запроса, поэтому адрес нигде не пишем в лог.
+ * file — загрузить файл (multipart): поля body уходят рядом, объекты — строкой JSON.
+ */
+export async function botCall(
+  token: string,
+  method: string,
+  body: object,
+  file?: { field: string; data: Buffer; name: string; type: string },
+): Promise<unknown> {
   try {
-    const res = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(10_000),
-    });
+    let init: RequestInit;
+    if (file) {
+      const form = new FormData();
+      for (const [k, v] of Object.entries(body)) {
+        if (v !== undefined) form.set(k, typeof v === "object" ? JSON.stringify(v) : String(v));
+      }
+      form.set(file.field, new Blob([new Uint8Array(file.data)], { type: file.type }), file.name);
+      init = { method: "POST", body: form };
+    } else {
+      init = { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
+    }
+    const res = await fetch(`https://api.telegram.org/bot${token}/${method}`, { ...init, signal: AbortSignal.timeout(20_000) });
     if (!res.ok) {
       console.warn(`Telegram ${method}: ${res.status} ${(await res.text()).slice(0, 200)}`);
       return null;
@@ -119,36 +137,45 @@ export function botUsername(cfg: TelegramConfig): Promise<string | null> {
   return username;
 }
 
-/** Кнопка под сообщением бота: webApp — страница сайта внутри Telegram, url — в браузере. */
-export type BotButton = { text: string; webApp: string } | { text: string; url: string };
+/** Кнопка под сообщением бота: webApp — страница сайта внутри Telegram, url — в браузере; icon — свой значок слева. */
+export type BotButton = ({ text: string; webApp: string } | { text: string; url: string }) & { icon?: EmojiKey };
 
-/** Кнопки под сообщением — каждая на своей строке. */
-const keyboard = (buttons: BotButton[]) =>
+/** Кнопки под сообщением — каждая на своей строке. Значок — только если набор эмодзи загружен. */
+export const keyboard = (buttons: BotButton[]) =>
   buttons.length === 0
     ? {}
     : {
         reply_markup: {
-          inline_keyboard: buttons.map((b) => [
-            "webApp" in b ? { text: b.text, web_app: { url: b.webApp } } : { text: b.text, url: b.url },
-          ]),
+          inline_keyboard: buttons.map((b) => {
+            const icon = b.icon ? emojiId(b.icon) : undefined;
+            return [
+              {
+                text: b.text,
+                ...("webApp" in b ? { web_app: { url: b.webApp } } : { url: b.url }),
+                ...(icon && { icon_custom_emoji_id: icon }),
+              },
+            ];
+          }),
         },
       };
 
-/** Сообщение от бота. Возвращает его номер в чате (чтобы потом поправить) или null, если не ушло. */
-export async function sendMessage(cfg: TelegramConfig, chatId: number, text: string, buttons: BotButton[] = []): Promise<number | null> {
-  const sent = await botCall(cfg.token, "sendMessage", {
-    chat_id: chatId,
-    text,
-    link_preview_options: { is_disabled: true },
-    ...keyboard(buttons),
-  });
-  const id = (sent as { message_id?: unknown } | null)?.message_id;
+/** Номер отправленного сообщения в чате Telegram; null — не ушло. */
+export const sentId = (r: unknown) => {
+  const id = (r as { message_id?: unknown } | null)?.message_id;
   return typeof id === "number" ? id : null;
-}
+};
 
-/** Поправить отправленное сообщение бота — без нового звука и всплывающего уведомления. */
-function editMessage(cfg: TelegramConfig, chatId: number, messageId: number, text: string, buttons: BotButton[]) {
-  return botApi(cfg.token, "editMessageText", { chat_id: chatId, message_id: messageId, text, ...keyboard(buttons) });
+/** Сообщение от бота (text — в разметке HTML). Возвращает его номер в чате или null, если не ушло. */
+export async function sendMessage(cfg: TelegramConfig, chatId: number, text: string, buttons: BotButton[] = []): Promise<number | null> {
+  return sentId(
+    await botCall(cfg.token, "sendMessage", {
+      chat_id: chatId,
+      text,
+      parse_mode: "HTML",
+      link_preview_options: { is_disabled: true },
+      ...keyboard(buttons),
+    }),
+  );
 }
 
 const sign = (token: string, purpose: string, value: string) =>
@@ -209,95 +236,6 @@ export async function unlinkTelegramUser(db: Db, telegramUserId: number): Promis
   return rows.length;
 }
 
-/** Клиент смотрел чат совсем недавно (чат опрашивается раз в 3 секунды) — значит, видит его сейчас, уведомление не нужно. */
-export const CLIENT_ACTIVE_MS = 10_000;
-
-export type ClientNotice =
-  | { kind: "message"; expertId: number | null }
-  | { kind: "call"; expertId: number | null }
-  | { kind: "fullText" };
-
-/** «1 новое сообщение», «3 новых сообщения», «5 новых сообщений». */
-export function newMessagesLabel(n: number): string {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod10 === 1 && mod100 !== 11) return `${n} новое сообщение`;
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${n} новых сообщения`;
-  return `${n} новых сообщений`;
-}
-
-/** Текст уведомления; unread — сколько сообщений эксперта клиент ещё не прочитал. Сам текст сообщения в Telegram не попадает. */
-export function noticeText(notice: ClientNotice, expertName: string, clientName: string, unread = 1): string {
-  if (notice.kind === "fullText") return `✨ ${clientName}, ваш подробный разбор готов — откройте чат, чтобы прочитать.`;
-  if (notice.kind === "call") return `📞 ${expertName} звонит вам — откройте чат, чтобы ответить.`;
-  return `💬 У вас ${newMessagesLabel(Math.max(1, unread))} от эксперта ${expertName}`;
-}
-
-/**
- * Последнее уведомление о сообщениях в каждом чате. Пока клиент его не прочитал, следующие сообщения
- * не шлют новое уведомление, а меняют число в нём: «У вас 3 новых сообщения». В памяти: после
- * перезапуска сайта первое сообщение просто придёт новым уведомлением.
- */
-const lastNotice = new Map<string, { chatId: number; messageId: number; sentAt: number }>();
-
-/**
- * Уведомить клиента в Telegram о новом в чате: сообщения эксперта, звонок, подробный разбор.
- * Только для заявок, привязанных к Telegram; клиент смотрит чат прямо сейчас — не беспокоим.
- * Ошибки не мешают самому чату (сообщение уже сохранено).
- */
-export async function notifyClient(db: Db, conversationId: string, notice: ClientNotice, now = new Date()): Promise<void> {
-  const cfg = telegramConfig();
-  if (!cfg) return;
-  try {
-    const [row] = await db
-      .select({
-        leadId: leads.id,
-        clientName: leads.name,
-        telegramUserId: leads.telegramUserId,
-        expertId: conversations.expertId,
-        clientReadAt: conversations.clientReadAt,
-        archivedAt: experts.archivedAt,
-      })
-      .from(conversations)
-      .innerJoin(leads, eq(leads.id, conversations.leadId))
-      .innerJoin(experts, eq(experts.id, conversations.expertId))
-      .where(eq(conversations.id, conversationId));
-    // Чат с экспертом из архива клиент не видит — и не зовём в него
-    if (!row?.telegramUserId || row.archivedAt) return;
-    if (row.clientReadAt && now.getTime() - row.clientReadAt.getTime() < CLIENT_ACTIVE_MS) return;
-    // Сообщение и звонок админа клиент видит от эксперта чата
-    const expertId = notice.kind === "fullText" ? row.expertId : (notice.expertId ?? row.expertId);
-    const [expert] = await db.select({ name: experts.name }).from(experts).where(eq(experts.id, expertId));
-    const buttons: BotButton[] = [
-      { text: notice.kind === "call" ? "Ответить" : "Прочитать", webApp: `${cfg.siteUrl}/razbor/${row.leadId}/chat?c=${conversationId}` },
-    ];
-    if (notice.kind !== "message") {
-      await sendMessage(cfg, row.telegramUserId, noticeText(notice, expert?.name ?? "Эксперт", row.clientName), buttons);
-      return;
-    }
-
-    const [unread] = await db
-      .select({ n: sql<number>`count(*)`.mapWith(Number) })
-      .from(messages)
-      .where(
-        and(
-          eq(messages.conversationId, conversationId),
-          inArray(messages.author, ["expert", "admin"]),
-          row.clientReadAt ? gt(messages.createdAt, row.clientReadAt) : undefined,
-        ),
-      );
-    const text = noticeText(notice, expert?.name ?? "Эксперт", row.clientName, unread?.n ?? 1);
-    // Прошлое уведомление ещё не прочитано — меняем в нём число, а не шлём новое
-    const prev = lastNotice.get(conversationId);
-    const unseen = prev && prev.chatId === row.telegramUserId && (!row.clientReadAt || row.clientReadAt.getTime() < prev.sentAt);
-    if (prev && unseen && (await editMessage(cfg, prev.chatId, prev.messageId, text, buttons))) return;
-    const messageId = await sendMessage(cfg, row.telegramUserId, text, buttons);
-    if (messageId !== null) lastNotice.set(conversationId, { chatId: row.telegramUserId, messageId, sentAt: now.getTime() });
-  } catch (err) {
-    console.warn(`Уведомление в Telegram: ${err instanceof Error ? err.message : String(err)}`);
-  }
-}
-
 /**
  * Настройка бота при запуске сайта: кнопка меню открывает сайт, сообщения боту приходят на вебхук.
  * Повторный вызов ничего не ломает — Telegram просто перезаписывает настройки.
@@ -308,6 +246,7 @@ export async function configureBot(cfg: TelegramConfig): Promise<void> {
     secret_token: webhookSecret(cfg.token),
     allowed_updates: ["message"],
   });
+  await loadBotEmoji(cfg);
   await botApi(cfg.token, "setChatMenuButton", {
     menu_button: { type: "web_app", text: "Открыть", web_app: { url: cfg.siteUrl } },
   });
@@ -319,14 +258,23 @@ export async function configureBot(cfg: TelegramConfig): Promise<void> {
   });
 }
 
-export const WELCOME_TEXT =
-  "Здравствуйте! Это Таромба — бесплатный разбор по дате рождения и чат с экспертами по астрологии, таро и нумерологии.\n\n" +
-  "Нажмите «Открыть», чтобы начать. Когда эксперт ответит, я пришлю уведомление сюда.";
+/** Свои эмодзи бота из его набора (bot-emoji.ts). Набора ещё нет — бот пишет без значков. */
+export async function loadBotEmoji(cfg: TelegramConfig): Promise<void> {
+  const name = await botUsername(cfg);
+  if (!name) return;
+  const set = (await botCall(cfg.token, "getStickerSet", { name: emojiSetName(name) })) as { stickers?: unknown } | null;
+  if (Array.isArray(set?.stickers)) setBotEmoji(set.stickers as { emoji?: unknown; custom_emoji_id?: unknown }[]);
+}
 
-/** Ответ бота на сообщение: текст и кнопки (отправляет webhook). */
+export const welcomeText = () =>
+  `${em("moon")}Здравствуйте! Это <b>Таромба</b> — бесплатный разбор по дате рождения и чат с экспертами по астрологии, таро и нумерологии.\n\n` +
+  "Нажмите «Открыть», чтобы начать. Ответы эксперта будут приходить сюда — отвечать можно прямо в этом чате.";
+
+/** Ответ бота на сообщение: текст (HTML) и кнопки (отправляет webhook). linked — только что привязанная заявка. */
 export interface BotReply {
   text: string;
   buttons: BotButton[];
+  linked?: string;
 }
 
 /**
@@ -342,7 +290,7 @@ export async function botReply(db: Db, cfg: TelegramConfig, telegramUserId: numb
     const n = await unlinkTelegramUser(db, telegramUserId);
     return {
       text: n
-        ? "Уведомления отключены. Чтобы снова получать ответы эксперта здесь, нажмите 🔔 «Получать ответы в Telegram» в чате на сайте."
+        ? `${em("bellOff")}Уведомления отключены. Чтобы снова получать ответы эксперта здесь, нажмите «Получать ответы в Telegram» в чате на сайте.`
         : "Уведомления и так не подключены.",
       buttons: [],
     };
@@ -357,23 +305,28 @@ export async function botReply(db: Db, cfg: TelegramConfig, telegramUserId: numb
   const leadId = linked ?? (await leadForTelegramUser(db, telegramUserId));
   if (!leadId) {
     return {
-      text: withCode ? `Ссылка не подошла — откройте её на сайте ещё раз.\n\n${WELCOME_TEXT}` : WELCOME_TEXT,
-      buttons: [{ text: "Открыть", webApp: cfg.siteUrl }],
+      text: withCode ? `Ссылка не подошла — откройте её на сайте ещё раз.\n\n${welcomeText()}` : welcomeText(),
+      buttons: [{ text: "Открыть", webApp: cfg.siteUrl, icon: "moon" }],
     };
   }
 
   const [lead] = await db.select({ name: leads.name }).from(leads).where(eq(leads.id, leadId));
   const [chat] = await db.select({ id: conversations.id }).from(conversations).where(eq(conversations.leadId, leadId)).limit(1);
-  const name = lead?.name ?? "";
+  const name = esc(lead?.name ?? "");
   const hello = linked
-    ? `✅ ${name}, Telegram подключён — ответы эксперта будут приходить сюда.`
-    : `Здравствуйте, ${name}! Ответы эксперта приходят сюда.`;
+    ? `${em("check")}<b>${name}, Telegram подключён</b>\n\nОтветы экспертов будут приходить сюда — отвечать можно прямо в этом чате.`
+    : `Здравствуйте, ${name}! Ответы экспертов приходят сюда — отвечать можно прямо в этом чате.`;
   return {
-    text: `${hello}\n\nЧат можно открыть здесь или на сайте в браузере. Отключить уведомления — /stop.`,
+    text: `${hello}\n\nЧат можно открыть и на сайте в браузере. Отключить уведомления — /stop.`,
     buttons: [
-      { text: chat ? "Открыть чат" : "Открыть разбор", webApp: `${cfg.siteUrl}/razbor/${leadId}${chat ? "/chat" : ""}` },
-      { text: "🌐 Открыть на сайте", url: `${cfg.siteUrl}/api/telegram/vhod?t=${loginCode(cfg.token, leadId, now)}` },
+      {
+        text: chat ? "Открыть чат" : "Открыть разбор",
+        webApp: `${cfg.siteUrl}/razbor/${leadId}${chat ? "/chat" : ""}`,
+        icon: "chat",
+      },
+      { text: "Открыть на сайте", url: `${cfg.siteUrl}/api/telegram/vhod?t=${loginCode(cfg.token, leadId, now)}`, icon: "globe" },
     ],
+    ...(linked && { linked }),
   };
 }
 

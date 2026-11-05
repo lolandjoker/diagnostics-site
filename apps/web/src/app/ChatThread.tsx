@@ -10,7 +10,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import type { MessageView } from "@/lib/chat";
 import { Avatar } from "./Avatar";
-import { pageAway } from "./telegramWebApp";
+import { pageAway, telegramInitData } from "./telegramWebApp";
 
 const POLL_MS = 3000;
 /** Как часто сообщать «я печатаю», пока человек набирает текст (на той стороне «печатает» держится 5 с). */
@@ -23,6 +23,16 @@ const PHOTO_MAX_SIDE = 1600;
 /** Уже небольшое фото нужного формата отправляем как есть. */
 const PHOTO_KEEP_BYTES = 1024 * 1024;
 const PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
+
+/** Окно «Подключите Telegram» после первого сообщения клиента; key — один раз на заявку. */
+export interface TelegramInvite {
+  key: string;
+  href: string;
+  title: string;
+  text: string;
+  button: string;
+  later: string;
+}
 
 export interface ChatLabels {
   placeholder: string;
@@ -123,6 +133,7 @@ export function ChatThread({
   peer,
   call,
   notice,
+  telegramInvite,
   prompt,
   suggestions = [],
   typingUrl,
@@ -144,8 +155,10 @@ export function ChatThread({
   peer?: ChatPeer;
   /** Звонок (CallPanel): с шапкой — справа в ней, без шапки — полосой над перепиской. */
   call?: ReactNode;
-  /** Полоса под шапкой (например, «Получать ответы в Telegram»). */
+  /** Полоса под шапкой («Получать ответы в Telegram»); пропадает, когда Telegram подключили. */
   notice?: ReactNode;
+  /** Клиенту: после первого сообщения — окно с приглашением в Telegram-бот (если ещё не подключён). */
+  telegramInvite?: TelegramInvite | undefined;
   /** Карточка над подсказками и полем ввода (например, «Откуда вы о нас узнали?»). */
   prompt?: ReactNode;
   /** Подсказки-вопросы: видны, пока человек ничего не написал в этом чате; нажал — вопрос отправлен. */
@@ -166,6 +179,8 @@ export function ChatThread({
   const [text, setText] = useState("");
   const [photo, setPhoto] = useState<{ file: File; preview: string } | null>(null);
   const [zoom, setZoom] = useState<string | null>(null);
+  const [telegramConnected, setTelegramConnected] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
   const lastId = useRef(0);
   const scroller = useRef<HTMLDivElement>(null);
   /** Человек внизу переписки — догрузившееся фото не должно утащить последние сообщения из вида. */
@@ -184,7 +199,12 @@ export function ChatThread({
         expertStatus?: "online" | "busy" | "offline";
         typing?: boolean;
         readUpTo?: string | null;
+        telegramConnected?: boolean;
       };
+      if (data.telegramConnected) {
+        setTelegramConnected(true);
+        setInviteOpen(false);
+      }
       if (data.expertStatus) setStatus(data.expertStatus);
       if (data.readUpTo !== undefined) setReadUpTo(data.readUpTo);
       setTyping(data.typing === true);
@@ -233,6 +253,26 @@ export function ChatThread({
   }, [photo]);
 
   useEffect(() => {
+    if (!inviteOpen) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setInviteOpen(false);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [inviteOpen]);
+
+  /** Первое сообщение клиента — зовём в Telegram-бот: один раз на заявку, не внутри Telegram и не тем, кто уже подключил. */
+  function maybeInvite() {
+    if (!telegramInvite || telegramConnected || telegramInitData()) return;
+    const key = `tgInvite:${telegramInvite.key}`;
+    try {
+      if (localStorage.getItem(key)) return;
+      localStorage.setItem(key, "1");
+    } catch {
+      // Без хранилища окно может показаться ещё раз — не страшно
+    }
+    setInviteOpen(true);
+  }
+
+  useEffect(() => {
     if (!zoom) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setZoom(null);
     window.addEventListener("keydown", onKey);
@@ -248,6 +288,7 @@ export function ChatThread({
   }, [text]);
 
   async function send(payload: { body?: string; photo?: File }) {
+    const firstOwn = !items.some(isOwn);
     setSending(true);
     setError(null);
     try {
@@ -271,6 +312,7 @@ export function ChatThread({
         return false;
       }
       await poll();
+      if (firstOwn) maybeInvite();
       return true;
     } catch {
       setError("Нет связи с сервером");
@@ -343,7 +385,7 @@ export function ChatThread({
         </header>
       )}
       {!peer && call}
-      {notice}
+      {!telegramConnected && notice}
 
       <div
         className="chat__messages"
@@ -498,6 +540,35 @@ export function ChatThread({
           </button>
         </div>
       </form>
+
+      {inviteOpen && telegramInvite && (
+        <div className="tg-invite" role="dialog" aria-modal="true" aria-labelledby="tg-invite-title" onClick={() => setInviteOpen(false)}>
+          <div className="tg-invite__card" onClick={(e) => e.stopPropagation()}>
+            <span className="tg-invite__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round">
+                <path d="M21 4.5 2.8 11.4c-.9.4-.9 1.2 0 1.5l4.6 1.5 1.8 5.4c.2.6.9.8 1.4.4l2.6-2.2 4.6 3.4c.6.4 1.3.1 1.5-.6L22 5.6c.2-.8-.4-1.4-1-1.1Z" />
+                <path d="m7.4 14.4 9.8-6.6-7 7.4" />
+              </svg>
+            </span>
+            <h2 id="tg-invite-title" className="tg-invite__title">
+              {telegramInvite.title}
+            </h2>
+            <p className="tg-invite__text">{telegramInvite.text}</p>
+            <a
+              className="tg-invite__go"
+              href={telegramInvite.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => setInviteOpen(false)}
+            >
+              {telegramInvite.button}
+            </a>
+            <button type="button" className="tg-invite__later" onClick={() => setInviteOpen(false)}>
+              {telegramInvite.later}
+            </button>
+          </div>
+        </div>
+      )}
 
       {zoom && (
         <div className="lightbox" role="dialog" aria-label="Фото" onClick={() => setZoom(null)}>

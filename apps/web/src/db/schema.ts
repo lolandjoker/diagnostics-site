@@ -103,7 +103,7 @@ export const experts = pgTable("experts", {
    */
   archivedAt: timestamp("archived_at", { withTimezone: true }),
   /**
-   * Подробная диагностика эксперта: приходит в чат с ним через 3 минуты после начала чата
+   * Подробная диагностика эксперта: приходит в чат с ним через 3 минуты 17 секунд после начала чата
    * ({name} — имя клиента). Пустая — в чат ничего не приходит.
    */
   fullText: text("full_text").notNull().default(""),
@@ -301,8 +301,10 @@ export const conversations = pgTable(
     lastMessageAt: timestamp("last_message_at", { withTimezone: true }).notNull().defaultNow(),
     /** Когда эксперт чата последний раз открывал переписку — для счётчика непрочитанных. */
     expertReadAt: timestamp("expert_read_at", { withTimezone: true }),
-    /** Когда в чат ушла подробная диагностика эксперта (через 3 минуты после начала чата); null — ещё не ушла. */
+    /** Когда в чат ушла подробная диагностика эксперта (через 3 минуты 17 секунд после начала чата); null — ещё не ушла. */
     fullTextSentAt: timestamp("full_text_sent_at", { withTimezone: true }),
+    /** Когда подошло время приветствия эксперта (через 17 секунд после начала чата); null — ещё не подошло. */
+    greetingSentAt: timestamp("greeting_sent_at", { withTimezone: true }),
     /** Клиент попросил позвонить; сбрасывается, когда эксперт или админ начал звонок. */
     callRequestedAt: timestamp("call_requested_at", { withTimezone: true }),
     /** Когда клиент последний раз открывал этот чат — для счётчика непрочитанных в его списке чатов. */
@@ -351,8 +353,33 @@ export const messages = pgTable(
     createdAt: createdAt(),
     /** author = admin, но написал оператор чатов — какой; null — сам админ. */
     operatorId: integer("operator_id").references(() => operators.id),
+    /** Отправлено сайтом от имени эксперта (приветствие) — не считается его ответом в статистике. */
+    automatic: boolean("automatic").notNull().default(false),
+    /** Клиент написал это из Telegram-бота, а не на сайте. */
+    viaTelegram: boolean("via_telegram").notNull().default(false),
   },
   (t) => [index("messages_conversation_idx").on(t.conversationId, t.id)],
+);
+
+/**
+ * Сообщения бота клиенту в Telegram и чат на сайте, к которому каждое относится: клиент отвечает в боте
+ * на сообщение эксперта — ответ уходит в тот же чат. withButtons — под сообщением ещё есть кнопка
+ * «Ответить на сайте» (у прежних сообщений её убираем, остаётся под последним).
+ */
+export const telegramMessages = pgTable(
+  "telegram_messages",
+  {
+    chatId: bigint("chat_id", { mode: "number" }).notNull(),
+    messageId: integer("message_id").notNull(),
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    siteMessageId: integer("site_message_id").references(() => messages.id, { onDelete: "set null" }),
+    expertId: integer("expert_id").references(() => experts.id),
+    withButtons: boolean("with_buttons").notNull().default(false),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.chatId, t.messageId] }), index("telegram_messages_chat_idx").on(t.chatId, t.createdAt)],
 );
 
 /** Фото в сообщении чата: JPEG, PNG или WebP, одно на сообщение. */

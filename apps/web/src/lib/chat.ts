@@ -12,15 +12,19 @@ import { conversations, experts, leads, messagePhotos, messages, operators } fro
 import type { MessageAuthor } from "@/db/schema";
 import { detectImageMime, expertPhotoUrls, expertStatus, getExpert, isOnline, listExperts } from "./experts";
 import type { Lead } from "./leads";
-import { notifyClient } from "./telegram";
+import { notifyClient } from "./bot-delivery";
 import { fillTemplate, getTexts } from "./texts";
 
 export type Conversation = typeof conversations.$inferSelect;
 
 export const MAX_MESSAGE_LENGTH = 4000;
 export const CLIENT_MESSAGES_PER_MINUTE = 20;
-/** Через сколько после начала чата в него приходит подробная диагностика эксперта. */
-export const FULL_TEXT_DELAY_MS = 3 * 60 * 1000;
+/** Через сколько после начала чата эксперт «начинает печатать» приветствие. */
+export const GREETING_TYPING_MS = 2_000;
+/** Через сколько после начала чата приходит приветствие эксперта (chat.greeting). */
+export const GREETING_DELAY_MS = 17_000;
+/** Через сколько после начала чата в него приходит подробная диагностика эксперта: 3 минуты после приветствия. */
+export const FULL_TEXT_DELAY_MS = GREETING_DELAY_MS + 3 * 60 * 1000;
 /** Фото в чате. Браузер перед отправкой уменьшает снимок, так что обычно выходит меньше 1 МБ. */
 export const MAX_CHAT_PHOTO_BYTES = 5 * 1024 * 1024;
 
@@ -120,9 +124,10 @@ export type StartResult = { ok: true; conversation: Conversation } | { ok: false
 
 /**
  * Человек выбрал эксперта: открывается чат с ним (уже был — тот же). Писать можно любому эксперту,
- * у каждого свой чат в списке переписок. Первый чат — только с экспертом в сети. Через FULL_TEXT_DELAY_MS
- * в чат приходит подробная диагностика этого эксперта — но одна на человека: получил в одном чате —
- * в других уже не придёт (см. deliverDueFullTexts).
+ * у каждого свой чат в списке переписок. Первый чат — только с экспертом в сети. Сценарий чата, куда
+ * придёт подробная диагностика: через 2 с эксперт «печатает…», через 17 с — его приветствие, снова
+ * «печатает…», через FULL_TEXT_DELAY_MS — диагностика. Она одна на человека: получил в одном чате —
+ * в других уже не придёт, и приветствия там нет (см. deliverDueFullTexts).
  * За клиента ничего не пишем: в пустом чате ему показываются подсказки-вопросы (chat.suggestions).
  */
 export async function startConversation(db: Db, lead: Lead, expertId: number, now: Date): Promise<StartResult> {
@@ -185,16 +190,49 @@ async function fullTextTarget(db: Db, leadId: string): Promise<string | null> {
 }
 
 /**
- * «Печатает…» всё время, пока идёт отсчёт до подробной диагностики: с начала чата и до её отправки.
- * Только в том чате, куда она придёт: одна диагностика на человека (fullTextTarget).
+ * «Печатает…» всё время, пока идёт отсчёт до подробной диагностики: через GREETING_TYPING_MS после начала
+ * чата и до её отправки (приветствие приходит посередине). Только в том чате, куда она придёт:
+ * одна диагностика на человека (fullTextTarget).
  */
-export async function fullTextTyping(db: Db, c: Pick<Conversation, "id" | "leadId" | "fullTextSentAt">): Promise<boolean> {
-  if (c.fullTextSentAt) return false;
+export async function fullTextTyping(
+  db: Db,
+  c: Pick<Conversation, "id" | "leadId" | "createdAt" | "fullTextSentAt">,
+  now: Date,
+): Promise<boolean> {
+  if (c.fullTextSentAt || now.getTime() < c.createdAt.getTime() + GREETING_TYPING_MS) return false;
   return (await fullTextTarget(db, c.leadId)) === c.id;
 }
 
 /**
- * Отправляет подробную диагностику эксперта в его чаты, которым уже FULL_TEXT_DELAY_MS, — сообщением с подписью
+ * Приветствие эксперта (chat.greeting) через GREETING_DELAY_MS — в чат, куда придёт подробная диагностика.
+ * Каждый чат отмечается одним UPDATE — два опроса не отправят приветствие дважды.
+ */
+async function deliverDueGreetings(db: Db, now: Date, leadId: string | undefined): Promise<void> {
+  const due = await db
+    .update(conversations)
+    .set({ greetingSentAt: now })
+    .where(
+      and(
+        isNull(conversations.greetingSentAt),
+        lte(conversations.createdAt, new Date(now.getTime() - GREETING_DELAY_MS)),
+        leadId === undefined ? undefined : eq(conversations.leadId, leadId),
+      ),
+    )
+    .returning({ id: conversations.id, leadId: conversations.leadId, expertId: conversations.expertId });
+  if (due.length === 0) return;
+  const greeting = (await getTexts(db, ["chat.greeting"]))["chat.greeting"].trim();
+  if (!greeting) return;
+  for (const c of due) {
+    if ((await fullTextTarget(db, c.leadId)) !== c.id) continue;
+    const [lead] = await db.select({ name: leads.name }).from(leads).where(eq(leads.id, c.leadId));
+    if (!lead) continue;
+    await postMessage(db, c.id, { author: "expert", expertId: c.expertId, automatic: true, body: fillTemplate(greeting, { name: lead.name }) });
+  }
+}
+
+/**
+ * Сначала приветствия, которым пора (deliverDueGreetings). Потом
+ * отправляет подробную диагностику эксперта в его чаты, которым уже FULL_TEXT_DELAY_MS, — сообщением с подписью
  * «Подробный разбор», а не от имени эксперта. Вызывается при каждом опросе чата и списка чатов,
  * поэтому сообщение появляется вовремя без фоновых задач. Каждый чат отмечается одним UPDATE —
  * два одновременных опроса не отправят текст дважды. Диагностика одна на человека: приходит в самый ранний
@@ -208,6 +246,7 @@ export async function deliverDueFullTexts(db: Db, now: Date, conversationId?: st
     if (!c) return;
     leadId = c.leadId;
   }
+  await deliverDueGreetings(db, now, leadId);
   const due = await db
     .update(conversations)
     .set({ fullTextSentAt: now })
@@ -232,14 +271,23 @@ export async function deliverDueFullTexts(db: Db, now: Date, conversationId?: st
     const [expert] = await db.select({ fullText: experts.fullText }).from(experts).where(eq(experts.id, c.expertId));
     // Одна диагностика на человека: уже получил в другом чате — в этот не отправляем
     if (lead && expert?.fullText && !(await leadGotFullText(db, c.leadId))) {
-      await postMessage(db, c.id, { author: "system", body: fillTemplate(expert.fullText, { name: lead.name }) });
-      void notifyClient(db, c.id, { kind: "fullText" });
+      const sent = await postMessage(db, c.id, { author: "system", body: fillTemplate(expert.fullText, { name: lead.name }) });
+      if (sent.ok) void notifyClient(db, c.id, { kind: "fullText", messageId: sent.id });
     }
   }
 }
 
 /** operatorId — для author = admin: написал оператор чатов (подпись у сотрудников — его имя). */
-export type PostInput = { author: MessageAuthor; body?: string; expertId?: number; operatorId?: number; photo?: Buffer };
+/** automatic — сообщение отправил сайт от имени эксперта (приветствие); viaTelegram — клиент ответил из бота. */
+export type PostInput = {
+  author: MessageAuthor;
+  body?: string;
+  expertId?: number;
+  operatorId?: number;
+  photo?: Buffer;
+  automatic?: boolean;
+  viaTelegram?: boolean;
+};
 export type PostResult = { ok: true; id: number } | { ok: false; error: string };
 
 export async function postMessage(db: Db, conversationId: string, input: PostInput): Promise<PostResult> {
@@ -277,6 +325,8 @@ export async function postMessage(db: Db, conversationId: string, input: PostInp
         body,
         expertId: input.expertId ?? null,
         operatorId: input.author === "admin" ? (input.operatorId ?? null) : null,
+        automatic: input.automatic ?? false,
+        viaTelegram: input.author === "client" && input.viaTelegram === true,
       })
       .returning({ id: messages.id });
     const messageId = (m as { id: number }).id;
@@ -286,9 +336,9 @@ export async function postMessage(db: Db, conversationId: string, input: PostInp
     await tx.update(conversations).set({ lastMessageAt: new Date() }).where(eq(conversations.id, conversationId));
     return messageId;
   });
-  // Клиенту из Telegram-бота — уведомление об ответе (не ждём: чат не должен тормозить из-за Telegram)
+  // Клиенту из Telegram-бота — ответ эксперта в бот (не ждём: чат не должен тормозить из-за Telegram)
   if (input.author === "expert" || input.author === "admin") {
-    void notifyClient(db, conversationId, { kind: "message", expertId: input.expertId ?? null });
+    void notifyClient(db, conversationId, { kind: "message", messageId: id });
   }
   return { ok: true, id };
 }
@@ -355,9 +405,11 @@ export async function messageViews(
     const expertId = asExpert ? conversation.expertId : m.expertId;
     const authorName =
       author === "client"
-        ? clientName
+        ? clientName + (viewer === "staff" && m.viaTelegram ? " · из Telegram" : "")
         : author === "expert"
-          ? ((asExpert ? chatExpert?.name : expertName) ?? "Эксперт")
+          ? ((asExpert ? chatExpert?.name : expertName) ?? "Эксперт") +
+            // Сотрудники видят, что это приветствие сайта, а не эксперт сам написал
+            (viewer === "staff" && m.automatic ? " · автоприветствие" : "")
           : author === "admin"
             ? operatorName
               ? `Оператор: ${operatorName}`

@@ -41,7 +41,16 @@ export default async function ClientChatPage(props: PageProps<"/razbor/[id]/chat
     getExpert(db, conversation.expertId),
     expertPhotoUrls(db),
     clientChats(db, lead.id),
-    getTexts(db, ["chat.title", "chat.placeholder", "chat.send", "experts.busy", "chat.suggestions"]),
+    getTexts(db, [
+      "chat.title",
+      "chat.placeholder",
+      "chat.send",
+      "experts.busy",
+      "chat.suggestions",
+      "chat.tg_invite_title",
+      "chat.tg_invite_text",
+      "chat.tg_invite_button",
+    ]),
     telegramLink(lead),
   ]);
 
@@ -93,6 +102,18 @@ export default async function ClientChatPage(props: PageProps<"/razbor/[id]/chat
             !lead.source &&
             !lead.heardFrom &&
             lead.telegramUserId === null && <HeardFromPoll leadId={lead.id} options={HEARD_FROM} />
+          }
+          telegramInvite={
+            telegram && !telegram.connected
+              ? {
+                  key: lead.id,
+                  href: telegram.href,
+                  title: t["chat.tg_invite_title"],
+                  text: t["chat.tg_invite_text"],
+                  button: t["chat.tg_invite_button"],
+                  later: "Не сейчас",
+                }
+              : undefined
           }
           notice={
             telegram &&

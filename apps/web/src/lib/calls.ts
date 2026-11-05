@@ -17,7 +17,7 @@ import { callSignals, calls, conversations } from "@/db/schema";
 import type { CallStatus } from "@/db/schema";
 import { postMessage } from "./chat";
 import type { Conversation } from "./chat";
-import { notifyClient } from "./telegram";
+import { notifyClient } from "./bot-delivery";
 
 export type Call = typeof calls.$inferSelect;
 export type CallSide = "client" | "staff";

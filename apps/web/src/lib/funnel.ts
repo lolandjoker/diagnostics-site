@@ -80,7 +80,7 @@ export async function funnel(db: Db, since: Date | null): Promise<FunnelStep[]> 
       .from(messages)
       .innerJoin(conversations, eq(conversations.id, messages.conversationId))
       .innerJoin(leads, eq(leads.id, conversations.leadId))
-      .where(and(inArray(messages.author, authors), inPeriod));
+      .where(and(inArray(messages.author, authors), eq(messages.automatic, false), inPeriod));
 
   const rows = await Promise.all([
     visitors("home"),
