@@ -3956,9 +3956,10 @@ body.no-scroll {
 
 .chats__day {
   display: flex;
+  flex: none;
   gap: 10px;
   align-items: center;
-  margin-bottom: 12px;
+  margin: 12px 12px 0;
   padding: 12px 14px;
   border: 1px solid var(--gold);
   border-radius: 16px;
