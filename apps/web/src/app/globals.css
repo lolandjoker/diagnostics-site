@@ -5358,3 +5358,9 @@ body.no-scroll {
   color: var(--muted);
   text-align: center;
 }
+
+.msg-menu__bar small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.72rem;
+}

@@ -114,8 +114,28 @@ describe("правка и удаление сообщений", () => {
     expect(rows.every((r) => !before.includes(r.messageId))).toBe(true);
 
     fetchMock.mockClear();
-    expect(await deleteFromTelegram(db, id)).toBe(rows.length);
+    expect(await deleteFromTelegram(db, id)).toEqual({ deleted: rows.length, failed: [] });
     expect(methods().every((m) => m === "deleteMessage")).toBe(true);
+
+    // Старше 48 часов Telegram удалить не даёт — исправленное приходит ответом на старое, с пометкой
+    const old = await post(c.id, { author: "admin", body: "Старое" });
+    await db.insert(telegramMessages).values({ chatId: TG, messageId: 77, conversationId: c.id, siteMessageId: old, withButtons: false });
+    fetchMock.mockImplementation(async (url: string) => {
+      const method = url.split("/").pop();
+      if (method === "deleteMessage") return new Response(JSON.stringify({ ok: false, description: "message can't be deleted" }), { status: 400 });
+      return new Response(JSON.stringify({ ok: true, result: method === "sendMessage" ? { message_id: ++nextId } : true }), { status: 200 });
+    });
+    for (let i = 0; i < 30; i++) await new Promise((r) => setTimeout(r, 50)); // авто-отправка нового сообщения
+    await db.delete(telegramMessages).where(eq(telegramMessages.siteMessageId, old));
+    await db.insert(telegramMessages).values({ chatId: TG, messageId: 77, conversationId: c.id, siteMessageId: old, withButtons: false });
+    await db.update(messages).set({ body: "Старое, исправленное", editedAt: new Date() }).where(eq(messages.id, old));
+    fetchMock.mockClear();
+    await resendEditedToTelegram(db, c.id, old);
+    const sent = fetchMock.mock.calls.map(([url, init]) => ({ method: String(url).split("/").pop(), body: JSON.parse(String((init as RequestInit).body)) as Record<string, unknown> }));
+    const fix = sent.find((x) => x.method === "sendMessage")!;
+    expect(fix.body.text).toContain("Исправлено:");
+    expect(fix.body.text).toContain("Старое, исправленное");
+    expect(fix.body.reply_parameters).toMatchObject({ message_id: 77 });
     // Не было в Telegram — при правке ничего не шлём
     const other = await post(c.id, { author: "client", body: "клиент пишет" });
     fetchMock.mockClear();

@@ -441,27 +441,53 @@ export async function botTyping(db: Db, conversationId: string, now = new Date()
   }
 }
 
-/** Сообщение сайта удалили — убрать его и из Telegram клиента (бот может удалять свои сообщения до 48 часов). */
-export async function deleteFromTelegram(db: Db, siteMessageId: number): Promise<number> {
+/**
+ * Сообщение сайта удалили — убрать его и из Telegram клиента. Бот может удалять свои сообщения только
+ * в первые 48 часов: что старше, у клиента остаётся (оно в «не удалось»).
+ */
+export async function deleteFromTelegram(db: Db, siteMessageId: number): Promise<{ deleted: number; failed: { chatId: number; messageId: number }[] }> {
   const cfg = telegramConfig();
-  if (!cfg) return 0;
+  if (!cfg) return { deleted: 0, failed: [] };
   const rows = await db
     .delete(telegramMessages)
     .where(eq(telegramMessages.siteMessageId, siteMessageId))
     .returning({ chatId: telegramMessages.chatId, messageId: telegramMessages.messageId });
-  for (const r of rows) await botApi(cfg.token, "deleteMessage", { chat_id: r.chatId, message_id: r.messageId });
-  return rows.length;
+  const failed: { chatId: number; messageId: number }[] = [];
+  for (const r of rows) {
+    if (!(await botApi(cfg.token, "deleteMessage", { chat_id: r.chatId, message_id: r.messageId }))) failed.push(r);
+  }
+  return { deleted: rows.length - failed.length, failed };
 }
 
 /**
  * Сообщение исправили — если оно уже ушло клиенту в Telegram: старое там убираем, исправленное присылаем
- * заново тем же оформлением (плашка эксперта, кнопка «Ответить на сайте»).
+ * заново тем же оформлением (плашка эксперта, кнопка «Ответить на сайте»). Старше 48 часов Telegram удалить
+ * не даёт — тогда исправленный текст приходит ответом на старое сообщение, с пометкой «Исправлено».
  */
 export function resendEditedToTelegram(db: Db, conversationId: string, siteMessageId: number, now = new Date()): Promise<void> {
   const cfg = telegramConfig();
   if (!cfg) return Promise.resolve();
   return enqueue(conversationId, async () => {
-    if ((await deleteFromTelegram(db, siteMessageId)) === 0) return;
-    await deliverMessage(db, cfg, siteMessageId, now, true);
+    const { deleted, failed } = await deleteFromTelegram(db, siteMessageId);
+    if (deleted === 0 && failed.length === 0) return;
+    if (failed.length === 0) {
+      await deliverMessage(db, cfg, siteMessageId, now, true);
+      return;
+    }
+    const [m] = await db.select({ body: messages.body }).from(messages).where(eq(messages.id, siteMessageId));
+    const ctx = await chatContext(db, cfg, conversationId, now, true);
+    if (!m || !ctx || m.body.trim() === "") return;
+    const first = failed[0]!;
+    const id = sentId(
+      await botCall(cfg.token, "sendMessage", {
+        chat_id: first.chatId,
+        text: `${em("pen")}<b>Исправлено:</b>\n${esc(m.body.trim())}`,
+        parse_mode: "HTML",
+        link_preview_options: { is_disabled: true },
+        reply_parameters: { message_id: first.messageId, allow_sending_without_reply: true },
+        ...keyboard([{ text: "Ответить на сайте", webApp: ctx.chatUrl, icon: "reply" }]),
+      }),
+    );
+    await remember(db, cfg, ctx, id, { siteMessageId, expertId: ctx.expertId, withButtons: true });
   });
 }
