@@ -420,7 +420,9 @@ export function ChatThread({
         {open &&
           (confirmDelete === m.id ? (
             <div className="msg-menu__bar" role="group" aria-label="Удалить сообщение">
-              <span>Удалить у всех?</span>
+              <span title="Telegram даёт боту удалять сообщения только в первые 48 часов">
+                Удалить у всех? <small>В Telegram — если ему меньше 2 суток.</small>
+              </span>
               <button type="button" className="msg-menu__danger" disabled={managing} onClick={() => void manage(m.id, "DELETE")}>
                 Удалить
               </button>
