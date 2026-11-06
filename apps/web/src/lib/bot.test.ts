@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import type { Mock } from "vitest";
 import { createTestDb } from "@/db";
 import type { Db } from "@/db";
-import { broadcasts, conversations, messages, reviews, telegramMessages, telegramStarts } from "@/db/schema";
+import { broadcasts, conversations, messages, reviews, telegramMessages, telegramStarts, leads } from "@/db/schema";
 import { em, setBotEmoji } from "./bot-emoji";
 import { clearCardCache, notifyClient, sendLatestToTelegram, splitText } from "./bot-delivery";
 import { REMIND_AFTER_MS, REVIEW_ASK_AFTER_MS, askReviews, remindUnread } from "./bot-chores";
@@ -10,7 +10,7 @@ import { handleExpertCallback, showExperts } from "./bot-experts";
 import { handleClientMessage } from "./bot-inbox";
 import { handleCallback } from "./bot-reviews";
 import { botStats } from "./bot-stats";
-import { broadcastHtml, runBroadcast, validateBroadcast } from "./broadcasts";
+import { broadcastHtml, personalUrl, runBroadcast, validateBroadcast } from "./broadcasts";
 import { markClientRead, messageViews, startConversation } from "./chat";
 import { createExpert, setExpertOnline } from "./experts";
 import { createLead } from "./leads";
@@ -312,6 +312,29 @@ describe("переписка в Telegram-боте", () => {
     expect(after).toMatchObject({ sent: 1, failed: 1 });
     expect(after!.finishedAt).not.toBeNull();
     expect(calls()[0]!.body.reply_markup).toEqual({ inline_keyboard: [[{ text: "Забрать", url: "https://taromba.com" }]] });
+  });
+
+  it("рассылка с личной кнопкой: каждому — его последняя заявка внутри Telegram; чат — последний или выбор эксперта", async () => {
+    const { lead: old } = await chatFor(TG);
+    // Позже у того же человека новая заявка с чатом — кнопка ведёт туда
+    const { lead: fresh, chat } = await chatFor(TG, "Ольга | Астролог");
+    await db.update(leads).set({ createdAt: new Date(Date.now() + 60_000) }).where(eq(leads.id, fresh.id));
+    // Другой человек без чата
+    const other = 4545;
+    await createLead(db, { name: "Ира", birthDate: "1991-01-01" }, new Date(), null, other);
+    const input = { body: "Пройдите тест", buttonText: "", buttonUrl: "", gift: true, personalPage: "arhetip" as const };
+    const [b] = await db.insert(broadcasts).values({ body: input.body, total: 2 }).returning();
+    await runBroadcast(db, cfg, b!.id, [TG, other], input);
+    const kb = calls()
+      .filter((c) => c.method === "sendMessage")
+      .map((c) => (c.body.reply_markup as { inline_keyboard: { text: string; web_app?: { url: string } }[][] }).inline_keyboard[0]![0]!);
+    expect(kb[0]).toMatchObject({ text: "Пройти тест «Ваш архетип»", web_app: { url: `https://example.com/razbor/${fresh.id}/arhetip` } });
+    expect(kb[0]!.web_app!.url).not.toContain(old.id);
+    const otherLead = (await db.select().from(leads).where(eq(leads.telegramUserId, other)))[0]!;
+    expect(kb[1]!.web_app!.url).toBe(`https://example.com/razbor/${otherLead.id}/arhetip`);
+
+    expect(personalUrl("https://example.com", "chat", { leadId: fresh.id, chatId: chat.id })).toBe(`https://example.com/razbor/${fresh.id}/chat?c=${chat.id}`);
+    expect(personalUrl("https://example.com", "chat", { leadId: otherLead.id, chatId: null })).toBe(`https://example.com/razbor/${otherLead.id}/eksperty`);
   });
 
   it("ссылка на бота с источником: запоминается первое касание, «Открыть» — через короткий адрес", async () => {

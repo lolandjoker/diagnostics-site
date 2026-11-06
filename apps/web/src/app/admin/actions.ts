@@ -36,7 +36,7 @@ import {
 import { NO_METHOD, VARIATION_MODES, deleteVariation, getVariation, getVariationTexts, saveVariationTexts, setVariationMode } from "@/lib/variations";
 import type { VariationMode } from "@/lib/variations";
 import { TEXT_DEFS, saveTexts } from "@/lib/texts";
-import { isAudience, sendTestBroadcast, startBroadcast, validateBroadcast } from "@/lib/broadcasts";
+import { hasLead, isAudience, isPersonalPage, type PersonalPage, sendTestBroadcast, startBroadcast, validateBroadcast } from "@/lib/broadcasts";
 import { telegramConfig } from "@/lib/telegram";
 import type { TextKey } from "@/lib/texts";
 import type { ActionResult } from "./ActionForm";
@@ -117,6 +117,8 @@ export async function broadcastAction(_prev: ActionResult, form: FormData): Prom
   const audience = str(form, "audience");
   const input = {
     audience: isAudience(audience) ? audience : ("all" as const),
+    personalPage: isPersonalPage(str(form, "personal_page")) ? (str(form, "personal_page") as PersonalPage) : undefined,
+    personalText: str(form, "personal_text"),
     body: str(form, "body"),
     buttonText: str(form, "button_text"),
     buttonUrl: str(form, "button_url"),
@@ -127,7 +129,11 @@ export async function broadcastAction(_prev: ActionResult, form: FormData): Prom
   const testId = str(form, "test_id").trim();
   if (testId) {
     if (!/^\d{3,15}$/.test(testId)) return fail("Telegram ID — только цифры");
-    return (await sendTestBroadcast(cfg, Number(testId), input))
+    const db = await getDb();
+    if (input.personalPage && !(await hasLead(db, Number(testId)))) {
+      return fail("У этого Telegram нет заявки — личной кнопке некуда вести. Подключите Telegram к своей заявке на сайте или пробуйте без личной кнопки");
+    }
+    return (await sendTestBroadcast(db, cfg, Number(testId), input))
       ? done("Пробное сообщение отправлено — посмотрите в Telegram. Чтобы разослать всем, сотрите ID.")
       : fail("Не ушло: этот человек ещё не открывал бота или заблокировал его");
   }

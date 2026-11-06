@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getDb } from "@/db";
 import { isAdmin } from "@/lib/admin-auth";
-import { AUDIENCES, type Audience, BROADCAST_GAP_MS, MAX_BROADCAST_LENGTH, audienceCounts, listBroadcasts } from "@/lib/broadcasts";
+import { AUDIENCES, type Audience, BROADCAST_GAP_MS, MAX_BROADCAST_LENGTH, PERSONAL_PAGES, type PersonalPage, audienceCounts, listBroadcasts } from "@/lib/broadcasts";
 import { telegramConfig } from "@/lib/telegram";
 import { ActionForm } from "../../ActionForm";
 import { broadcastAction } from "../../actions";
@@ -68,11 +68,32 @@ export default async function BroadcastsPage() {
         </label>
         <div className="row">
           <label className="field">
-            <span>Кнопка: надпись (необязательно)</span>
+            <span>Личная кнопка — каждому его страница внутри Telegram</span>
+            <select name="personal_page" defaultValue="">
+              <option value="">Без личной кнопки</option>
+              {(Object.keys(PERSONAL_PAGES) as PersonalPage[]).map((p) => (
+                <option key={p} value={p}>
+                  {PERSONAL_PAGES[p].label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            <span>Надпись личной кнопки (необязательно)</span>
+            <input name="personal_text" maxLength={40} placeholder="Например: Пройти тест «Ваш архетип»" />
+          </label>
+        </div>
+        <p className="muted field-hint">
+          Личная кнопка открывает каждому его собственный раздел — сразу с его именем и датой, без ввода данных.
+          Обычная кнопка-ссылка ниже открывает сайт в браузере, где человека не узнают.
+        </p>
+        <div className="row">
+          <label className="field">
+            <span>Кнопка-ссылка: надпись (необязательно)</span>
             <input name="button_text" maxLength={40} placeholder="Например: Получить подарок" />
           </label>
           <label className="field">
-            <span>Кнопка: адрес</span>
+            <span>Кнопка-ссылка: адрес</span>
             <input name="button_url" type="url" placeholder="https://taromba.com/…" />
           </label>
         </div>
@@ -107,7 +128,12 @@ export default async function BroadcastsPage() {
                 {history.map((b) => (
                   <tr key={b.id}>
                     <td>{when.format(b.createdAt)}</td>
-                    <td>{b.audience === "silent" ? "не ответили" : b.audience === "never" ? "не писали" : "все"}</td>
+                    <td>
+                      {b.audience === "silent" ? "не ответили" : b.audience === "never" ? "не писали" : "все"}
+                      {b.personalPage && b.personalPage in PERSONAL_PAGES && (
+                        <span className="muted"> · кнопка: {PERSONAL_PAGES[b.personalPage as PersonalPage].label}</span>
+                      )}
+                    </td>
                     <td>{b.body.length > 120 ? `${b.body.slice(0, 120)}…` : b.body}</td>
                     <td>{b.total}</td>
                     <td>{b.sent}</td>

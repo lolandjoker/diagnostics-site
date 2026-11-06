@@ -523,6 +523,8 @@ export const broadcasts = pgTable("broadcasts", {
   finishedAt: timestamp("finished_at", { withTimezone: true }),
   /** Кому (lib/broadcasts.ts, AUDIENCES): all — все подключившие бота, silent — не ответили нам в чате, never — ни разу не писали. */
   audience: text("audience").notNull().default("all"),
+  /** Личная кнопка (lib/broadcasts.ts, PERSONAL_PAGES): каждому — его страница внутри Telegram; "" — нет. */
+  personalPage: text("personal_page").notNull().default(""),
 });
 
 /** Фото в сообщении чата: JPEG, PNG или WebP, одно на сообщение. */
