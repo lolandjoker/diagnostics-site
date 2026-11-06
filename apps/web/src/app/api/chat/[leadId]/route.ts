@@ -14,9 +14,11 @@ import {
   markClientRead,
   messageViews,
   postMessage,
+  chatSync,
 } from "@/lib/chat";
 import { expertStatus, getExpert } from "@/lib/experts";
 import { afterParam, jsonError, messagePayload, noStore, sameOrigin } from "@/lib/http";
+import { markBrowserBlocked } from "@/lib/blocks";
 import { getLead } from "@/lib/leads";
 import { clearTyping, isTyping } from "@/lib/typing";
 
@@ -32,6 +34,8 @@ async function load(req: Request, leadId: string) {
 export async function GET(req: Request, ctx: RouteContext<"/api/chat/[leadId]">) {
   const { db, lead, conversation } = await load(req, (await ctx.params).leadId);
   if (!lead || !conversation) return jsonError("Чат не найден", 404);
+  // Заблокирован — помечаем браузер: новая заявка из него тоже будет в блоке
+  if (lead.blockedAt) await markBrowserBlocked();
   const now = new Date();
   await deliverDueFullTexts(db, now, conversation.id);
   if (new URL(req.url).searchParams.get("hidden") !== "1") await markClientRead(db, conversation.id, now);
@@ -44,8 +48,11 @@ export async function GET(req: Request, ctx: RouteContext<"/api/chat/[leadId]">)
       expertStatus: expert ? expertStatus(expert, now) : "offline",
       typing,
       readUpTo: conversation.expertReadAt?.toISOString() ?? null,
+      // Удалённые и исправленные сообщения — без перезагрузки чата
+      ...(await chatSync(db, conversation, new URL(req.url).searchParams.get("since"), "client")),
       // Подключил Telegram — страница убирает приглашение подключить
       telegramConnected: lead.telegramUserId !== null,
+      blocked: lead.blockedAt !== null,
     },
     { headers: noStore },
   );
@@ -53,8 +60,12 @@ export async function GET(req: Request, ctx: RouteContext<"/api/chat/[leadId]">)
 
 export async function POST(req: Request, ctx: RouteContext<"/api/chat/[leadId]">) {
   if (!sameOrigin(req)) return jsonError("Запрос не с сайта", 403);
-  const { db, conversation } = await load(req, (await ctx.params).leadId);
-  if (!conversation) return jsonError("Чат не найден", 404);
+  const { db, lead, conversation } = await load(req, (await ctx.params).leadId);
+  if (!lead || !conversation) return jsonError("Чат не найден", 404);
+  if (lead.blockedAt) {
+    await markBrowserBlocked();
+    return jsonError("Переписка недоступна", 403);
+  }
   const data = await messagePayload(req, MAX_CHAT_PHOTO_BYTES);
   if (typeof data === "string") return jsonError(data, 400);
   const res = await postMessage(db, conversation.id, {

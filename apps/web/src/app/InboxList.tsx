@@ -165,6 +165,7 @@ export function InboxList({
                     <span className="inbox__who">
                       {c.leadName}
                       {c.geoCity && <span className="inbox__city"> · {cityName(c.geoCity)}</span>}
+                      {c.blocked && <span className="block-badge">блок</span>}
                     </span>
                     <time dateTime={c.lastMessageAt}>{when(c.lastMessageAt)}</time>
                   </span>

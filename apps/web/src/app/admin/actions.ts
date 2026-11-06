@@ -36,7 +36,7 @@ import {
 import { NO_METHOD, VARIATION_MODES, deleteVariation, getVariation, getVariationTexts, saveVariationTexts, setVariationMode } from "@/lib/variations";
 import type { VariationMode } from "@/lib/variations";
 import { TEXT_DEFS, saveTexts } from "@/lib/texts";
-import { sendTestBroadcast, startBroadcast, validateBroadcast } from "@/lib/broadcasts";
+import { isAudience, sendTestBroadcast, startBroadcast, validateBroadcast } from "@/lib/broadcasts";
 import { telegramConfig } from "@/lib/telegram";
 import type { TextKey } from "@/lib/texts";
 import type { ActionResult } from "./ActionForm";
@@ -114,7 +114,9 @@ export async function broadcastAction(_prev: ActionResult, form: FormData): Prom
   await requireAdmin();
   const cfg = telegramConfig();
   if (!cfg) return fail("Telegram-бот не подключён");
+  const audience = str(form, "audience");
   const input = {
+    audience: isAudience(audience) ? audience : ("all" as const),
     body: str(form, "body"),
     buttonText: str(form, "button_text"),
     buttonUrl: str(form, "button_url"),
@@ -129,7 +131,7 @@ export async function broadcastAction(_prev: ActionResult, form: FormData): Prom
       ? done("Пробное сообщение отправлено — посмотрите в Telegram. Чтобы разослать всем, сотрите ID.")
       : fail("Не ушло: этот человек ещё не открывал бота или заблокировал его");
   }
-  if (form.get("confirm") !== "on") return fail("Отметьте «Отправить всем» — или впишите свой Telegram ID для пробы");
+  if (form.get("confirm") !== "on") return fail("Отметьте «Отправить» — или впишите свой Telegram ID для пробы");
   const { total } = await startBroadcast(await getDb(), cfg, input);
   refresh();
   return done(`Рассылка началась: ${total} получателей. Обновите страницу, чтобы увидеть, сколько ушло.`);

@@ -28,6 +28,7 @@ export default async function ExpertChatPage(props: PageProps<"/expert/chat/[id]
         telegram={header?.telegram ?? false}
         geoCountry={header?.geoCountry ?? null}
         geoCity={header?.geoCity ?? null}
+        blocked={header?.blocked ?? false}
         mine={mine}
         warning={
           header?.expertArchived ? (

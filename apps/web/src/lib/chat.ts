@@ -6,7 +6,7 @@
  * чата (имя и фото); подпись «Администратор» видят только эксперты и админ.
  * К сообщению можно приложить фото (JPEG, PNG или WebP до MAX_CHAT_PHOTO_BYTES).
  */
-import { and, asc, desc, eq, gt, isNull, lte, ne, sql } from "drizzle-orm";
+import { type SQL, and, asc, desc, eq, gt, isNull, lte, ne, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { conversations, experts, leads, messagePhotos, messages, operators } from "@/db/schema";
 import type { MessageAuthor } from "@/db/schema";
@@ -132,6 +132,8 @@ export type StartResult = { ok: true; conversation: Conversation } | { ok: false
  * За клиента ничего не пишем: в пустом чате ему показываются подсказки-вопросы (chat.suggestions).
  */
 export async function startConversation(db: Db, lead: Lead, expertId: number, now: Date): Promise<StartResult> {
+  // Заблокированный клиент (lib/blocks.ts) новых чатов не начинает
+  if (lead.blockedAt) return { ok: false, error: "Переписка недоступна" };
   const withExpert = async () =>
     (
       await db
@@ -373,6 +375,8 @@ export interface MessageView {
   createdAt: string;
   /** Сотрудникам: клиент написал это из Telegram-бота. */
   viaTelegram?: boolean;
+  /** Текст исправлен админом или оператором — пометка «изменено». */
+  editedAt?: string;
 }
 
 /**
@@ -385,13 +389,35 @@ export async function messageViews(
   afterId: number,
   viewer: "client" | "staff",
 ): Promise<MessageView[]> {
+  return viewsWhere(db, conversation, gt(messages.id, afterId), viewer);
+}
+
+/** Сообщения, исправленные после since (их уже показали — нужно заменить текст). */
+export async function editedViews(db: Db, conversation: Conversation, since: Date, viewer: "client" | "staff"): Promise<MessageView[]> {
+  return viewsWhere(db, conversation, gt(messages.editedAt, since), viewer);
+}
+
+/**
+ * Для опроса чата: какие сообщения сейчас есть (удалённые пропадут у собеседника без перезагрузки)
+ * и какие исправлены с прошлого опроса. now — от сервера, его же присылают следующим since.
+ */
+export async function chatSync(db: Db, conversation: Conversation, since: string | null, viewer: "client" | "staff") {
+  const now = new Date();
+  const ids = (await db.select({ id: messages.id }).from(messages).where(eq(messages.conversationId, conversation.id))).map((r) => r.id);
+  const sinceDate = since && !Number.isNaN(Date.parse(since)) ? new Date(since) : null;
+  // Сдвиг на 5 с назад — правка, сохранённая во время прошлого опроса, не потеряется
+  const edited = sinceDate ? await editedViews(db, conversation, new Date(sinceDate.getTime() - 5000), viewer) : [];
+  return { ids, edited, now: now.toISOString() };
+}
+
+async function viewsWhere(db: Db, conversation: Conversation, filter: SQL, viewer: "client" | "staff"): Promise<MessageView[]> {
   const rows = await db
     .select({ m: messages, expertName: experts.name, operatorName: operators.name, photoId: messagePhotos.messageId })
     .from(messages)
     .leftJoin(experts, eq(experts.id, messages.expertId))
     .leftJoin(operators, eq(operators.id, messages.operatorId))
     .leftJoin(messagePhotos, eq(messagePhotos.messageId, messages.id))
-    .where(and(eq(messages.conversationId, conversation.id), gt(messages.id, afterId)))
+    .where(and(eq(messages.conversationId, conversation.id), filter))
     .orderBy(asc(messages.id))
     .limit(500);
   if (rows.length === 0) return [];
@@ -433,6 +459,7 @@ export async function messageViews(
     };
     if (photoId !== null) view.photo = `/api/chat/${conversation.leadId}/photo/${m.id}`;
     if (viewer === "staff" && m.viaTelegram) view.viaTelegram = true;
+    if (m.editedAt) view.editedAt = m.editedAt.toISOString();
     out.push(view);
   }
   return out;
@@ -466,6 +493,8 @@ export interface InboxItem {
   waitingSince: string | null;
   /** Последнее сообщение в чате — наше (не клиента): прочитал ли его клиент. null — последнее от клиента. */
   lastOwnRead: boolean | null;
+  /** Клиент заблокирован (lib/blocks.ts). */
+  blocked: boolean;
 }
 
 /** Все чаты, свежие сверху. Эксперт видит все и может ответить в любом. */
@@ -482,6 +511,7 @@ export async function inbox(db: Db, limit = 300): Promise<InboxItem[]> {
       telegram: sql<boolean>`${leads.telegramUserId} is not null`.mapWith(Boolean),
       geoCountry: leads.geoCountry,
       geoCity: leads.geoCity,
+      blockedAt: leads.blockedAt,
       waitingSince: sql<string | null>`(select min(m.created_at) from ${messages} m where m.conversation_id = ${conversations.id}
         and m.author = 'client' and m.id > coalesce((select max(s.id) from ${messages} s where s.conversation_id = ${conversations.id}
           and s.author in ('expert', 'admin') and s.automatic = false), 0))`,
@@ -509,7 +539,9 @@ export async function inbox(db: Db, limit = 300): Promise<InboxItem[]> {
     telegram: r.telegram,
     geoCountry: r.geoCountry,
     geoCity: r.geoCity,
-    waitingSince: r.waitingSince ? new Date(r.waitingSince).toISOString() : null,
+    // Заблокированному не отвечаем — в «Без ответа» он не нужен
+    waitingSince: r.waitingSince && !r.blockedAt ? new Date(r.waitingSince).toISOString() : null,
+    blocked: r.blockedAt !== null,
     lastOwnRead:
       r.lastAuthor === null || r.lastAuthor === "client"
         ? null
@@ -527,6 +559,8 @@ export async function conversationHeader(db: Db, conversation: Conversation) {
       geoCountry: leads.geoCountry,
       geoCity: leads.geoCity,
       source: leads.source,
+      leadId: leads.id,
+      blocked: sql<boolean>`${leads.blockedAt} is not null`.mapWith(Boolean),
       expertName: experts.name,
       expertArchived: sql<boolean>`${experts.archivedAt} is not null`.mapWith(Boolean),
     })

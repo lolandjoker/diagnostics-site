@@ -16,6 +16,7 @@ import { desc, eq } from "drizzle-orm";
 import type { Db } from "@/db";
 import { conversations, leads, telegramStarts } from "@/db/schema";
 import { type EmojiKey, botEmojiDue, em, emojiId, emojiSetName, setBotEmoji } from "./bot-emoji";
+import { isTelegramBlockedCached } from "./blocks";
 import { isSource } from "./sources";
 
 export interface TelegramConfig {
@@ -103,6 +104,8 @@ export async function botCall(
   body: object,
   file?: { field: string; data: Buffer; name: string; type: string },
 ): Promise<unknown> {
+  // Заблокированный клиент (lib/blocks.ts): бот ему ничего не шлёт
+  if (/^(send|copy|forward)/.test(method) && isTelegramBlockedCached((body as { chat_id?: unknown }).chat_id)) return null;
   try {
     let init: RequestInit;
     if (file) {

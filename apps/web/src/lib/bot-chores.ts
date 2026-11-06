@@ -6,6 +6,7 @@
  *   ещё нет. Оценка — кнопками 1–5, слова — ответом на сообщение (lib/bot-reviews.ts);
  * - личный прогноз на день: предложение подписаться и утренняя рассылка подписчикам (lib/bot-forecast.ts).
  */
+import { loadTelegramBlocks } from "./blocks";
 import { and, eq, exists, gt, inArray, isNotNull, isNull, lt, lte, ne, notExists, or, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { conversations, experts, leads, messages, reviews } from "@/db/schema";
@@ -130,6 +131,7 @@ export async function askReviews(db: Db, now: Date): Promise<number> {
 
 /** Всё плановое разом; ошибки — в лог, следующая попытка через минуту. */
 export async function runBotChores(db: Db, now = new Date()): Promise<void> {
+  await loadTelegramBlocks(db).catch(() => {});
   for (const job of [remindUnread, askReviews, askForecast, sendForecasts]) {
     try {
       await job(db, now);

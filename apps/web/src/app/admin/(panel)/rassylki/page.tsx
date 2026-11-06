@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getDb } from "@/db";
 import { isAdmin } from "@/lib/admin-auth";
-import { BROADCAST_GAP_MS, MAX_BROADCAST_LENGTH, broadcastRecipients, listBroadcasts } from "@/lib/broadcasts";
+import { AUDIENCES, type Audience, BROADCAST_GAP_MS, MAX_BROADCAST_LENGTH, audienceCounts, listBroadcasts } from "@/lib/broadcasts";
 import { telegramConfig } from "@/lib/telegram";
 import { ActionForm } from "../../ActionForm";
 import { broadcastAction } from "../../actions";
@@ -23,7 +23,7 @@ const STALLED_MS = 60 * 60 * 1000;
 export default async function BroadcastsPage() {
   if (!(await isAdmin())) redirect("/admin");
   const db = await getDb();
-  const [recipients, history] = await Promise.all([broadcastRecipients(db), listBroadcasts(db)]);
+  const [counts, history] = await Promise.all([audienceCounts(db), listBroadcasts(db)]);
   const now = Date.now();
   const last = history[0];
   const recent = last && now - last.createdAt.getTime() < BROADCAST_GAP_MS;
@@ -32,8 +32,7 @@ export default async function BroadcastsPage() {
     <>
       <h1>Рассылки в Telegram-бот</h1>
       <p className="muted">
-        Сообщение получат все, кто подключил бота: сейчас это <b>{recipients.length}</b>. Внизу каждой рассылки бот
-        добавляет «Отключить сообщения — /stop». Жирный текст — **так**. Сначала отправьте пробу себе: впишите свой
+        Подключили бота: <b>{counts.all}</b>. Внизу каждой рассылки бот добавляет «Отключить сообщения — /stop». Жирный текст — **так**. Сначала отправьте пробу себе: впишите свой
         Telegram ID (узнать его можно у @userinfobot).
       </p>
       <p className="muted">
@@ -48,6 +47,17 @@ export default async function BroadcastsPage() {
       )}
 
       <ActionForm action={broadcastAction}>
+        <fieldset className="audience">
+          <legend>Кому</legend>
+          {(Object.keys(AUDIENCES) as Audience[]).map((a) => (
+            <label key={a} className="check">
+              <input type="radio" name="audience" value={a} defaultChecked={a === "all"} />
+              <span>
+                {AUDIENCES[a]} — <b>{counts[a]}</b>
+              </span>
+            </label>
+          ))}
+        </fieldset>
         <label className="field">
           <span>Текст (до {MAX_BROADCAST_LENGTH} символов)</span>
           <textarea name="body" rows={8} maxLength={MAX_BROADCAST_LENGTH} required />
@@ -72,7 +82,7 @@ export default async function BroadcastsPage() {
         </label>
         <label className="check">
           <input name="confirm" type="checkbox" />
-          <span>Отправить всем ({recipients.length}) — если ID для пробы пустой</span>
+          <span>Отправить выбранным — если ID для пробы пустой</span>
         </label>
         <button className="button">Отправить</button>
       </ActionForm>
@@ -85,6 +95,7 @@ export default async function BroadcastsPage() {
               <thead>
                 <tr>
                   <th>Когда</th>
+                  <th>Кому</th>
                   <th>Текст</th>
                   <th>Получателей</th>
                   <th>Дошло</th>
@@ -96,6 +107,7 @@ export default async function BroadcastsPage() {
                 {history.map((b) => (
                   <tr key={b.id}>
                     <td>{when.format(b.createdAt)}</td>
+                    <td>{b.audience === "silent" ? "не ответили" : b.audience === "never" ? "не писали" : "все"}</td>
                     <td>{b.body.length > 120 ? `${b.body.slice(0, 120)}…` : b.body}</td>
                     <td>{b.total}</td>
                     <td>{b.sent}</td>

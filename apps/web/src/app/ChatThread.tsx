@@ -143,6 +143,7 @@ export function ChatThread({
   typingUrl,
   typingName,
   receipts = "own",
+  manageUrl,
 }: {
   /** GET ?after= и POST — один адрес. */
   url: string;
@@ -181,6 +182,11 @@ export function ChatThread({
    * автоматические): прочитано, если клиент открывал чат после сообщения или ответил после него (в том числе из Telegram).
    */
   receipts?: "own" | "staff";
+  /**
+   * Админ и операторы: можно исправить и удалить сообщение — `${manageUrl}/<id>` (PATCH { body } / DELETE).
+   * Исправить — только наши сообщения (эксперт, админ/оператор), удалить — любое.
+   */
+  manageUrl?: string;
 }) {
   const [items, setItems] = useState<MessageView[]>([]);
   const [typing, setTyping] = useState(false);
@@ -196,6 +202,15 @@ export function ChatThread({
   const [telegramConnected, setTelegramConnected] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const lastId = useRef(0);
+  /** Время сервера с прошлого опроса — сервер пришлёт сообщения, исправленные после него. */
+  const since = useRef<string | null>(null);
+  /** Меню у сообщения (админ/оператор): какое открыто, правка, подтверждение удаления. */
+  const [menuFor, setMenuFor] = useState<number | null>(null);
+  const [editing, setEditing] = useState<{ id: number; text: string } | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
+  const [managing, setManaging] = useState(false);
+  /** Клиента заблокировали — писать нельзя. */
+  const [blocked, setBlocked] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
   /** Человек внизу переписки — догрузившееся фото не должно утащить последние сообщения из вида. */
   const atBottom = useRef(true);
@@ -205,7 +220,8 @@ export function ChatThread({
   const poll = useCallback(async () => {
     try {
       // Человек не смотрит на чат — сообщения не считаются прочитанными (и клиенту из Telegram придёт уведомление)
-      const next = withParam(url, "after", String(lastId.current));
+      const after = withParam(url, "after", String(lastId.current));
+      const next = since.current ? withParam(after, "since", since.current) : after;
       const res = await fetch(pageAway() ? withParam(next, "hidden", "1") : next, { cache: "no-store" });
       if (!res.ok) return;
       const data = (await res.json()) as {
@@ -214,7 +230,13 @@ export function ChatThread({
         typing?: boolean;
         readUpTo?: string | null;
         telegramConnected?: boolean;
+        ids?: number[];
+        edited?: MessageView[];
+        now?: string;
+        blocked?: boolean;
       };
+      setBlocked(data.blocked === true);
+      if (data.now) since.current = data.now;
       if (data.telegramConnected) {
         setTelegramConnected(true);
         setInviteOpen(false);
@@ -222,11 +244,17 @@ export function ChatThread({
       if (data.expertStatus) setStatus(data.expertStatus);
       if (data.readUpTo !== undefined) setReadUpTo(data.readUpTo);
       setTyping(data.typing === true);
-      if (data.messages.length > 0) {
-        lastId.current = data.messages.at(-1)?.id ?? lastId.current;
+      if (data.messages.length > 0) lastId.current = data.messages.at(-1)?.id ?? lastId.current;
+      const alive = data.ids ? new Set(data.ids) : null;
+      const edited = new Map((data.edited ?? []).map((m) => [m.id, m]));
+      if (data.messages.length > 0 || edited.size > 0 || alive) {
         setItems((prev) => {
           const known = new Set(prev.map((m) => m.id));
-          return [...prev, ...data.messages.filter((m) => !known.has(m.id))];
+          let next = [...prev, ...data.messages.filter((m) => !known.has(m.id))];
+          // Удалённые пропадают, исправленные — с новым текстом
+          if (alive && next.some((m) => !alive.has(m.id))) next = next.filter((m) => alive.has(m.id));
+          if (edited.size > 0) next = next.map((m) => edited.get(m.id) ?? m);
+          return next.length === prev.length && next.every((m, i) => m === prev[i]) ? prev : next;
         });
       }
     } catch {
@@ -336,6 +364,129 @@ export function ChatThread({
     }
   }
 
+  async function manage(id: number, method: "PATCH" | "DELETE", body?: string) {
+    if (!manageUrl || managing) return;
+    setManaging(true);
+    setError(null);
+    try {
+      const res = await fetch(`${manageUrl}/${id}`, {
+        method,
+        ...(method === "PATCH" && { headers: { "Content-Type": "application/json" }, body: JSON.stringify({ body }) }),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        setError(data.error ?? "Не получилось");
+        return;
+      }
+      setItems((prev) =>
+        method === "DELETE"
+          ? prev.filter((m) => m.id !== id)
+          : prev.map((m) => (m.id === id ? { ...m, body: (body ?? "").trim(), editedAt: new Date().toISOString() } : m)),
+      );
+      setEditing(null);
+      setConfirmDelete(null);
+      setMenuFor(null);
+    } catch {
+      setError("Нет связи с сервером");
+    } finally {
+      setManaging(false);
+    }
+  }
+
+  const canEdit = (m: MessageView) => m.author === "expert" || m.author === "admin";
+
+  /** Кнопка «⋯» и меню у сообщения — только админу и операторам. */
+  const messageMenu = (m: MessageView) => {
+    if (!manageUrl) return null;
+    const open = menuFor === m.id;
+    return (
+      <div className={open ? "msg-menu is-open" : "msg-menu"}>
+        <button
+          type="button"
+          className="msg-menu__more"
+          aria-label="Действия с сообщением"
+          aria-expanded={open}
+          onClick={() => {
+            setMenuFor(open ? null : m.id);
+            setConfirmDelete(null);
+          }}
+        >
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true">
+            <circle cx="5" cy="12" r="1.8" />
+            <circle cx="12" cy="12" r="1.8" />
+            <circle cx="19" cy="12" r="1.8" />
+          </svg>
+        </button>
+        {open &&
+          (confirmDelete === m.id ? (
+            <div className="msg-menu__bar" role="group" aria-label="Удалить сообщение">
+              <span>Удалить у всех?</span>
+              <button type="button" className="msg-menu__danger" disabled={managing} onClick={() => void manage(m.id, "DELETE")}>
+                Удалить
+              </button>
+              <button type="button" onClick={() => setConfirmDelete(null)}>
+                Отмена
+              </button>
+            </div>
+          ) : (
+            <div className="msg-menu__bar" role="group" aria-label="Действия">
+              {canEdit(m) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditing({ id: m.id, text: m.body });
+                    setMenuFor(null);
+                  }}
+                >
+                  Изменить
+                </button>
+              )}
+              <button type="button" className="msg-menu__danger" onClick={() => setConfirmDelete(m.id)}>
+                Удалить
+              </button>
+            </div>
+          ))}
+      </div>
+    );
+  };
+
+  /** Текст сообщения или поле правки. */
+  const messageBody = (m: MessageView) => {
+    if (editing?.id !== m.id) return m.body ? <div className="text">{m.body}</div> : null;
+    return (
+      <form
+        className="msg-edit"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void manage(m.id, "PATCH", editing.text);
+        }}
+      >
+        <textarea
+          autoFocus
+          value={editing.text}
+          maxLength={4000}
+          rows={Math.min(8, Math.max(2, Math.ceil(editing.text.length / 40)))}
+          onChange={(e) => setEditing({ id: m.id, text: e.target.value })}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setEditing(null);
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              e.currentTarget.form?.requestSubmit();
+            }
+          }}
+        />
+        <div className="msg-edit__actions">
+          <button type="button" onClick={() => setEditing(null)}>
+            Отмена
+          </button>
+          <button type="submit" className="msg-edit__save" disabled={managing}>
+            Сохранить
+          </button>
+        </div>
+      </form>
+    );
+  };
+
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     if (text.trim() === "" && !photo) return;
@@ -436,6 +587,7 @@ export function ChatThread({
                     {time(m.createdAt)}
                     {ticksFor(m) && <ReadTicks read={isRead(m)} />}
                   </time>
+                  {messageMenu(m)}
                 </article>
               ) : (
                 <div className={`chat__row ${own ? "chat__row--own" : ""} ${first ? "chat__row--first" : ""}`}>
@@ -458,8 +610,9 @@ export function ChatThread({
                         <img src={m.photo} alt="Фото" loading="lazy" onLoad={keepAtBottom} />
                       </button>
                     )}
-                    {m.body && <div className="text">{m.body}</div>}
+                    {messageBody(m)}
                     <time className="msg__time" dateTime={m.createdAt}>
+                      {m.editedAt && <span className="msg__edited">изменено</span>}
                       {m.viaTelegram && (
                         <span className="msg__via" title="Клиент ответил из Telegram">
                           <TelegramIcon size={12} /> из Telegram
@@ -468,6 +621,7 @@ export function ChatThread({
                       {time(m.createdAt)}
                       {ticksFor(m) && <ReadTicks read={isRead(m)} />}
                     </time>
+                    {messageMenu(m)}
                   </div>
                 </div>
               )}
@@ -503,8 +657,13 @@ export function ChatThread({
         </p>
       )}
 
-      {prompt}
-      {suggestions.length > 0 && !items.some(isOwn) && (
+      {blocked && (
+        <p className="chat__blocked" role="status">
+          Переписка недоступна.
+        </p>
+      )}
+      {!blocked && prompt}
+      {!blocked && suggestions.length > 0 && !items.some(isOwn) && (
         <div className="chat__suggestions" aria-label="Можно спросить">
           {suggestions.map((s) => (
             <button key={s} type="button" className="chat__suggestion" disabled={sending} onClick={() => void send({ body: s })}>
@@ -513,7 +672,7 @@ export function ChatThread({
           ))}
         </div>
       )}
-      <form className="chat__form" onSubmit={onSubmit}>
+      <form className="chat__form" onSubmit={onSubmit} hidden={blocked}>
         {photo && (
           <div className="chat__attach">
             <img src={photo.preview} alt="Фото к отправке" />
