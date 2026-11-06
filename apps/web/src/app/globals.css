@@ -5394,3 +5394,24 @@ body.no-scroll {
   align-items: flex-start;
   justify-content: flex-start;
 }
+
+/* Рассылка: одна кнопка — личный раздел или своя ссылка */
+.button-picker {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+
+.button-picker legend {
+  padding: 0 4px;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.button-picker > p {
+  margin: 0;
+  font-size: 0.82rem;
+}

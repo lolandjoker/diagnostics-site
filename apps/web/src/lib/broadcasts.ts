@@ -10,6 +10,7 @@ import { desc, eq, inArray, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { broadcasts, conversations, leads } from "@/db/schema";
 import { em } from "./bot-emoji";
+import { PERSONAL_PAGES, type PersonalPage, isPersonalPage } from "./broadcast-pages";
 import { type BotButton, type TelegramConfig, ensureBotEmoji, esc, sendMessage } from "./telegram";
 
 export const MAX_BROADCAST_LENGTH = 3500;
@@ -29,18 +30,8 @@ export type Audience = keyof typeof AUDIENCES;
 
 export const isAudience = (v: unknown): v is Audience => typeof v === "string" && Object.hasOwn(AUDIENCES, v);
 
-/** Личная кнопка: куда ведёт и надпись по умолчанию. chat — последний чат человека (нет чата — выбор эксперта). */
-export const PERSONAL_PAGES = {
-  den: { label: "«Мой день»", button: "Открыть «Мой день»" },
-  arhetip: { label: "Тест «Ваш архетип»", button: "Пройти тест «Ваш архетип»" },
-  sovmestimost: { label: "Совместимость пары", button: "Узнать совместимость" },
-  "da-net": { label: "«Да или нет»", button: "Задать вопрос картам" },
-  chat: { label: "Чат с экспертом", button: "Открыть чат с экспертом" },
-} as const;
-
-export type PersonalPage = keyof typeof PERSONAL_PAGES;
-
-export const isPersonalPage = (v: unknown): v is PersonalPage => typeof v === "string" && Object.hasOwn(PERSONAL_PAGES, v);
+// Личная кнопка: куда ведёт и надпись по умолчанию (chat — последний чат человека, нет чата — выбор эксперта)
+export { PERSONAL_PAGES, type PersonalPage, isPersonalPage };
 
 export interface BroadcastInput {
   /** Кому; по умолчанию — всем. */
