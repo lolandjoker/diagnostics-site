@@ -14,7 +14,15 @@ import { Avatar } from "./Avatar";
 import { InboxList } from "./InboxList";
 import { GeoTag, TelegramBadge } from "./StaffBits";
 
-const ListHref = createContext<string | null>(null);
+/** Куда «назад» (список) и база адресов чатов — для шапки открытого чата. */
+const Nav = createContext<{ listHref: string; linkBase: string } | null>(null);
+
+/** Чат клиента в шапке: с каким экспертом, где разбор. */
+export interface HeadChat {
+  id: string;
+  expertName: string;
+  diagnosis: boolean;
+}
 
 export function StaffMessenger({
   inboxUrl,
@@ -35,10 +43,16 @@ export function StaffMessenger({
   const prefix = `${linkBase}/`;
   const currentId = pathname.startsWith(prefix) ? pathname.slice(prefix.length).split("/")[0] : undefined;
   return (
-    <ListHref.Provider value={listHref}>
+    <Nav.Provider value={{ listHref, linkBase }}>
       <div className={currentId ? "staff-messenger staff-messenger--open" : "staff-messenger"}>
         <aside className="staff-messenger__list">
-          <InboxList url={inboxUrl} linkBase={linkBase} {...(meId !== undefined && { meId })} {...(currentId && { currentId })} />
+          <InboxList
+            url={inboxUrl}
+            searchUrl={inboxUrl.replace(/inbox$/, "search")}
+            linkBase={linkBase}
+            {...(meId !== undefined && { meId })}
+            {...(currentId && { currentId })}
+          />
         </aside>
         <section className="staff-messenger__chat">
           <div className="staff-messenger__pane" key={currentId ?? "empty"}>
@@ -46,7 +60,7 @@ export function StaffMessenger({
           </div>
         </section>
       </div>
-    </ListHref.Provider>
+    </Nav.Provider>
   );
 }
 
@@ -71,6 +85,8 @@ export function StaffChatHead({
   info,
   blocked = false,
   blockUrl,
+  chats = [],
+  currentId,
 }: {
   name: string;
   /** ГГГГ-ММ-ДД */
@@ -87,8 +103,15 @@ export function StaffChatHead({
   blocked?: boolean;
   /** Админ и операторы: блокировать / разблокировать (POST / DELETE). */
   blockUrl?: string;
+  /** Все чаты клиента (по времени начала) — если их больше одного, показываем, где он был и где получил разбор. */
+  chats?: HeadChat[];
+  /** Открытый чат. */
+  currentId?: string;
 }) {
-  const listHref = useContext(ListHref);
+  const nav = useContext(Nav);
+  const listHref = nav?.listHref;
+  const shortName = (n: string) => n.split("|")[0]!.trim();
+  const here = chats.findIndex((c) => c.id === currentId);
   return (
     <>
       <header className="staff-chat__head">
@@ -127,6 +150,25 @@ export function StaffChatHead({
           </details>
         )}
       </header>
+      {chats.length > 1 && (
+        <nav className="staff-chat__chats" aria-label="Чаты клиента">
+          <span className="muted">
+            {here > 0 ? "Перешёл сюда от другого эксперта. Все чаты клиента:" : "Чаты клиента:"}
+          </span>
+          {chats.map((c) =>
+            c.id === currentId ? (
+              <span key={c.id} className="staff-chat__chat is-current">
+                {shortName(c.expertName)} · здесь{c.diagnosis ? " · разбор" : ""}
+              </span>
+            ) : (
+              <Link key={c.id} className="staff-chat__chat" href={`${nav?.linkBase ?? ""}/${c.id}`}>
+                {shortName(c.expertName)}
+                {c.diagnosis ? " · разбор" : ""}
+              </Link>
+            ),
+          )}
+        </nav>
+      )}
       {blocked && (
         <p className="notice notice--error staff-chat__note">
           Клиент заблокирован: не может писать на сайте и в Telegram, бот ему ничего не отправляет.
