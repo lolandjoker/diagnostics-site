@@ -123,7 +123,10 @@ describe("чаты по экспертам, переходы и поиск", () 
     await setExpertOnline(db, e2.id, true, new Date());
     const second = await startConversation(db, first.lead, e2.id, new Date(Date.now() + 1000));
     if (!second.ok) throw new Error(second.error);
+    // Разбор пришёл в первый чат; во втором отметка тоже стоит, но текста нет — это не «разбор здесь»
     await db.update(conversations).set({ fullTextSentAt: new Date(), createdAt: new Date(Date.now() - 60_000) }).where(eq(conversations.id, first.chat.id));
+    await db.update(conversations).set({ fullTextSentAt: new Date() }).where(eq(conversations.id, second.conversation.id));
+    await postMessage(db, first.chat.id, { author: "system", body: "Подробный разбор" });
     await postMessage(db, second.conversation.id, { author: "client", body: "Здравствуйте, Ольга" });
 
     const list = await inbox(db);

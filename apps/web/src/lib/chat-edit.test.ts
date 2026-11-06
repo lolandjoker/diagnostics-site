@@ -100,7 +100,7 @@ describe("правка и удаление сообщений", () => {
     const id = await post(c.id, { author: "admin", body: "Опечатка" });
     // Сообщение само уходит в Telegram (клиент не на сайте) — ждём отправку
     const sentRows = async () => db.select().from(telegramMessages).where(eq(telegramMessages.siteMessageId, id));
-    for (let i = 0; i < 50 && (await sentRows()).length === 0; i++) await new Promise((r) => setTimeout(r, 100));
+    for (let i = 0; i < 200 && (await sentRows()).length === 0; i++) await new Promise((r) => setTimeout(r, 100));
     const before = (await sentRows()).map((r) => r.messageId);
     expect(before.length).toBeGreaterThan(0);
     fetchMock.mockClear();
@@ -125,7 +125,9 @@ describe("правка и удаление сообщений", () => {
       if (method === "deleteMessage") return new Response(JSON.stringify({ ok: false, description: "message can't be deleted" }), { status: 400 });
       return new Response(JSON.stringify({ ok: true, result: method === "sendMessage" ? { message_id: ++nextId } : true }), { status: 200 });
     });
-    for (let i = 0; i < 30; i++) await new Promise((r) => setTimeout(r, 50)); // авто-отправка нового сообщения
+    // Ждём авто-отправку нового сообщения, затем подменяем её «старым» сообщением бота
+    const oldRows = async () => db.select().from(telegramMessages).where(eq(telegramMessages.siteMessageId, old));
+    for (let i = 0; i < 200 && (await oldRows()).every((r) => r.messageId === 77); i++) await new Promise((r) => setTimeout(r, 100));
     await db.delete(telegramMessages).where(eq(telegramMessages.siteMessageId, old));
     await db.insert(telegramMessages).values({ chatId: TG, messageId: 77, conversationId: c.id, siteMessageId: old, withButtons: false });
     await db.update(messages).set({ body: "Старое, исправленное", editedAt: new Date() }).where(eq(messages.id, old));

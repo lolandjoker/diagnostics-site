@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { getDb } from "@/db";
 import { isAdmin } from "@/lib/admin-auth";
 import { chatsOfLeads, conversationHeader, getConversation } from "@/lib/chat";
+import { clubStatus } from "@/lib/club-status";
 import { getTexts } from "@/lib/texts";
 import { CallPanel } from "../../../../CallPanel";
 import { ChatThread } from "../../../../ChatThread";
@@ -15,9 +16,10 @@ export default async function AdminChatPage(props: PageProps<"/admin/chats/[id]"
   const db = await getDb();
   const conversation = await getConversation(db, id);
   if (!conversation) notFound();
-  const [header, leadChats, t] = await Promise.all([
+  const [header, leadChats, club, t] = await Promise.all([
     conversationHeader(db, conversation),
     chatsOfLeads(db, [conversation.leadId]),
+    clubStatus(db, conversation.leadId),
     getTexts(db, ["chat.placeholder", "chat.send", "chat.admin_name"]),
   ]);
   return (
@@ -31,6 +33,7 @@ export default async function AdminChatPage(props: PageProps<"/admin/chats/[id]"
         geoCity={header?.geoCity ?? null}
         chats={(leadChats.get(conversation.leadId) ?? []).map((c) => ({ id: c.id, expertName: c.expertName, diagnosis: c.diagnosis }))}
         currentId={conversation.id}
+        club={club}
         blocked={header?.blocked ?? false}
         blockUrl={`/admin/api/chat/${conversation.id}/block`}
         warning={

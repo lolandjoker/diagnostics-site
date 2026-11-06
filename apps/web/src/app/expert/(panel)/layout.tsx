@@ -1,3 +1,4 @@
+import { cookies } from "next/headers";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { getDb } from "@/db";
@@ -5,6 +6,8 @@ import { requireExpert } from "@/lib/expert-auth";
 import { staffTelegramStatus } from "@/lib/staff-telegram";
 import { AdminNav } from "../../AdminNav";
 import { StaffTelegramLink } from "../../StaffTelegramLink";
+import { ThemePicker } from "../../ThemePicker";
+import { STAFF_THEME_COOKIE, isStaffTheme } from "@/lib/staff-theme";
 import { expertStatus } from "@/lib/experts";
 import type { ExpertStatus } from "@/lib/experts";
 import { expertLogout, setMyStatus } from "../actions";
@@ -21,8 +24,10 @@ export default async function ExpertLayout({ children }: { children: ReactNode }
     ["busy", "Занят"],
     ["offline", "Не в сети"],
   ];
+  const savedTheme = (await cookies()).get(STAFF_THEME_COOKIE)?.value;
+  const theme = isStaffTheme(savedTheme) ? savedTheme : "light";
   return (
-    <div className="admin">
+    <div className="admin" data-theme={theme}>
       <header className="admin__header">
         <AdminNav
           items={[
@@ -34,6 +39,7 @@ export default async function ExpertLayout({ children }: { children: ReactNode }
           who={expert.name}
         />
         <div className="row">
+          <ThemePicker current={theme} />
           <StaffTelegramLink kind="expert" connected={tg.connected} name={tg.name} />
           <form action={setMyStatus} className="status-switch" aria-label="Мой статус">
             {options.map(([status, label]) => (
