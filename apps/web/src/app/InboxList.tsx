@@ -2,7 +2,9 @@
 
 /**
  * Список чатов для сотрудников — слева в мессенджере (StaffMessenger).
- * - Эксперт: «Все эксперты» или один (фильтрует сервер — видны и старые чаты эксперта); выбор запоминается.
+ * - Эксперты — как аккаунты в Telegram: слева колонка с фото (на телефоне — строка сверху), точка «в сети»,
+ *   непрочитанные. Выбрали эксперта — «вошли в его аккаунт»: только его чаты (фильтрует сервер — видны и старые),
+ *   ответы клиент видит от его имени. «Все» — все чаты разом. Выбор запоминается.
  * - Папки: «Мои» (у эксперта) / «Все» / «Без ответа» / «Непрочитанные». «Без ответа» — клиент написал, а живого
  *   ответа ещё не было; там видно, сколько он ждёт (старые ожидания сверху).
  * - Поиск: по имени — сразу в списке; от 2 символов — ещё и по тексту сообщений, как в Telegram
@@ -177,29 +179,66 @@ export function InboxList({
     { key: "waiting", label: "Без ответа", n: count("waiting"), alert: true },
     { key: "unread", label: "Непрочитанные", n: count("unread") },
   ];
-  const totalChats = experts.reduce((s, e) => s + e.chats, 0);
+  const totalUnread = experts.reduce((s, e) => s + e.unread, 0);
+  const pickExpert = (v: number | null) => {
+    setExpert(v);
+    remember(EXPERT_KEY, v ? String(v) : "");
+  };
+  const account = expert !== null ? experts.find((e) => e.id === expert) : undefined;
 
   return (
-    <nav className="inbox" aria-label="Чаты">
-      <div className="inbox__tools">
-        {experts.length > 1 && (
-          <select
-            className="inbox__expert-pick"
-            value={expert ?? ""}
-            aria-label="Эксперт"
-            onChange={(e) => {
-              const v = Number(e.target.value) || null;
-              setExpert(v);
-              remember(EXPERT_KEY, v ? String(v) : "");
-            }}
+    <nav className={experts.length > 1 ? "inbox inbox--rail" : "inbox"} aria-label="Чаты">
+      {experts.length > 1 && (
+        <div className="xrail" role="tablist" aria-label="Эксперты">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={expert === null}
+            className={expert === null ? "xrail__item is-current" : "xrail__item"}
+            onClick={() => pickExpert(null)}
+            title="Все чаты"
           >
-            <option value="">Все эксперты · {totalChats}</option>
-            {experts.map((e) => (
-              <option key={e.id} value={e.id}>
-                {shortName(e.name)} · {e.chats}
-              </option>
-            ))}
-          </select>
+            <span className="xrail__all" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                <rect x="4" y="4" width="7" height="7" rx="2" />
+                <rect x="13" y="4" width="7" height="7" rx="2" />
+                <rect x="4" y="13" width="7" height="7" rx="2" />
+                <rect x="13" y="13" width="7" height="7" rx="2" />
+              </svg>
+            </span>
+            {totalUnread > 0 && <span className="xrail__badge">{totalUnread > 99 ? "99+" : totalUnread}</span>}
+            <span className="xrail__name">Все</span>
+          </button>
+          {experts.map((e) => (
+            <button
+              key={e.id}
+              type="button"
+              role="tab"
+              aria-selected={expert === e.id}
+              className={expert === e.id ? "xrail__item is-current" : "xrail__item"}
+              onClick={() => pickExpert(e.id)}
+              title={`${e.name} · ${e.chats} чатов`}
+            >
+              <Avatar name={e.name} photo={e.photo} size={40} online={e.status !== "offline"} busy={e.status === "busy"} />
+              {e.unread > 0 && <span className="xrail__badge">{e.unread > 99 ? "99+" : e.unread}</span>}
+              <span className="xrail__name">{shortName(e.name).split(" ")[0]}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="inbox__main">
+      <div className="inbox__tools">
+        {account && (
+          <div className="inbox__account">
+            <Avatar name={account.name} photo={account.photo} size={34} online={account.status !== "offline"} busy={account.status === "busy"} />
+            <span className="inbox__account-text">
+              <b>{shortName(account.name)}</b>
+              <small>Вы в аккаунте эксперта — клиенты видят ответы от его имени</small>
+            </span>
+            <button type="button" className="inbox__account-exit" onClick={() => pickExpert(null)} aria-label="Ко всем чатам" title="Ко всем чатам">
+              ×
+            </button>
+          </div>
         )}
         <input
           className="inbox__search"
@@ -335,6 +374,7 @@ export function InboxList({
           )}
         </div>
       )}
+      </div>
     </nav>
   );
 }

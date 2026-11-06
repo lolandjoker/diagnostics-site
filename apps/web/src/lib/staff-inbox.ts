@@ -6,10 +6,11 @@
  * - searchMessages: поиск по тексту сообщений, как в Telegram (от SEARCH_MIN символов, не больше SEARCH_LIMIT
  *   результатов, свежие сверху). На Postgres ускоряется trigram-индексом (миграция 0031), в PGlite — без него.
  */
-import { and, count, desc, eq, ilike, isNull } from "drizzle-orm";
+import { and, count, desc, eq, ilike, isNull, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { conversations, experts, leads, messages } from "@/db/schema";
 import { type InboxItem, deliverDueFullTexts, inbox } from "./chat";
+import { type ExpertStatus, expertPhotoUrls, expertStatus } from "./experts";
 
 export const INBOX_CACHE_MS = 2000;
 export const SEARCH_MIN = 2;
@@ -50,19 +51,54 @@ export interface InboxExpert {
   id: number;
   name: string;
   chats: number;
+  /** Непрочитанные сообщения клиентов во всех чатах эксперта. */
+  unread: number;
+  photo: string | null;
+  status: ExpertStatus;
 }
 
-/** Эксперты, у которых есть чаты (для переключателя), — больше чатов выше. */
-export async function inboxExperts(db: Db): Promise<InboxExpert[]> {
-  const rows = await db
-    .select({ id: experts.id, name: experts.name, chats: count(conversations.id) })
-    .from(experts)
-    .innerJoin(conversations, eq(conversations.expertId, experts.id))
-    .where(isNull(experts.deletedAt))
-    .groupBy(experts.id, experts.name)
-    .orderBy(desc(count(conversations.id)));
-  return rows.map((r) => ({ id: r.id, name: r.name, chats: Number(r.chats) }));
+/**
+ * Эксперты, у которых есть чаты (для переключателя «аккаунтов»), — больше чатов выше: фото, статус, непрочитанные.
+ * Общий кеш на INBOX_CACHE_MS, как и список чатов.
+ */
+export function inboxExperts(db: Db, now = Date.now()): Promise<InboxExpert[]> {
+  const hit = expertsCache.at;
+  if (expertsCache.data && now - hit < INBOX_CACHE_MS) return expertsCache.data;
+  const data = (async () => {
+    const unread = sql<number>`coalesce(sum((select count(*) from ${messages} m where m.conversation_id = ${conversations.id}
+      and m.author = 'client' and (${conversations.expertReadAt} is null or m.created_at > ${conversations.expertReadAt}))), 0)`.mapWith(Number);
+    const [rows, photos] = await Promise.all([
+      db
+        .select({ e: experts, chats: count(conversations.id), unread })
+        .from(experts)
+        .innerJoin(conversations, eq(conversations.expertId, experts.id))
+        .where(isNull(experts.deletedAt))
+        .groupBy(experts.id)
+        .orderBy(desc(count(conversations.id))),
+      expertPhotoUrls(db),
+    ]);
+    const at = new Date(now);
+    return rows.map((r) => ({
+      id: r.e.id,
+      name: r.e.name,
+      chats: Number(r.chats),
+      unread: r.unread,
+      photo: photos.get(r.e.id) ?? null,
+      status: expertStatus(r.e, at),
+    }));
+  })();
+  expertsCache.at = now;
+  expertsCache.data = data;
+  data.catch(() => {
+    expertsCache.data = null;
+  });
+  return data;
 }
+
+const expertsCache = ((globalThis as unknown as { __diagInboxExperts?: { at: number; data: Promise<InboxExpert[]> | null } }).__diagInboxExperts ??= {
+  at: 0,
+  data: null,
+});
 
 export interface SearchHit {
   conversationId: string;
