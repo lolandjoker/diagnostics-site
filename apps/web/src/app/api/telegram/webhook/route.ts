@@ -14,6 +14,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { after } from "next/server";
 import { getDb } from "@/db";
+import { isTelegramBlocked } from "@/lib/blocks";
 import { enqueue, sendLatestToTelegram, warmExpertCards } from "@/lib/bot-delivery";
 import { handleExpertCallback, showExperts } from "@/lib/bot-experts";
 import { handleForecastCallback, joinClub, stopForecast, toggleForecast } from "@/lib/bot-forecast";
@@ -136,6 +137,8 @@ export async function POST(req: Request) {
   const userId = callback?.from?.id ?? message?.from?.id;
   const chatId = message?.chat?.id;
 
+  // Заблокированный клиент: бот молчит и ничего не принимает (lib/blocks.ts)
+  if (typeof userId === "number" && (await isTelegramBlocked(await getDb(), userId))) return new Response(null, { status: 200 });
   warmUp();
   // enqueue сам подгружает свои эмодзи бота и пишет ошибки в лог
   if (callback && typeof userId === "number") {

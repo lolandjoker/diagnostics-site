@@ -1,12 +1,13 @@
 /**
- * Рассылки в Telegram-бот из админки — всем, кто подключил бота (заявка привязана к Telegram и не отключена
- * командой /stop). Отправка идёт в фоне, не быстрее BROADCAST_PER_SECOND сообщений в секунду (лимит Telegram —
+ * Рассылки в Telegram-бот из админки — тем, кто подключил бота (заявка привязана к Telegram и не отключена
+ * командой /stop): всем или только тем, кто не ответил нам в чате / ни разу не писал (AUDIENCES).
+ * Заблокированных клиентов (lib/blocks.ts) в рассылке нет. Отправка идёт в фоне, не быстрее BROADCAST_PER_SECOND сообщений в секунду (лимит Telegram —
  * около 30): страница показывает, сколько ушло. Внизу каждой рассылки — «Отключить сообщения — /stop».
  * Разметка текста: **жирный**. Заблокировавшим бота сообщение не доходит — оно в «не дошло».
  */
-import { desc, isNotNull, sql } from "drizzle-orm";
+import { desc, sql } from "drizzle-orm";
 import type { Db } from "@/db";
-import { broadcasts, leads } from "@/db/schema";
+import { broadcasts } from "@/db/schema";
 import { em } from "./bot-emoji";
 import { type BotButton, type TelegramConfig, ensureBotEmoji, esc, sendMessage } from "./telegram";
 
@@ -17,7 +18,19 @@ export const BROADCAST_GAP_MS = 24 * 60 * 60 * 1000;
 
 export type Broadcast = typeof broadcasts.$inferSelect;
 
+export const AUDIENCES = {
+  all: "Всем, кто подключил Telegram",
+  silent: "Не ответили нам в чате — последнее сообщение наше, клиент молчит",
+  never: "Ни разу не написали в чат",
+} as const;
+
+export type Audience = keyof typeof AUDIENCES;
+
+export const isAudience = (v: unknown): v is Audience => typeof v === "string" && Object.hasOwn(AUDIENCES, v);
+
 export interface BroadcastInput {
+  /** Кому; по умолчанию — всем. */
+  audience?: Audience;
   body: string;
   buttonText: string;
   buttonUrl: string;
@@ -47,10 +60,39 @@ function buttons(input: BroadcastInput): BotButton[] {
   return input.buttonText.trim() ? [{ text: input.buttonText.trim(), url: input.buttonUrl.trim() }] : [];
 }
 
-/** Кому рассылать: все пользователи Telegram с привязанной заявкой (каждый один раз). */
-export async function broadcastRecipients(db: Db): Promise<number[]> {
-  const rows = await db.selectDistinct({ id: leads.telegramUserId }).from(leads).where(isNotNull(leads.telegramUserId));
-  return rows.map((r) => r.id).filter((id): id is number => id !== null);
+/**
+ * Кому рассылать (каждый человек Telegram один раз, по всем его заявкам и чатам):
+ * - all — все с привязанной заявкой;
+ * - silent — писал в чат, но самое последнее сообщение во всех его чатах — наше (эксперт, оператор, авторазбор);
+ * - never — ни одного своего сообщения ни в одном чате.
+ * Заблокированных не берём.
+ */
+export async function broadcastRecipients(db: Db, audience: Audience = "all"): Promise<number[]> {
+  const res = await db.execute<{ tg: number | string }>(sql`
+    with people as (
+      select distinct l.telegram_user_id as tg from leads l
+      where l.telegram_user_id is not null and l.blocked_at is null
+        and not exists (select 1 from telegram_blocks b where b.telegram_user_id = l.telegram_user_id)
+    ),
+    stats as (
+      select p.tg,
+        exists (select 1 from messages m join conversations c on c.id = m.conversation_id join leads l on l.id = c.lead_id
+                where l.telegram_user_id = p.tg and m.author = 'client') as wrote,
+        (select m.author from messages m join conversations c on c.id = m.conversation_id join leads l on l.id = c.lead_id
+         where l.telegram_user_id = p.tg order by m.created_at desc, m.id desc limit 1) as last_author
+      from people p
+    )
+    select tg from stats
+    where ${audience === "silent" ? sql`wrote and last_author <> 'client'` : audience === "never" ? sql`not wrote` : sql`true`}
+    order by tg`);
+  const rows = (Array.isArray(res) ? res : (res as { rows: { tg: number | string }[] }).rows) as { tg: number | string }[];
+  return rows.map((r) => Number(r.tg));
+}
+
+/** Сколько получателей у каждого условия — для формы. */
+export async function audienceCounts(db: Db): Promise<Record<Audience, number>> {
+  const [all, silent, never] = await Promise.all([broadcastRecipients(db, "all"), broadcastRecipients(db, "silent"), broadcastRecipients(db, "never")]);
+  return { all: all.length, silent: silent.length, never: never.length };
 }
 
 export async function listBroadcasts(db: Db, limit = 20): Promise<Broadcast[]> {
@@ -70,10 +112,11 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * посреди рассылки, остаток не уйдёт — в истории она останется незаконченной.
  */
 export async function startBroadcast(db: Db, cfg: TelegramConfig, input: BroadcastInput): Promise<{ id: number; total: number }> {
-  const recipients = await broadcastRecipients(db);
+  const audience = input.audience ?? "all";
+  const recipients = await broadcastRecipients(db, audience);
   const [row] = await db
     .insert(broadcasts)
-    .values({ body: input.body.trim(), buttonText: input.buttonText.trim(), buttonUrl: input.buttonUrl.trim(), total: recipients.length })
+    .values({ body: input.body.trim(), buttonText: input.buttonText.trim(), buttonUrl: input.buttonUrl.trim(), total: recipients.length, audience })
     .returning({ id: broadcasts.id });
   const id = row!.id;
   void runBroadcast(db, cfg, id, recipients, input);

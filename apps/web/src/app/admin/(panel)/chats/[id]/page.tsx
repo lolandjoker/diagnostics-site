@@ -26,6 +26,8 @@ export default async function AdminChatPage(props: PageProps<"/admin/chats/[id]"
         telegram={header?.telegram ?? false}
         geoCountry={header?.geoCountry ?? null}
         geoCity={header?.geoCity ?? null}
+        blocked={header?.blocked ?? false}
+        blockUrl={`/admin/api/chat/${conversation.id}/block`}
         warning={
           header?.expertArchived ? (
             <p className="notice notice--error staff-chat__note">
@@ -48,6 +50,7 @@ export default async function AdminChatPage(props: PageProps<"/admin/chats/[id]"
         typingName={header?.leadName ?? "Клиент"}
         ownAuthors={["admin"]}
         receipts="staff"
+        manageUrl={`/admin/api/chat/${conversation.id}/messages`}
         labels={{ placeholder: t["chat.placeholder"], send: t["chat.send"] }}
         call={
           <CallPanel

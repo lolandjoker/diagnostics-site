@@ -4,7 +4,7 @@
  * &hidden=1 — вкладка свёрнута, не отмечаем.
  */
 import { getDb } from "@/db";
-import { MAX_CHAT_PHOTO_BYTES, deliverDueFullTexts, getConversation, markExpertRead, messageViews, postMessage } from "@/lib/chat";
+import { MAX_CHAT_PHOTO_BYTES, deliverDueFullTexts, getConversation, markExpertRead, messageViews, postMessage, chatSync } from "@/lib/chat";
 import { currentExpert } from "@/lib/expert-auth";
 import { afterParam, jsonError, messagePayload, noStore, sameOrigin } from "@/lib/http";
 import { clearTyping, isTyping } from "@/lib/typing";
@@ -27,6 +27,8 @@ export async function GET(req: Request, ctx: RouteContext<"/expert/api/chat/[id]
       typing: isTyping(conversation.id, "client", new Date()),
       // ✓✓ у своих сообщений — клиент открывал чат после них
       readUpTo: conversation.clientReadAt?.toISOString() ?? null,
+      // Удалённые и исправленные сообщения — без перезагрузки чата
+      ...(await chatSync(db, conversation, new URL(req.url).searchParams.get("since"), "staff")),
     },
     { headers: noStore },
   );

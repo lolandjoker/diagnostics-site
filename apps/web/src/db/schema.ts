@@ -216,6 +216,8 @@ export const leads = pgTable(
      */
     geoCountry: text("geo_country"),
     geoCity: text("geo_city"),
+    /** Клиент заблокирован админом или оператором (lib/blocks.ts): не пишет в чаты, бот ему ничего не шлёт. */
+    blockedAt: timestamp("blocked_at", { withTimezone: true }),
   },
   (t) => [index("leads_telegram_user_idx").on(t.telegramUserId, t.createdAt)],
 );
@@ -367,6 +369,8 @@ export const messages = pgTable(
     automatic: boolean("automatic").notNull().default(false),
     /** Клиент написал это из Telegram-бота, а не на сайте. */
     viaTelegram: boolean("via_telegram").notNull().default(false),
+    /** Админ или оператор исправил текст — когда (клиент видит пометку «изменено»); null — не правили. */
+    editedAt: timestamp("edited_at", { withTimezone: true }),
   },
   (t) => [index("messages_conversation_idx").on(t.conversationId, t.id)],
 );
@@ -393,6 +397,12 @@ export const telegramMessages = pgTable(
   },
   (t) => [primaryKey({ columns: [t.chatId, t.messageId] }), index("telegram_messages_chat_idx").on(t.chatId, t.createdAt)],
 );
+
+/** Заблокированные аккаунты Telegram (lib/blocks.ts): бот их не слушает и ничего им не шлёт, новые заявки — тоже в блоке. */
+export const telegramBlocks = pgTable("telegram_blocks", {
+  telegramUserId: bigint("telegram_user_id", { mode: "number" }).primaryKey(),
+  createdAt: createdAt(),
+});
 
 /**
  * Откуда человек пришёл в бота: ссылка t.me/<бот>?start=<источник> (karta, r1 …). Первое касание —
@@ -511,6 +521,8 @@ export const broadcasts = pgTable("broadcasts", {
   failed: integer("failed").notNull().default(0),
   createdAt: createdAt(),
   finishedAt: timestamp("finished_at", { withTimezone: true }),
+  /** Кому (lib/broadcasts.ts, AUDIENCES): all — все подключившие бота, silent — не ответили нам в чате, never — ни разу не писали. */
+  audience: text("audience").notNull().default("all"),
 });
 
 /** Фото в сообщении чата: JPEG, PNG или WebP, одно на сообщение. */

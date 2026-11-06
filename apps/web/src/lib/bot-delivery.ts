@@ -85,13 +85,14 @@ export async function chatContext(db: Db, cfg: TelegramConfig, conversationId: s
       expertId: conversations.expertId,
       clientReadAt: conversations.clientReadAt,
       archivedAt: experts.archivedAt,
+      blockedAt: leads.blockedAt,
     })
     .from(conversations)
     .innerJoin(leads, eq(leads.id, conversations.leadId))
     .innerJoin(experts, eq(experts.id, conversations.expertId))
     .where(eq(conversations.id, conversationId));
   // Чат с экспертом из архива клиент не видит — и не зовём в него
-  if (!row?.telegramUserId || row.archivedAt) return null;
+  if (!row?.telegramUserId || row.archivedAt || row.blockedAt) return null;
   if (!force && row.clientReadAt && now.getTime() - row.clientReadAt.getTime() < CLIENT_ACTIVE_MS) return null;
   return {
     conversationId,
@@ -438,4 +439,29 @@ export async function botTyping(db: Db, conversationId: string, now = new Date()
   } catch {
     // «печатает…» — не важно, если не дошло
   }
+}
+
+/** Сообщение сайта удалили — убрать его и из Telegram клиента (бот может удалять свои сообщения до 48 часов). */
+export async function deleteFromTelegram(db: Db, siteMessageId: number): Promise<number> {
+  const cfg = telegramConfig();
+  if (!cfg) return 0;
+  const rows = await db
+    .delete(telegramMessages)
+    .where(eq(telegramMessages.siteMessageId, siteMessageId))
+    .returning({ chatId: telegramMessages.chatId, messageId: telegramMessages.messageId });
+  for (const r of rows) await botApi(cfg.token, "deleteMessage", { chat_id: r.chatId, message_id: r.messageId });
+  return rows.length;
+}
+
+/**
+ * Сообщение исправили — если оно уже ушло клиенту в Telegram: старое там убираем, исправленное присылаем
+ * заново тем же оформлением (плашка эксперта, кнопка «Ответить на сайте»).
+ */
+export function resendEditedToTelegram(db: Db, conversationId: string, siteMessageId: number, now = new Date()): Promise<void> {
+  const cfg = telegramConfig();
+  if (!cfg) return Promise.resolve();
+  return enqueue(conversationId, async () => {
+    if ((await deleteFromTelegram(db, siteMessageId)) === 0) return;
+    await deliverMessage(db, cfg, siteMessageId, now, true);
+  });
 }
