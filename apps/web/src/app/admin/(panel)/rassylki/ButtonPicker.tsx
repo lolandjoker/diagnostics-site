@@ -3,12 +3,23 @@
 /**
  * Кнопка под рассылкой — один выбор: куда ведёт и надпись. Личный раздел (тест, «Мой день», чат…) — у каждого
  * свой, открывается внутри Telegram; «Своя ссылка» — одна для всех, тогда появляется поле адреса.
+ * Управляется снаружи (BroadcastComposer): шаблон рассылки выставляет кнопку сам.
  */
-import { useState } from "react";
 import { PERSONAL_PAGES, type PersonalPage } from "@/lib/broadcast-pages";
 
-export function ButtonPicker() {
-  const [kind, setKind] = useState<"" | "url" | PersonalPage>("");
+export type ButtonKind = "" | "url" | PersonalPage;
+
+export function ButtonPicker({
+  kind,
+  label,
+  onKind,
+  onLabel,
+}: {
+  kind: ButtonKind;
+  label: string;
+  onKind: (k: ButtonKind) => void;
+  onLabel: (l: string) => void;
+}) {
   const personal = kind !== "" && kind !== "url";
   return (
     <fieldset className="button-picker">
@@ -16,7 +27,7 @@ export function ButtonPicker() {
       <div className="row">
         <label className="field">
           <span>Куда ведёт</span>
-          <select name="button_kind" value={kind} onChange={(e) => setKind(e.target.value as typeof kind)}>
+          <select name="button_kind" value={kind} onChange={(e) => onKind(e.target.value as ButtonKind)}>
             <option value="">Без кнопки</option>
             <optgroup label="Личный раздел — у каждого свой, внутри Telegram">
               {(Object.keys(PERSONAL_PAGES) as PersonalPage[]).map((p) => (
@@ -35,6 +46,8 @@ export function ButtonPicker() {
               name="button_label"
               maxLength={40}
               required={kind === "url"}
+              value={label}
+              onChange={(e) => onLabel(e.target.value)}
               placeholder={personal ? PERSONAL_PAGES[kind].button : "Например: Смотреть видео"}
             />
           </label>

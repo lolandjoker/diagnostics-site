@@ -4,7 +4,7 @@ import { isAdmin } from "@/lib/admin-auth";
 import { AUDIENCES, type Audience, BROADCAST_GAP_MS, MAX_BROADCAST_LENGTH, PERSONAL_PAGES, type PersonalPage, audienceCounts, listBroadcasts } from "@/lib/broadcasts";
 import { telegramConfig } from "@/lib/telegram";
 import { ActionForm } from "../../ActionForm";
-import { ButtonPicker } from "./ButtonPicker";
+import { BroadcastComposer } from "./BroadcastComposer";
 import { broadcastAction } from "../../actions";
 
 export const dynamic = "force-dynamic";
@@ -48,26 +48,7 @@ export default async function BroadcastsPage() {
       )}
 
       <ActionForm action={broadcastAction}>
-        <fieldset className="audience">
-          <legend>Кому</legend>
-          {(Object.keys(AUDIENCES) as Audience[]).map((a) => (
-            <label key={a} className="check">
-              <input type="radio" name="audience" value={a} defaultChecked={a === "all"} />
-              <span>
-                {AUDIENCES[a]} — <b>{counts[a]}</b>
-              </span>
-            </label>
-          ))}
-        </fieldset>
-        <label className="field">
-          <span>Текст (до {MAX_BROADCAST_LENGTH} символов)</span>
-          <textarea name="body" rows={8} maxLength={MAX_BROADCAST_LENGTH} required />
-        </label>
-        <label className="check">
-          <input name="gift" type="checkbox" />
-          <span>Значок подарка в начале</span>
-        </label>
-        <ButtonPicker />
+        <BroadcastComposer counts={counts} maxLength={MAX_BROADCAST_LENGTH} />
         <label className="field field--short">
           <span>Проба: только на этот Telegram ID</span>
           <input name="test_id" inputMode="numeric" pattern="\d*" placeholder="например, 123456789" />
@@ -100,7 +81,7 @@ export default async function BroadcastsPage() {
                   <tr key={b.id}>
                     <td>{when.format(b.createdAt)}</td>
                     <td>
-                      {b.audience === "silent" ? "не ответили" : b.audience === "never" ? "не писали" : "все"}
+                      {b.audience in AUDIENCES ? AUDIENCES[b.audience as Audience].split(" — ")[0] : "все"}
                       {b.personalPage && b.personalPage in PERSONAL_PAGES && (
                         <span className="muted"> · кнопка: {PERSONAL_PAGES[b.personalPage as PersonalPage].label}</span>
                       )}
