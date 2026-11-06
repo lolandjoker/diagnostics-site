@@ -18,29 +18,28 @@ export default async function ExpertChatPage(props: PageProps<"/expert/chat/[id]
     getTexts(db, ["chat.placeholder", "chat.send"]),
   ]);
   const mine = conversation.expertId === expert.id;
-  const birth = header?.birthDate.split("-").reverse().join(".");
 
   return (
     <>
       <StaffChatHead
         name={header?.leadName ?? "Клиент"}
-        meta={
-          <>
-            Дата рождения: {birth} · Эксперт чата: {header?.expertName}
-            {mine ? " (вы)" : ""}
-          </>
-        }
-        note={
+        birthDate={header?.birthDate ?? null}
+        expertName={header?.expertName ?? null}
+        telegram={header?.telegram ?? false}
+        geoCountry={header?.geoCountry ?? null}
+        geoCity={header?.geoCity ?? null}
+        mine={mine}
+        warning={
           header?.expertArchived ? (
             <p className="notice notice--error staff-chat__note">
               Эксперт {header.expertName} в архиве — клиент этот чат сейчас не видит и уведомлений не получает. Сообщения
               сохранятся и появятся у него, когда эксперта достанут из архива.
             </p>
-          ) : !mine && (
+          ) : !mine ? (
             <p className="notice notice--error staff-chat__note">
               Это чат эксперта {header?.expertName}. Если ответите, клиент увидит ваше имя — {expert.name}.
             </p>
-          )
+          ) : undefined
         }
       />
       <ChatThread
@@ -49,6 +48,7 @@ export default async function ExpertChatPage(props: PageProps<"/expert/chat/[id]
         typingUrl={`/expert/api/chat/${conversation.id}/typing`}
         typingName={header?.leadName ?? "Клиент"}
         ownAuthors={[]}
+        receipts="staff"
         ownExpertId={expert.id}
         labels={{ placeholder: t["chat.placeholder"], send: t["chat.send"] }}
         call={

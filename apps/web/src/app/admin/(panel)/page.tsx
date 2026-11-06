@@ -5,6 +5,8 @@ import { calls } from "@/db/schema";
 import { FUNNEL_PERIODS, funnel, funnelStart, periodStart, trackingSince } from "@/lib/funnel";
 import type { FunnelPeriod } from "@/lib/funnel";
 import { botStats } from "@/lib/bot-stats";
+import { cityName, countryName } from "@/lib/geo-label";
+import { geoStats } from "@/lib/geo-stats";
 import { heardFromStats, sourceStats } from "@/lib/sources";
 import { botUsername, telegramConfig } from "@/lib/telegram";
 import { getTexts } from "@/lib/texts";
@@ -40,7 +42,7 @@ export default async function DashboardPage(props: PageProps<"/admin">) {
   const tracking = await trackingSince(db);
   const since = periodStart(period, new Date());
   const cfg = telegramConfig();
-  const [steps, [callRow], sources, heard, sourceNames, bot, botName] = await Promise.all([
+  const [steps, [callRow], sources, heard, sourceNames, bot, botName, geo] = await Promise.all([
     tracking ? funnel(db, funnelStart(since, tracking)) : Promise.resolve([]),
     db
       .select({ n: count() })
@@ -51,7 +53,9 @@ export default async function DashboardPage(props: PageProps<"/admin">) {
     getTexts(db, REF_TEXT_KEYS),
     botStats(db, since),
     cfg ? botUsername(cfg) : Promise.resolve(null),
+    geoStats(db, since),
   ]);
+  const geoTotal = geo.countries.reduce((s, c) => s + c.leads, 0);
   const heardTotal = heard.reduce((sum, h) => sum + h.leads, 0);
   const top = Math.max(1, ...steps.map((s) => s.count));
   // Самое большое падение между соседними шагами — там теряем больше всего людей
@@ -187,6 +191,76 @@ export default async function DashboardPage(props: PageProps<"/admin">) {
             </tbody>
           </table>
         </div>
+      </section>
+
+      <section className="admin-section">
+        <h2>География</h2>
+        <p className="muted">
+          Откуда заявки за период — по IP в момент заявки (сам IP не храним). Определено: {geoTotal}
+          {geo.unknown > 0 && <>, не определено: {geo.unknown} (старые заявки или адрес не нашёлся в базе)</>}.
+        </p>
+        {geoTotal === 0 ? (
+          <p className="muted">Пока нет данных — появятся с новыми заявками.</p>
+        ) : (
+          <div className="geo-stats">
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Страна</th>
+                    <th>Заявки</th>
+                    <th>Доля</th>
+                    <th>Начали чат</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {geo.countries.map((c) => (
+                    <tr key={c.country}>
+                      <td>{countryName(c.country)}</td>
+                      <td>{c.leads}</td>
+                      <td>{pct(c.leads, geoTotal)}</td>
+                      <td>
+                        {c.chats} <span className="muted">({pct(c.chats, c.leads)})</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Город</th>
+                    <th>Заявки</th>
+                    <th>Начали чат</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {geo.cities.map((c) => (
+                    <tr key={`${c.country}:${c.city}`}>
+                      <td>
+                        {cityName(c.city ?? "")}
+                        {c.country !== "RU" && <span className="muted"> · {countryName(c.country)}</span>}
+                      </td>
+                      <td>{c.leads}</td>
+                      <td>
+                        {c.chats} <span className="muted">({pct(c.chats, c.leads)})</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+        <p className="muted geo-stats__credit">
+          Геоданные:{" "}
+          <a href="https://db-ip.com" target="_blank" rel="noopener noreferrer">
+            IP Geolocation by DB-IP
+          </a>{" "}
+          (CC BY 4.0). Точность — до города, у мобильного интернета город иногда определяется по месту оператора.
+        </p>
       </section>
 
       <section className="admin-section">

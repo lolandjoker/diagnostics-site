@@ -210,6 +210,12 @@ export const leads = pgTable(
     source: text("source"),
     /** Ответ на вопрос «Откуда вы о нас узнали?» на странице разбора (HEARD_FROM); null — не ответил. */
     heardFrom: text("heard_from"),
+    /**
+     * Откуда человек по IP (lib/geo.ts, база DB-IP на нашем сервере): код страны (RU) и город, как в базе
+     * (Moscow). Сам IP не храним. null — не определили (старая заявка, локальный адрес, нет в базе).
+     */
+    geoCountry: text("geo_country"),
+    geoCity: text("geo_city"),
   },
   (t) => [index("leads_telegram_user_idx").on(t.telegramUserId, t.createdAt)],
 );

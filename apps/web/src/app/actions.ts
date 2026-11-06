@@ -1,5 +1,6 @@
 "use server";
 
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getDb } from "@/db";
 import {
@@ -11,6 +12,7 @@ import {
   rememberedLeadId,
   validateLead,
 } from "@/lib/leads";
+import { clientIp, rememberLeadGeo } from "@/lib/geo";
 import { isHeardFrom, rememberedSource, setHeardFrom } from "@/lib/sources";
 import { telegramConfig, telegramStartSource, verifyInitData } from "@/lib/telegram";
 import { pickVariation } from "@/lib/variations";
@@ -43,6 +45,8 @@ export async function submitLead(_prev: FormState, form: FormData): Promise<Form
   const source = (await rememberedSource()) ?? (telegramUser ? await telegramStartSource(db, telegramUser.id) : null);
   const lead = await createLead(db, input, now, await pickVariation(db), telegramUser?.id ?? null, source);
   await rememberLead(lead.id);
+  // Откуда человек — по IP (сам IP не храним); не вышло — заявка всё равно создана
+  await rememberLeadGeo(db, lead.id, clientIp(await headers())).catch(() => {});
   redirect(`/razbor/${lead.id}`);
 }
 

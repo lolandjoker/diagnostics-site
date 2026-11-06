@@ -10,6 +10,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import type { MessageView } from "@/lib/chat";
 import { Avatar } from "./Avatar";
+import { ReadTicks, TelegramIcon } from "./StaffBits";
 import { pageAway, telegramInitData } from "./telegramWebApp";
 
 const POLL_MS = 3000;
@@ -85,16 +86,6 @@ async function preparePhoto(file: File): Promise<Blob> {
   }
 }
 
-/** У своих сообщений: ✓ — отправлено, ✓✓ — прочитано. */
-function ReadMark({ read }: { read: boolean }) {
-  return (
-    <span className={read ? "msg__read msg__read--seen" : "msg__read"} title={read ? "Прочитано" : "Отправлено"}>
-      <span aria-hidden="true">{read ? "✓✓" : "✓"}</span>
-      <span className="sr-only">{read ? "прочитано" : "отправлено"}</span>
-    </span>
-  );
-}
-
 const time = (iso: string) => new Date(iso).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
 
 function dayLabel(iso: string): string {
@@ -151,6 +142,7 @@ export function ChatThread({
   suggestions = [],
   typingUrl,
   typingName,
+  receipts = "own",
 }: {
   /** GET ?after= и POST — один адрес. */
   url: string;
@@ -184,6 +176,11 @@ export function ChatThread({
   typingUrl?: string;
   /** Кто печатает на той стороне — подпись «… печатает» (клиенту — эксперт, сотрудникам — клиент). */
   typingName?: string;
+  /**
+   * У каких сообщений птички прочтения: own — у своих; staff — у всех не от клиента (эксперт, админ, операторы,
+   * автоматические): прочитано, если клиент открывал чат после сообщения или ответил после него (в том числе из Telegram).
+   */
+  receipts?: "own" | "staff";
 }) {
   const [items, setItems] = useState<MessageView[]>([]);
   const [typing, setTyping] = useState(false);
@@ -358,6 +355,10 @@ export function ChatThread({
     setPhoto({ file, preview: URL.createObjectURL(file) });
   }
 
+  const lastClientId = receipts === "staff" ? items.reduce((max, m) => (m.author === "client" && m.id > max ? m.id : max), 0) : 0;
+  const ticksFor = (m: MessageView) => (receipts === "staff" ? m.author !== "client" : isOwn(m));
+  const isRead = (m: MessageView) => (readUpTo !== null && m.createdAt <= readUpTo) || lastClientId > m.id;
+
   const isOwn = (m: MessageView) =>
     (m.author === "admin"
       ? ownAuthors.includes("admin") && (m.operatorId ?? undefined) === ownOperatorId
@@ -431,7 +432,10 @@ export function ChatThread({
                     <span aria-hidden="true">✦</span> {m.authorName}
                   </div>
                   {m.body && <div className="text">{m.body}</div>}
-                  <time dateTime={m.createdAt}>{time(m.createdAt)}</time>
+                  <time dateTime={m.createdAt}>
+                    {time(m.createdAt)}
+                    {ticksFor(m) && <ReadTicks read={isRead(m)} />}
+                  </time>
                 </article>
               ) : (
                 <div className={`chat__row ${own ? "chat__row--own" : ""} ${first ? "chat__row--first" : ""}`}>
@@ -456,8 +460,13 @@ export function ChatThread({
                     )}
                     {m.body && <div className="text">{m.body}</div>}
                     <time className="msg__time" dateTime={m.createdAt}>
+                      {m.viaTelegram && (
+                        <span className="msg__via" title="Клиент ответил из Telegram">
+                          <TelegramIcon size={12} /> из Telegram
+                        </span>
+                      )}
                       {time(m.createdAt)}
-                      {isOwn(m) && <ReadMark read={readUpTo !== null && m.createdAt <= readUpTo} />}
+                      {ticksFor(m) && <ReadTicks read={isRead(m)} />}
                     </time>
                   </div>
                 </div>
