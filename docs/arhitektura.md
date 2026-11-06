@@ -38,7 +38,7 @@
 | Клуб Таромбы | `club.ts` (карта дня), `quizzes.ts`, `quiz-compat.ts`, `quiz-archetype.ts`, `quiz-yesno.ts`, `quiz-images.tsx`, `arcana*.ts*`, `numerology.ts`, `ai-reading.ts` | без Telegram результат закрыт; ИИ — Opus 5.5 по JSON-схеме (`aiJson`), без ключа — заготовки; квизы: совместимость раз в 5 дней, архетип раз в 30, «Да или нет» раз в день |
 | Источники и воронка | `sources.ts`, `funnel.ts`, `variations.ts` | короткие адреса (`/karta`, `/arhetip`, `/r1…`) → cookie источника |
 | Эксперты, отзывы, звонки | `experts.ts`, `reviews.ts`, `calls.ts`, `certificates.ts`, `gallery.ts` | |
-| Доступ | `admin-auth.ts`, `expert-auth.ts`, `operator-auth.ts`, `staff-auth.ts` | `chatWorker()` — админ или оператор |
+| Доступ | `admin-auth.ts`, `expert-auth.ts`, `operator-auth.ts`, `staff-auth.ts`, `owner.ts` | `chatWorker()` — админ или оператор; владелец (OWNER_TELEGRAM_IDS в .env) — `/admin` в боте → ссылка `/admin/telegram?t=…` на 10 минут ставит cookie админки |
 
 ## Чаты сотрудников (админ, операторы, эксперты)
 

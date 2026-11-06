@@ -15,6 +15,7 @@ import { timingSafeEqual } from "node:crypto";
 import { after } from "next/server";
 import { getDb } from "@/db";
 import { isTelegramBlocked } from "@/lib/blocks";
+import { isOwner } from "@/lib/owner";
 import { enqueue, sendLatestToTelegram, warmExpertCards } from "@/lib/bot-delivery";
 import { handleExpertCallback, showExperts } from "@/lib/bot-experts";
 import { handleForecastCallback, joinClub, stopForecast, toggleForecast } from "@/lib/bot-forecast";
@@ -72,6 +73,12 @@ async function onMessage(cfg: TelegramConfig, message: IncomingMessage, chatId: 
   }
   if (command === "/forecast") {
     await toggleForecast(db, cfg, userId);
+    return;
+  }
+  // Владелец: вход в админку (lib/owner.ts) — не пересылать как сообщение в чат
+  if (command === "/admin" && isOwner(userId)) {
+    const reply = await botReply(db, cfg, userId, "/admin", new Date());
+    await sendMessage(cfg, chatId, reply.text, reply.buttons);
     return;
   }
   // Сотрудник подключает Telegram по ссылке из своей панели
