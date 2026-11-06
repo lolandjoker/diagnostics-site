@@ -334,6 +334,18 @@ export function ChatThread({
     return () => window.removeEventListener("keydown", onKey);
   }, [zoom]);
 
+  // Сотрудники: «напомнить» в шапке подставляет готовый текст в поле ввода
+  useEffect(() => {
+    const onInsert = (e: Event) => {
+      const t = (e as CustomEvent<string>).detail;
+      if (typeof t !== "string" || !t) return;
+      setText((prev) => (prev.trim() ? `${prev.trimEnd()}\n\n${t}` : t));
+      window.setTimeout(() => textarea.current?.focus(), 0);
+    };
+    window.addEventListener("chat:insert", onInsert);
+    return () => window.removeEventListener("chat:insert", onInsert);
+  }, []);
+
   // Поле ввода растёт вместе с текстом (до предела в CSS)
   useEffect(() => {
     const el = textarea.current;
