@@ -4,21 +4,22 @@ import { getTexts } from "@/lib/texts";
 const rub = new Intl.NumberFormat("ru-RU");
 
 export interface Price {
-  /** «5 000 ₽» */
+  /** «5 000 ₽», «50 $» */
   old: string;
   label: string;
   free: string;
 }
 
 /**
- * Обычная цена консультации эксперта (настоящая, задаётся в «Текстах сайта» → «Цена») и что сейчас
+ * Обычная цена консультации эксперта (настоящая, задаётся в «Текстах сайта» → «Цена»: число и валюта) и что сейчас
  * бесплатно. null — показ выключен или цена 0.
  */
 export async function getPrice(db: Db): Promise<Price | null> {
-  const t = await getTexts(db, ["price.show", "price.amount", "price.label", "price.free"]);
+  const t = await getTexts(db, ["price.show", "price.amount", "price.currency", "price.label", "price.free"]);
   const amount = Number(t["price.amount"]);
   if (t["price.show"] !== "1" || !Number.isFinite(amount) || amount <= 0) return null;
-  return { old: `${rub.format(amount)}\u00A0₽`, label: t["price.label"], free: t["price.free"] };
+  const currency = t["price.currency"].trim().slice(0, 5) || "₽";
+  return { old: `${rub.format(amount)}\u00A0${currency}`, label: t["price.label"], free: t["price.free"] };
 }
 
 /** «Консультация эксперта: ~~5 000 ₽~~ Бесплатно» — у формы на главной и у «Написать эксперту» на разборе. */

@@ -121,7 +121,8 @@ export const TEXT_DEFS = [
     default: "1",
     toggle: true,
   },
-  { key: "price.amount", group: "Цена", label: "Обычная цена консультации эксперта, ₽", default: "5000", number: true },
+  { key: "price.amount", group: "Цена", label: "Обычная цена консультации эксперта (число)", default: "5000", number: true },
+  { key: "price.currency", group: "Цена", label: "Валюта цены", default: "₽", hint: "Знак после числа: ₽, $ или €" },
   { key: "price.label", group: "Цена", label: "Подпись перед ценой", default: "Консультация эксперта:" },
   { key: "price.free", group: "Цена", label: "Вместо цены", default: "Бесплатно" },
   // Источники: свободные короткие адреса для других площадок (lib/sources.ts)
