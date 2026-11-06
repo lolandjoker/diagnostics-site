@@ -36,7 +36,7 @@ import {
 import { NO_METHOD, VARIATION_MODES, deleteVariation, getVariation, getVariationTexts, saveVariationTexts, setVariationMode } from "@/lib/variations";
 import type { VariationMode } from "@/lib/variations";
 import { TEXT_DEFS, saveTexts } from "@/lib/texts";
-import { hasLead, isAudience, isPersonalPage, type PersonalPage, sendTestBroadcast, startBroadcast, validateBroadcast } from "@/lib/broadcasts";
+import { hasLead, isAudience, isPersonalPage, sendTestBroadcast, startBroadcast, validateBroadcast } from "@/lib/broadcasts";
 import { telegramConfig } from "@/lib/telegram";
 import type { TextKey } from "@/lib/texts";
 import type { ActionResult } from "./ActionForm";
@@ -115,13 +115,15 @@ export async function broadcastAction(_prev: ActionResult, form: FormData): Prom
   const cfg = telegramConfig();
   if (!cfg) return fail("Telegram-бот не подключён");
   const audience = str(form, "audience");
+  // Кнопка: "" — нет, url — своя ссылка, иначе — личный раздел (PERSONAL_PAGES)
+  const kind = str(form, "button_kind");
   const input = {
     audience: isAudience(audience) ? audience : ("all" as const),
-    personalPage: isPersonalPage(str(form, "personal_page")) ? (str(form, "personal_page") as PersonalPage) : undefined,
-    personalText: str(form, "personal_text"),
+    personalPage: isPersonalPage(kind) ? kind : undefined,
+    personalText: isPersonalPage(kind) ? str(form, "button_label") : "",
     body: str(form, "body"),
-    buttonText: str(form, "button_text"),
-    buttonUrl: str(form, "button_url"),
+    buttonText: kind === "url" ? str(form, "button_label") : "",
+    buttonUrl: kind === "url" ? str(form, "button_url") : "",
     gift: form.get("gift") === "on",
   };
   const error = validateBroadcast(input);

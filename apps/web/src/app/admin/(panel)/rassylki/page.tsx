@@ -4,6 +4,7 @@ import { isAdmin } from "@/lib/admin-auth";
 import { AUDIENCES, type Audience, BROADCAST_GAP_MS, MAX_BROADCAST_LENGTH, PERSONAL_PAGES, type PersonalPage, audienceCounts, listBroadcasts } from "@/lib/broadcasts";
 import { telegramConfig } from "@/lib/telegram";
 import { ActionForm } from "../../ActionForm";
+import { ButtonPicker } from "./ButtonPicker";
 import { broadcastAction } from "../../actions";
 
 export const dynamic = "force-dynamic";
@@ -66,37 +67,7 @@ export default async function BroadcastsPage() {
           <input name="gift" type="checkbox" />
           <span>Значок подарка в начале</span>
         </label>
-        <div className="row">
-          <label className="field">
-            <span>Личная кнопка — каждому его страница внутри Telegram</span>
-            <select name="personal_page" defaultValue="">
-              <option value="">Без личной кнопки</option>
-              {(Object.keys(PERSONAL_PAGES) as PersonalPage[]).map((p) => (
-                <option key={p} value={p}>
-                  {PERSONAL_PAGES[p].label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
-            <span>Надпись личной кнопки (необязательно)</span>
-            <input name="personal_text" maxLength={40} placeholder="Например: Пройти тест «Ваш архетип»" />
-          </label>
-        </div>
-        <p className="muted field-hint">
-          Личная кнопка открывает каждому его собственный раздел — сразу с его именем и датой, без ввода данных.
-          Обычная кнопка-ссылка ниже открывает сайт в браузере, где человека не узнают.
-        </p>
-        <div className="row">
-          <label className="field">
-            <span>Кнопка-ссылка: надпись (необязательно)</span>
-            <input name="button_text" maxLength={40} placeholder="Например: Получить подарок" />
-          </label>
-          <label className="field">
-            <span>Кнопка-ссылка: адрес</span>
-            <input name="button_url" type="url" placeholder="https://taromba.com/…" />
-          </label>
-        </div>
+        <ButtonPicker />
         <label className="field field--short">
           <span>Проба: только на этот Telegram ID</span>
           <input name="test_id" inputMode="numeric" pattern="\d*" placeholder="например, 123456789" />
