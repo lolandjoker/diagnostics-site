@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { getDb } from "@/db";
 import { chatsOfLeads, conversationHeader, getConversation } from "@/lib/chat";
+import { clubStatus } from "@/lib/club-status";
 import { requireOperator } from "@/lib/operator-auth";
 import { getTexts } from "@/lib/texts";
 import { CallPanel } from "../../../../CallPanel";
@@ -16,8 +17,9 @@ export default async function OperatorChatPage(props: PageProps<"/operator/chat/
   const db = await getDb();
   const conversation = await getConversation(db, id);
   if (!conversation) notFound();
-  const [header, leadChats, t] = await Promise.all([conversationHeader(db, conversation),
-    chatsOfLeads(db, [conversation.leadId]), getTexts(db, ["chat.placeholder", "chat.send"])]);
+  const [header, leadChats, club, t] = await Promise.all([conversationHeader(db, conversation),
+    chatsOfLeads(db, [conversation.leadId]),
+    clubStatus(db, conversation.leadId), getTexts(db, ["chat.placeholder", "chat.send"])]);
   return (
     <>
       <StaffChatHead
@@ -29,6 +31,7 @@ export default async function OperatorChatPage(props: PageProps<"/operator/chat/
         geoCity={header?.geoCity ?? null}
         chats={(leadChats.get(conversation.leadId) ?? []).map((c) => ({ id: c.id, expertName: c.expertName, diagnosis: c.diagnosis }))}
         currentId={conversation.id}
+        club={club}
         blocked={header?.blocked ?? false}
         blockUrl={`/admin/api/chat/${conversation.id}/block`}
         warning={

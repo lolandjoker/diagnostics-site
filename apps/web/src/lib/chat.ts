@@ -495,7 +495,7 @@ export interface InboxItem {
   lastOwnRead: boolean | null;
   /** Клиент заблокирован (lib/blocks.ts). */
   blocked: boolean;
-  /** В этом чате клиент получил подробный разбор. */
+  /** В этом чате клиент получил подробный разбор (в чате есть сообщение «Подробный разбор»). */
   diagnosis: boolean;
   /** Другие чаты этого же клиента (та же заявка) — с какими экспертами, где разбор; по времени начала. */
   otherChats: OtherChat[];
@@ -519,14 +519,21 @@ export async function chatsOfLeads(db: Db, leadIds: string[]): Promise<Map<strin
   const unique = [...new Set(leadIds)];
   for (let i = 0; i < unique.length; i += 500) {
     const rows = await db
-      .select({ id: conversations.id, leadId: conversations.leadId, expertName: experts.name, fullTextSentAt: conversations.fullTextSentAt, createdAt: conversations.createdAt })
+      .select({
+        id: conversations.id,
+        leadId: conversations.leadId,
+        expertName: experts.name,
+        createdAt: conversations.createdAt,
+        // Разбор один на человека: отметка fullTextSentAt ставится всем созревшим чатам, а сам текст — только в один
+        diagnosis: sql<boolean>`exists (select 1 from ${messages} m where m.conversation_id = ${conversations.id} and m.author = 'system')`.mapWith(Boolean),
+      })
       .from(conversations)
       .innerJoin(experts, eq(experts.id, conversations.expertId))
       .where(inArray(conversations.leadId, unique.slice(i, i + 500)))
       .orderBy(asc(conversations.createdAt));
     for (const r of rows) {
       const list = out.get(r.leadId) ?? [];
-      list.push({ id: r.id, leadId: r.leadId, expertName: r.expertName, diagnosis: r.fullTextSentAt !== null, startedAt: r.createdAt.toISOString() });
+      list.push({ id: r.id, leadId: r.leadId, expertName: r.expertName, diagnosis: r.diagnosis, startedAt: r.createdAt.toISOString() });
       out.set(r.leadId, list);
     }
   }
@@ -588,7 +595,7 @@ export async function inbox(db: Db, opts: { limit?: number; expertId?: number | 
       r.lastAuthor === null || r.lastAuthor === "client"
         ? null
         : r.c.clientReadAt !== null && r.lastAt !== null && r.c.clientReadAt.getTime() >= new Date(r.lastAt).getTime(),
-    diagnosis: r.c.fullTextSentAt !== null,
+    diagnosis: chats[idx]?.diagnosis ?? false,
     otherChats: chats.filter((c) => c.id !== r.c.id).map(({ leadId: _l, ...c }) => c),
     movedFrom: idx > 0 ? chats[idx - 1]!.expertName : null,
     };

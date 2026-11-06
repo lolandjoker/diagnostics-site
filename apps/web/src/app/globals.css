@@ -5560,3 +5560,68 @@ body.no-scroll {
   box-shadow: 0 0 0 3px rgba(214, 160, 20, 0.55);
   transition: box-shadow 0.4s;
 }
+
+/* Шапка чата: что клиент прошёл в Клубе, напомнить о непройденном */
+.club-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin: -4px 0 10px;
+  font-size: 0.78rem;
+}
+
+.club-bar__title {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.club-chip {
+  padding: 3px 10px;
+  border: 1px solid rgba(138, 106, 31, 0.3);
+  border-radius: 999px;
+  background: rgba(138, 106, 31, 0.08);
+  color: var(--text);
+  font: inherit;
+}
+
+.club-chip--todo {
+  border-style: dashed;
+  background: #fff;
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    border-color 0.2s,
+    color 0.2s;
+}
+
+.club-chip--todo:hover {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.club-chip--todo b {
+  color: var(--gold);
+}
+
+.club-chip--muted {
+  border-color: var(--line);
+  background: none;
+  color: var(--muted);
+}
+
+@media (max-width: 860px) {
+  .staff-messenger--open .club-bar {
+    margin: 0;
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--line);
+    background: var(--surface);
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .staff-messenger--open .club-bar > * {
+    flex: none;
+  }
+}

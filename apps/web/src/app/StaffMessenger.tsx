@@ -12,6 +12,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, createContext, useContext, useState } from "react";
 import { Avatar } from "./Avatar";
 import { InboxList } from "./InboxList";
+import type { ClubStatus } from "@/lib/club-status";
 import { GeoTag, TelegramBadge } from "./StaffBits";
 
 /** Куда «назад» (список) и база адресов чатов — для шапки открытого чата. */
@@ -87,6 +88,7 @@ export function StaffChatHead({
   blockUrl,
   chats = [],
   currentId,
+  club,
 }: {
   name: string;
   /** ГГГГ-ММ-ДД */
@@ -107,6 +109,8 @@ export function StaffChatHead({
   chats?: HeadChat[];
   /** Открытый чат. */
   currentId?: string;
+  /** Что клиент прошёл в Клубе Таромбы — и кнопки напомнить о непройденном. */
+  club?: ClubStatus | null;
 }) {
   const nav = useContext(Nav);
   const listHref = nav?.listHref;
@@ -169,6 +173,7 @@ export function StaffChatHead({
           )}
         </nav>
       )}
+      {club && <ClubBar club={club} />}
       {blocked && (
         <p className="notice notice--error staff-chat__note">
           Клиент заблокирован: не может писать на сайте и в Telegram, бот ему ничего не отправляет.
@@ -176,6 +181,59 @@ export function StaffChatHead({
       )}
       {warning}
     </>
+  );
+}
+
+/** Подставить текст в поле ввода открытого чата (ChatThread слушает событие). */
+const insertIntoChat = (text: string) => window.dispatchEvent(new CustomEvent("chat:insert", { detail: text }));
+
+const ago = new Intl.DateTimeFormat("ru-RU", { timeZone: "Europe/Moscow", day: "numeric", month: "short" });
+
+/**
+ * «Клуб»: карта дня (серия), совместимость, архетип, «Да или нет». Пройдено — результат; не пройдено — кнопка
+ * «напомнить», она подставляет готовое сообщение в поле ввода (его можно поправить перед отправкой).
+ */
+function ClubBar({ club }: { club: ClubStatus }) {
+  const remind = (kind: keyof ClubStatus["reminders"], label: string) => (
+    <button type="button" className="club-chip club-chip--todo" onClick={() => insertIntoChat(club.reminders[kind])} title="Подставить напоминание в поле ввода">
+      {label} · <b>напомнить</b>
+    </button>
+  );
+  return (
+    <div className="club-bar" aria-label="Клуб Таромбы">
+      <span className="club-bar__title">Клуб:</span>
+      {club.cards.total > 0 ? (
+        <span className="club-chip" title={`Всего карт: ${club.cards.total}${club.forecast ? ", карта по утрам в боте включена" : ""}`}>
+          Карта дня{club.cards.streak > 1 ? ` · серия ${club.cards.streak}` : ""}
+          {club.cards.today ? ` · сегодня «${club.cards.today}»` : " · сегодня не тянул(а)"}
+        </span>
+      ) : (
+        remind("card", "Карта дня — не тянул(а)")
+      )}
+      {club.compat ? (
+        <span className="club-chip" title={`Прошёл(ла) ${ago.format(new Date(club.compat.at))}`}>
+          Совместимость{club.compat.total !== null ? ` ${club.compat.total}%` : ""}
+          {club.compat.partner ? ` · ${club.compat.partner}` : ""}
+        </span>
+      ) : (
+        remind("compat", "Совместимость — нет")
+      )}
+      {club.archetype ? (
+        <span className="club-chip" title={`Прошёл(ла) ${ago.format(new Date(club.archetype.at))}`}>
+          Архетип · {club.archetype.name}
+        </span>
+      ) : (
+        remind("archetype", "Архетип — нет")
+      )}
+      {club.yesno ? (
+        <span className="club-chip" title={`«${club.yesno.question}» → ${club.yesno.card}`}>
+          Да/нет · {club.yesno.answer ?? "без ответа"}
+        </span>
+      ) : (
+        remind("yesno", "Да/нет — нет")
+      )}
+      {!club.telegram && <span className="club-chip club-chip--muted">без Telegram — результаты у клиента закрыты</span>}
+    </div>
   );
 }
 
