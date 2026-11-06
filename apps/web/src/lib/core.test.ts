@@ -2,6 +2,7 @@ import { createTestDb } from "@/db";
 import type { Db } from "@/db";
 import { maskBirthDate } from "./date-input";
 import { ageOn, birthDateToIso, validateLead } from "./leads";
+import { getPrice } from "../app/PriceTag";
 import { fillTemplate, getTexts, saveTexts } from "./texts";
 
 const NOW = new Date("2026-10-23T10:00:00Z");
@@ -26,6 +27,12 @@ describe("тексты", () => {
     expect(await saveTexts(db, { "price.amount": "" })).toMatch("целое число");
     expect(await saveTexts(db, { "price.amount": "7000", "price.show": "" })).toBeNull();
     expect(await getTexts(db, ["price.show", "price.amount"])).toEqual({ "price.show": "", "price.amount": "7000" });
+  });
+
+  it("цена в долларах: «50 $»", async () => {
+    expect((await getPrice(db))?.old).toBe("5 000 ₽");
+    await saveTexts(db, { "price.amount": "50", "price.currency": "$" });
+    expect((await getPrice(db))?.old).toBe("50 $");
   });
 
   it("подстановки", () => {
