@@ -17,6 +17,7 @@ import type { Db } from "@/db";
 import { conversations, leads, telegramStarts } from "@/db/schema";
 import { type EmojiKey, botEmojiDue, em, emojiId, emojiSetName, setBotEmoji } from "./bot-emoji";
 import { isTelegramBlockedCached } from "./blocks";
+import { adminLoginCode, isOwner } from "./owner";
 import { isSource } from "./sources";
 
 export interface TelegramConfig {
@@ -312,6 +313,21 @@ export interface BotReply {
  */
 export async function botReply(db: Db, cfg: TelegramConfig, telegramUserId: number, text: string, now: Date): Promise<BotReply> {
   const [command = "", arg = ""] = text.trim().split(/\s+/, 2);
+  // Владелец сайта (lib/owner.ts): вход в админку из Telegram и в свой разбор как клиент
+  if (command === "/admin" && isOwner(telegramUserId)) {
+    const url = `${cfg.siteUrl}/admin/telegram?t=${adminLoginCode(cfg.token, telegramUserId, now)}`;
+    const own = await leadForTelegramUser(db, telegramUserId);
+    return {
+      text: `${em("star")}<b>Вход в админку</b>
+
+Ссылки действуют 10 минут. Новые — снова командой /admin.`,
+      buttons: [
+        { text: "Админка в Telegram", webApp: url, icon: "star" },
+        { text: "Админка в браузере", url, icon: "globe" },
+        ...(own ? [{ text: "Как клиент", webApp: `${cfg.siteUrl}/razbor/${own}/den`, icon: "moon" as const }] : []),
+      ],
+    };
+  }
   if (command === "/stop") {
     const n = await unlinkTelegramUser(db, telegramUserId);
     return {
