@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import type { ReactNode } from "react";
 import { getDb } from "@/db";
 import { requireExpert } from "@/lib/expert-auth";
 import { staffTelegramStatus } from "@/lib/staff-telegram";
+import { AdminNav } from "../../AdminNav";
 import { StaffTelegramLink } from "../../StaffTelegramLink";
 import { expertStatus } from "@/lib/experts";
 import type { ExpertStatus } from "@/lib/experts";
@@ -24,13 +24,15 @@ export default async function ExpertLayout({ children }: { children: ReactNode }
   return (
     <div className="admin">
       <header className="admin__header">
-        <nav>
-          <Link href="/expert">Чаты</Link>
-          <Link href="/admin">Сводка</Link>
-          <Link href="/admin/experts">Эксперты</Link>
-          <Link href="/admin/reviews">Отзывы</Link>
-          <span className="muted">{expert.name}</span>
-        </nav>
+        <AdminNav
+          items={[
+            { href: "/expert", label: "Чаты" },
+            { href: "/admin", label: "Сводка" },
+            { href: "/admin/experts", label: "Эксперты" },
+            { href: "/admin/reviews", label: "Отзывы" },
+          ]}
+          who={expert.name}
+        />
         <div className="row">
           <StaffTelegramLink kind="expert" connected={tg.connected} name={tg.name} />
           <form action={setMyStatus} className="status-switch" aria-label="Мой статус">

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getDb } from "@/db";
 import { clientChats, conversationForLead } from "@/lib/chat";
+import { backfillLeadGeo } from "@/lib/geo";
 import { cardStreak, cardView, daysLabel, recentDays, todayCard } from "@/lib/club";
 import { splitExpertName } from "@/lib/expert-name";
 import { expertStatus, getExpert } from "@/lib/experts";
@@ -25,6 +26,7 @@ export default async function MyDayPage(props: PageProps<"/razbor/[id]/den">) {
   const db = await getDb();
   const lead = await getLead(db, id);
   if (!lead) redirect("/");
+  await backfillLeadGeo(db, lead);
   const now = new Date();
   const [row, streak, week, telegram, chats, chat] = await Promise.all([
     todayCard(db, lead.id, now),

@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { getDb } from "@/db";
 import { requireOperator } from "@/lib/operator-auth";
 import { staffTelegramStatus } from "@/lib/staff-telegram";
+import { AdminNav } from "../../AdminNav";
 import { StaffTelegramLink } from "../../StaffTelegramLink";
 import { StaffMessenger } from "../../StaffMessenger";
 import { operatorLogout } from "../actions";
@@ -20,10 +21,7 @@ export default async function OperatorLayout({ children }: { children: ReactNode
   return (
     <div className="admin">
       <header className="admin__header">
-        <nav>
-          <b>Чаты</b>
-          <span className="muted">Оператор: {operator.name}</span>
-        </nav>
+        <AdminNav items={[{ href: "/operator", label: "Чаты" }]} who={`Оператор: ${operator.name}`} />
         <div className="row">
           <StaffTelegramLink kind="operator" connected={tg.connected} name={tg.name} />
           <form action={operatorLogout}>

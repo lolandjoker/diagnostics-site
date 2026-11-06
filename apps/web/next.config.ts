@@ -28,8 +28,8 @@ const nextConfig: NextConfig = {
   transpilePackages: ["@diag/engine"],
   // Драйверы базы грузятся из node_modules как есть, без упаковки сборщиком
   serverExternalPackages: ["pg", "@electric-sql/pglite"],
-  // Шрифт плашки эксперта для бота (lib/bot-card.tsx) читается с диска — взять его в сборку
-  outputFileTracingIncludes: { "/**": ["./assets/fonts/*.woff"] },
+  // С диска читаются: шрифты картинок для бота (lib/bot-card.tsx) и геобаза DB-IP (lib/geo.ts) — взять их в сборку
+  outputFileTracingIncludes: { "/**": ["./assets/fonts/*.woff", "./node_modules/@ip-location-db/dbip-city-mmdb/*.mmdb"] },
   // Фото эксперта и сертификаты загружаются через серверные действия, по нескольку файлов за раз
   // (до 10 штук по 5 МБ); по умолчанию лимит 1 МБ
   experimental: {

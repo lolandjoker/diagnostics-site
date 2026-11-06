@@ -4682,3 +4682,489 @@ body.no-scroll {
   font-style: normal;
   font-weight: 500;
 }
+
+/* --- Панель сотрудников: шапка, чаты с телефона, пометки, птички --- */
+
+/* Шапка панели: разделы — одной строкой, текущий подсвечен; на телефоне строка листается вбок */
+.admin__header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  margin: -16px -16px 20px;
+  padding: 10px 16px;
+  background: rgba(246, 244, 249, 0.92);
+  backdrop-filter: blur(8px);
+}
+
+.admin-nav {
+  display: flex;
+  flex: 1 1 auto;
+  gap: 4px;
+  align-items: center;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  scroll-behavior: smooth;
+}
+
+.admin-nav::-webkit-scrollbar {
+  display: none;
+}
+
+.admin-nav a {
+  flex: none;
+  padding: 7px 13px;
+  border-radius: 999px;
+  color: var(--text);
+  font-size: 0.9rem;
+  text-decoration: none;
+  transition:
+    background 0.2s,
+    color 0.2s;
+}
+
+.admin-nav a:hover {
+  background: rgba(138, 106, 31, 0.08);
+}
+
+.admin-nav a.is-current {
+  background: rgba(138, 106, 31, 0.14);
+  color: var(--gold);
+  font-weight: 700;
+}
+
+.admin-nav__who {
+  flex: none;
+  padding-left: 8px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .admin__header {
+    gap: 6px;
+  }
+
+  .admin__header > .row {
+    width: 100%;
+    gap: 8px 12px;
+    justify-content: space-between;
+  }
+}
+
+/* Чаты занимают весь экран под шапкой */
+.admin:has(.staff-messenger) {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  min-height: 0;
+  padding-bottom: 12px;
+}
+
+.admin:has(.staff-messenger) .admin__header {
+  margin-bottom: 12px;
+}
+
+.admin:has(.staff-messenger) > main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.admin:has(.staff-messenger) .staff-messenger {
+  flex: 1;
+  height: auto;
+  min-height: 0;
+}
+
+.staff-messenger__pane {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  animation: pane-in 0.22s ease both;
+}
+
+.staff-messenger__pane .chat {
+  flex: 1;
+  height: auto;
+  min-height: 0;
+}
+
+@keyframes pane-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+/* Шапка открытого чата */
+.staff-chat__head {
+  position: relative;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin: 0 0 10px;
+}
+
+.staff-chat__back {
+  display: none;
+  flex: none;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  margin-left: -6px;
+  border-radius: 50%;
+  color: var(--text);
+}
+
+.staff-chat__back:hover {
+  background: rgba(127, 127, 127, 0.1);
+}
+
+.staff-chat__who {
+  flex: 1;
+  min-width: 0;
+}
+
+.staff-chat__who h1 {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 0;
+  overflow: hidden;
+  font-size: 1.2rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.staff-chat__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.staff-chat__info {
+  position: relative;
+  flex: none;
+}
+
+.staff-chat__info summary {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  color: var(--muted);
+  font-family: Georgia, serif;
+  font-style: italic;
+  font-weight: 700;
+  list-style: none;
+  cursor: pointer;
+  transition:
+    border-color 0.2s,
+    color 0.2s;
+}
+
+.staff-chat__info summary::-webkit-details-marker {
+  display: none;
+}
+
+.staff-chat__info[open] summary,
+.staff-chat__info summary:hover {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.staff-chat__info-body {
+  position: absolute;
+  top: 38px;
+  right: 0;
+  z-index: 10;
+  width: min(320px, 80vw);
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 12px 32px rgba(28, 26, 34, 0.14);
+  color: var(--text);
+  font-size: 0.85rem;
+  line-height: 1.45;
+  animation: pane-in 0.18s ease both;
+}
+
+.staff-chat__note {
+  margin: 0 0 10px;
+}
+
+/* Пометки: Telegram и город */
+.tg-badge {
+  display: inline-flex;
+  flex: none;
+  gap: 4px;
+  align-items: center;
+  padding: 2px 9px 2px 3px;
+  border-radius: 999px;
+  background: rgba(42, 171, 238, 0.12);
+  color: #1679ad;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.tg-badge--dot {
+  padding: 0;
+  background: none;
+}
+
+.geo-tag {
+  display: inline-flex;
+  gap: 3px;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.admin__header .admin-nav {
+  flex-wrap: nowrap;
+}
+
+/* Заголовки не прячутся под закреплённой шапкой */
+.admin h2 {
+  scroll-margin-top: 72px;
+}
+
+/* Птички прочтения */
+.ticks {
+  display: inline-flex;
+  margin-left: 4px;
+  vertical-align: -1px;
+  color: currentColor;
+  opacity: 0.7;
+}
+
+.ticks--read {
+  color: var(--gold);
+  opacity: 1;
+}
+
+.admin .ticks--read {
+  color: #1a8fd0;
+}
+
+.msg__via {
+  display: inline-flex;
+  gap: 3px;
+  align-items: center;
+  margin-right: 6px;
+  color: #1679ad;
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+
+/* Список чатов */
+.inbox__tabs {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.inbox__tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.inbox__tabs button {
+  flex: none;
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  padding: 5px 12px;
+  transition:
+    background 0.2s,
+    border-color 0.2s,
+    color 0.2s;
+}
+
+.inbox__count {
+  min-width: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(28, 26, 34, 0.08);
+  color: var(--text);
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+}
+
+.inbox__count--alert {
+  background: var(--error);
+  color: #fff;
+}
+
+.inbox__item {
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  transition: background 0.15s;
+}
+
+.inbox__ava {
+  position: relative;
+  display: inline-flex;
+}
+
+.inbox__tg {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  display: flex;
+  border: 2px solid var(--surface);
+  border-radius: 50%;
+}
+
+.inbox__body {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.inbox__top,
+.inbox__bottom {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.inbox__top time {
+  flex: none;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.inbox__city {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 400;
+}
+
+.inbox__expert {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.78rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.inbox__last .ticks {
+  margin: 0 4px 0 0;
+}
+
+.inbox__badges .badge {
+  margin-left: 0;
+}
+
+.inbox__wait {
+  justify-self: start;
+  margin-top: 3px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: rgba(214, 140, 20, 0.14);
+  color: #8a5300;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.inbox__wait--long {
+  background: rgba(180, 35, 24, 0.1);
+  color: var(--error);
+}
+
+/* География в «Сводке» */
+.geo-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .geo-stats {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.geo-stats__credit {
+  margin-top: 8px;
+  font-size: 0.78rem;
+}
+
+/* Телефон: открытый чат — на весь экран, со стрелкой «назад» в шапке чата */
+@media (max-width: 860px) {
+  .admin:has(.staff-messenger--open) {
+    padding: 0;
+  }
+
+  .admin:has(.staff-messenger--open) .admin__header {
+    display: none;
+  }
+
+  .staff-messenger--open .staff-messenger__chat {
+    gap: 0;
+  }
+
+  .staff-messenger--open .staff-chat__head {
+    margin: 0;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--line);
+    background: var(--surface);
+  }
+
+  .staff-messenger--open .staff-chat__note {
+    margin: 0;
+    padding: 8px 12px;
+    border-radius: 0;
+  }
+
+  .staff-messenger--open .chat {
+    border: 0;
+    border-radius: 0;
+  }
+
+  .staff-chat__back {
+    display: grid;
+  }
+
+  .staff-messenger--open .call-bar {
+    padding: 6px 12px;
+  }
+
+  .staff-messenger__pane {
+    animation-name: pane-slide;
+  }
+
+  .inbox__item {
+    padding: 12px;
+  }
+}
+
+@keyframes pane-slide {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .staff-messenger__pane,
+  .staff-chat__info-body {
+    animation: none;
+  }
+}

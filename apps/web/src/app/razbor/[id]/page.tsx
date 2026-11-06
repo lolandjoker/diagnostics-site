@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getDb } from "@/db";
 import { conversationForLead } from "@/lib/chat";
+import { backfillLeadGeo } from "@/lib/geo";
 import { MAX_LEAD_EDITS, RESULT_LOADING_MS, getLead } from "@/lib/leads";
 import { birthPortrait } from "@/lib/portrait";
 import { fillTemplate, getTexts } from "@/lib/texts";
@@ -25,6 +26,7 @@ export default async function ResultPage(props: PageProps<"/razbor/[id]">) {
   // Сразу после заявки разбор «считается» — анимация, потом страница обновится сама
   const loadingLeft = (lead.editedAt ?? lead.createdAt).getTime() + RESULT_LOADING_MS - Date.now();
   if (loadingLeft > 0) return <ResultLoading leftMs={loadingLeft} totalMs={RESULT_LOADING_MS} />;
+  await backfillLeadGeo(db, lead);
 
   const t = await getTexts(db, [
     "result.title",

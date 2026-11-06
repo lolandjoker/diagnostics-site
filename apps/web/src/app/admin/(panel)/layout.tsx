@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import type { ReactNode } from "react";
 import { getDb } from "@/db";
 import { requireStaff } from "@/lib/staff-auth";
 import { staffTelegramStatus } from "@/lib/staff-telegram";
+import { AdminNav } from "../../AdminNav";
 import { StaffTelegramLink } from "../../StaffTelegramLink";
 import { logout } from "../auth-actions";
 import { expertLogout } from "../../expert/actions";
@@ -30,14 +30,10 @@ export default async function PanelLayout({ children }: { children: ReactNode })
   return (
     <div className="admin">
       <header className="admin__header">
-        <nav>
-          {NAV.filter((n) => !(expert && n.adminOnly)).map((n) => (
-            <Link key={n.href} href={expert ? (n.expertHref ?? n.href) : n.href}>
-              {n.label}
-            </Link>
-          ))}
-          {expert && <span className="muted">{staff.expert.name}</span>}
-        </nav>
+        <AdminNav
+          items={NAV.filter((n) => !(expert && n.adminOnly)).map((n) => ({ href: expert ? (n.expertHref ?? n.href) : n.href, label: n.label }))}
+          {...(expert && { who: staff.expert.name })}
+        />
         <div className="row">
           <StaffTelegramLink kind={ref.kind} connected={tg.connected} name={tg.name} />
           <form action={expert ? expertLogout : logout}>

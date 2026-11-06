@@ -200,7 +200,7 @@ describe("переписка в Telegram-боте", () => {
     expect(inB.filter((m) => m.author === "client").map((m) => m.body)).toEqual(["А вам, Ольга?", "И ещё вопрос"]);
     // Эксперт видит, что клиент ответил из Telegram
     const staff = await messageViews(db, a.chat, 0, "staff");
-    expect(staff.find((m) => m.author === "client")?.authorName).toBe("Анна · из Telegram");
+    expect(staff.find((m) => m.author === "client")).toMatchObject({ authorName: "Анна", viaTelegram: true });
 
     // Команды и стикеры — не ответ эксперту
     expect(await incoming("/stop")).toEqual({ handled: false });

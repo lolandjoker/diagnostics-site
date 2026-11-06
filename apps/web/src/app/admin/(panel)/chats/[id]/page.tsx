@@ -21,23 +21,24 @@ export default async function AdminChatPage(props: PageProps<"/admin/chats/[id]"
     <>
       <StaffChatHead
         name={header?.leadName ?? "Клиент"}
-        meta={
-          <>
-            Дата рождения: {header?.birthDate.split("-").reverse().join(".")} · Эксперт: {header?.expertName}
-          </>
-        }
-        note={
+        birthDate={header?.birthDate ?? null}
+        expertName={header?.expertName ?? null}
+        telegram={header?.telegram ?? false}
+        geoCountry={header?.geoCountry ?? null}
+        geoCity={header?.geoCity ?? null}
+        warning={
           header?.expertArchived ? (
             <p className="notice notice--error staff-chat__note">
               Эксперт {header.expertName} в архиве — клиент этот чат сейчас не видит и уведомлений не получает. Сообщения
               сохранятся и появятся у него, когда эксперта достанут из архива.
             </p>
-          ) : (
-            <p className="muted staff-chat__note">
-              Ваши сообщения клиент видит от имени эксперта — {header?.expertName}, с его фото. Подпись «
-              {t["chat.admin_name"]}» (у операторов — «Оператор: имя») видите только вы и эксперты.
-            </p>
-          )
+          ) : undefined
+        }
+        info={
+          <>
+            Ваши сообщения клиент видит от имени эксперта — {header?.expertName}, с его фото. Подпись «{t["chat.admin_name"]}» (у
+            операторов — «Оператор: имя») видите только вы и эксперты.
+          </>
         }
       />
       <ChatThread
@@ -46,6 +47,7 @@ export default async function AdminChatPage(props: PageProps<"/admin/chats/[id]"
         typingUrl={`/admin/api/chat/${conversation.id}/typing`}
         typingName={header?.leadName ?? "Клиент"}
         ownAuthors={["admin"]}
+        receipts="staff"
         labels={{ placeholder: t["chat.placeholder"], send: t["chat.send"] }}
         call={
           <CallPanel

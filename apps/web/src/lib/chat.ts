@@ -371,6 +371,8 @@ export interface MessageView {
   /** Адрес приложенного фото. */
   photo?: string;
   createdAt: string;
+  /** Сотрудникам: клиент написал это из Telegram-бота. */
+  viaTelegram?: boolean;
 }
 
 /**
@@ -408,7 +410,7 @@ export async function messageViews(
     const expertId = asExpert ? conversation.expertId : m.expertId;
     const authorName =
       author === "client"
-        ? clientName + (viewer === "staff" && m.viaTelegram ? " · из Telegram" : "")
+        ? clientName
         : author === "expert"
           ? ((asExpert ? chatExpert?.name : expertName) ?? "Эксперт") +
             // Сотрудники видят, что это приветствие сайта, а не эксперт сам написал
@@ -430,6 +432,7 @@ export async function messageViews(
       createdAt: m.createdAt.toISOString(),
     };
     if (photoId !== null) view.photo = `/api/chat/${conversation.leadId}/photo/${m.id}`;
+    if (viewer === "staff" && m.viaTelegram) view.viaTelegram = true;
     out.push(view);
   }
   return out;
@@ -451,6 +454,18 @@ export interface InboxItem {
   unread: number;
   /** Клиент попросил позвонить, а звонка ещё не было. */
   callRequested: boolean;
+  /** Клиент подключил Telegram — ответы уходят ему и в бот. */
+  telegram: boolean;
+  /** Откуда клиент по IP (lib/geo.ts): код страны и город; null — не знаем. */
+  geoCountry: string | null;
+  geoCity: string | null;
+  /**
+   * «Без ответа»: клиент написал, а живого ответа после этого не было (автоприветствие и подробный разбор
+   * ответом не считаются) — с какого момента он ждёт; null — ответили или клиент ничего не писал.
+   */
+  waitingSince: string | null;
+  /** Последнее сообщение в чате — наше (не клиента): прочитал ли его клиент. null — последнее от клиента. */
+  lastOwnRead: boolean | null;
 }
 
 /** Все чаты, свежие сверху. Эксперт видит все и может ответить в любом. */
@@ -464,6 +479,14 @@ export async function inbox(db: Db, limit = 300): Promise<InboxItem[]> {
         and m.author = 'client' and (${conversations.expertReadAt} is null or m.created_at > ${conversations.expertReadAt}))`.mapWith(
         Number,
       ),
+      telegram: sql<boolean>`${leads.telegramUserId} is not null`.mapWith(Boolean),
+      geoCountry: leads.geoCountry,
+      geoCity: leads.geoCity,
+      waitingSince: sql<string | null>`(select min(m.created_at) from ${messages} m where m.conversation_id = ${conversations.id}
+        and m.author = 'client' and m.id > coalesce((select max(s.id) from ${messages} s where s.conversation_id = ${conversations.id}
+          and s.author in ('expert', 'admin') and s.automatic = false), 0))`,
+      lastAuthor: sql<string | null>`(select m.author from ${messages} m where m.conversation_id = ${conversations.id} order by m.id desc limit 1)`,
+      lastAt: sql<string | null>`(select m.created_at from ${messages} m where m.conversation_id = ${conversations.id} order by m.id desc limit 1)`,
       lastMessage: sql<string>`coalesce((select case when m.product_id is not null then '[предложение продукта]'
           when m.body = '' and exists (select 1 from ${messagePhotos} p where p.message_id = m.id) then '[фото]'
           else left(m.body, 120) end
@@ -483,6 +506,14 @@ export async function inbox(db: Db, limit = 300): Promise<InboxItem[]> {
     lastMessage: r.lastMessage,
     unread: r.unread,
     callRequested: r.c.callRequestedAt !== null,
+    telegram: r.telegram,
+    geoCountry: r.geoCountry,
+    geoCity: r.geoCity,
+    waitingSince: r.waitingSince ? new Date(r.waitingSince).toISOString() : null,
+    lastOwnRead:
+      r.lastAuthor === null || r.lastAuthor === "client"
+        ? null
+        : r.c.clientReadAt !== null && r.lastAt !== null && r.c.clientReadAt.getTime() >= new Date(r.lastAt).getTime(),
   }));
 }
 
@@ -492,6 +523,10 @@ export async function conversationHeader(db: Db, conversation: Conversation) {
     .select({
       leadName: leads.name,
       birthDate: leads.birthDate,
+      telegram: sql<boolean>`${leads.telegramUserId} is not null`.mapWith(Boolean),
+      geoCountry: leads.geoCountry,
+      geoCity: leads.geoCity,
+      source: leads.source,
       expertName: experts.name,
       expertArchived: sql<boolean>`${experts.archivedAt} is not null`.mapWith(Boolean),
     })
