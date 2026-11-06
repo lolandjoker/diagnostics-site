@@ -5,6 +5,9 @@ import type { Db } from "@/db";
 import { leads, telegramBlocks } from "@/db/schema";
 import { blockClient, inheritBlock, isTelegramBlocked, unblockClient } from "./blocks";
 import { broadcastRecipients } from "./broadcasts";
+import { drawDailyCard } from "./club";
+import { runArchetype } from "./quiz-archetype";
+import { runYesNo } from "./quiz-yesno";
 import { inbox, postMessage, startConversation } from "./chat";
 import { createExpert, setExpertOnline } from "./experts";
 import { createLead } from "./leads";
@@ -124,5 +127,23 @@ describe("кому рассылка", () => {
     expect(await broadcastRecipients(db, "all")).toEqual([8001, 8002, 8003]);
     expect(await broadcastRecipients(db, "silent")).toEqual([8001]);
     expect(await broadcastRecipients(db, "never")).toEqual([8003]);
+  });
+
+  it("по квизам: не проходили архетип / «Да или нет» / не тянули карту / ни одного квиза", async () => {
+    vi.stubEnv("ANTHROPIC_API_KEY", "");
+    const e = await expert();
+    const arch = await chat(8101, e, "Архетип");
+    await runArchetype(db, arch.lead, [1, 1, 1, 0, 3], new Date());
+    const yn = await chat(8102, e, "Вопрос");
+    await runYesNo(db, yn.lead, "Стоит ли менять работу?", new Date());
+    await drawDailyCard(db, yn.lead.id, 1, new Date());
+    await chat(8103, e, "Ничего");
+
+    expect(await broadcastRecipients(db, "no_archetype")).toEqual([8102, 8103]);
+    expect(await broadcastRecipients(db, "no_yesno")).toEqual([8101, 8103]);
+    expect(await broadcastRecipients(db, "no_compat")).toEqual([8101, 8102, 8103]);
+    expect(await broadcastRecipients(db, "no_card")).toEqual([8101, 8103]);
+    expect(await broadcastRecipients(db, "no_quiz")).toEqual([8103]);
+    vi.unstubAllEnvs();
   });
 });

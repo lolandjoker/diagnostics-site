@@ -5560,3 +5560,35 @@ body.no-scroll {
   box-shadow: 0 0 0 3px rgba(214, 160, 20, 0.55);
   transition: box-shadow 0.4s;
 }
+
+/* Рассылки: готовые шаблоны */
+.bc-templates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  font-size: 0.85rem;
+}
+
+.bc-template {
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  transition:
+    border-color 0.2s,
+    background 0.2s;
+}
+
+.bc-template:hover {
+  border-color: var(--gold);
+}
+
+.bc-template.is-current {
+  border-color: var(--gold);
+  background: color-mix(in srgb, var(--gold) 12%, transparent);
+  font-weight: 700;
+}

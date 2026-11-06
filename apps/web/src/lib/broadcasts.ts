@@ -10,7 +10,7 @@ import { desc, eq, inArray, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { broadcasts, conversations, leads } from "@/db/schema";
 import { em } from "./bot-emoji";
-import { PERSONAL_PAGES, type PersonalPage, isPersonalPage } from "./broadcast-pages";
+import { AUDIENCES, type Audience, PERSONAL_PAGES, type PersonalPage, isAudience, isPersonalPage } from "./broadcast-pages";
 import { type BotButton, type TelegramConfig, ensureBotEmoji, esc, sendMessage } from "./telegram";
 
 export const MAX_BROADCAST_LENGTH = 3500;
@@ -20,15 +20,7 @@ export const BROADCAST_GAP_MS = 24 * 60 * 60 * 1000;
 
 export type Broadcast = typeof broadcasts.$inferSelect;
 
-export const AUDIENCES = {
-  all: "Всем, кто подключил Telegram",
-  silent: "Не ответили нам в чате — последнее сообщение наше, клиент молчит",
-  never: "Ни разу не написали в чат",
-} as const;
-
-export type Audience = keyof typeof AUDIENCES;
-
-export const isAudience = (v: unknown): v is Audience => typeof v === "string" && Object.hasOwn(AUDIENCES, v);
+export { AUDIENCES, type Audience, isAudience };
 
 // Личная кнопка: куда ведёт и надпись по умолчанию (chat — последний чат человека, нет чата — выбор эксперта)
 export { PERSONAL_PAGES, type PersonalPage, isPersonalPage };
@@ -121,9 +113,22 @@ function buttons(input: BroadcastInput, siteUrl?: string, target?: { leadId: str
  * Кому рассылать (каждый человек Telegram один раз, по всем его заявкам и чатам):
  * - all — все с привязанной заявкой;
  * - silent — писал в чат, но самое последнее сообщение во всех его чатах — наше (эксперт, оператор, авторазбор);
- * - never — ни одного своего сообщения ни в одном чате.
+ * - never — ни одного своего сообщения ни в одном чате;
+ * - no_archetype / no_compat / no_yesno — не проходил этот квиз ни по одной своей заявке, no_card — ни разу не тянул
+ *   карту дня, no_quiz — ни одного квиза.
  * Заблокированных не берём.
  */
+const AUDIENCE_WHERE: Record<Audience, ReturnType<typeof sql>> = {
+  all: sql`true`,
+  silent: sql`wrote and last_author <> 'client'`,
+  never: sql`not wrote`,
+  no_archetype: sql`not did_archetype`,
+  no_compat: sql`not did_compat`,
+  no_yesno: sql`not did_yesno`,
+  no_card: sql`not did_card`,
+  no_quiz: sql`not did_archetype and not did_compat and not did_yesno`,
+};
+
 export async function broadcastRecipients(db: Db, audience: Audience = "all"): Promise<number[]> {
   const res = await db.execute<{ tg: number | string }>(sql`
     with people as (
@@ -136,11 +141,15 @@ export async function broadcastRecipients(db: Db, audience: Audience = "all"): P
         exists (select 1 from messages m join conversations c on c.id = m.conversation_id join leads l on l.id = c.lead_id
                 where l.telegram_user_id = p.tg and m.author = 'client') as wrote,
         (select m.author from messages m join conversations c on c.id = m.conversation_id join leads l on l.id = c.lead_id
-         where l.telegram_user_id = p.tg order by m.created_at desc, m.id desc limit 1) as last_author
+         where l.telegram_user_id = p.tg order by m.created_at desc, m.id desc limit 1) as last_author,
+        exists (select 1 from club_quizzes q join leads l on l.id = q.lead_id where l.telegram_user_id = p.tg and q.kind = 'archetype') as did_archetype,
+        exists (select 1 from club_quizzes q join leads l on l.id = q.lead_id where l.telegram_user_id = p.tg and q.kind = 'compat') as did_compat,
+        exists (select 1 from club_quizzes q join leads l on l.id = q.lead_id where l.telegram_user_id = p.tg and q.kind = 'yesno') as did_yesno,
+        exists (select 1 from daily_cards d join leads l on l.id = d.lead_id where l.telegram_user_id = p.tg) as did_card
       from people p
     )
     select tg from stats
-    where ${audience === "silent" ? sql`wrote and last_author <> 'client'` : audience === "never" ? sql`not wrote` : sql`true`}
+    where ${AUDIENCE_WHERE[audience]}
     order by tg`);
   const rows = (Array.isArray(res) ? res : (res as { rows: { tg: number | string }[] }).rows) as { tg: number | string }[];
   return rows.map((r) => Number(r.tg));
@@ -148,8 +157,9 @@ export async function broadcastRecipients(db: Db, audience: Audience = "all"): P
 
 /** Сколько получателей у каждого условия — для формы. */
 export async function audienceCounts(db: Db): Promise<Record<Audience, number>> {
-  const [all, silent, never] = await Promise.all([broadcastRecipients(db, "all"), broadcastRecipients(db, "silent"), broadcastRecipients(db, "never")]);
-  return { all: all.length, silent: silent.length, never: never.length };
+  const keys = Object.keys(AUDIENCES) as Audience[];
+  const lists = await Promise.all(keys.map((a) => broadcastRecipients(db, a)));
+  return Object.fromEntries(keys.map((a, i) => [a, lists[i]!.length])) as Record<Audience, number>;
 }
 
 export async function listBroadcasts(db: Db, limit = 20): Promise<Broadcast[]> {
