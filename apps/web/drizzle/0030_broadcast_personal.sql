@@ -1,0 +1,1 @@
+ALTER TABLE "broadcasts" ADD COLUMN "personal_page" text DEFAULT '' NOT NULL;

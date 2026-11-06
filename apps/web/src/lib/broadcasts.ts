@@ -3,11 +3,12 @@
  * командой /stop): всем или только тем, кто не ответил нам в чате / ни разу не писал (AUDIENCES).
  * Заблокированных клиентов (lib/blocks.ts) в рассылке нет. Отправка идёт в фоне, не быстрее BROADCAST_PER_SECOND сообщений в секунду (лимит Telegram —
  * около 30): страница показывает, сколько ушло. Внизу каждой рассылки — «Отключить сообщения — /stop».
- * Разметка текста: **жирный**. Заблокировавшим бота сообщение не доходит — оно в «не дошло».
+ * Личная кнопка (PERSONAL_PAGES) открывает каждому его собственную страницу внутри Telegram — «Мой день», чат,
+ * квиз — по его последней заявке, без ввода имени и даты. Разметка текста: **жирный**. Заблокировавшим бота сообщение не доходит — оно в «не дошло».
  */
-import { desc, sql } from "drizzle-orm";
+import { desc, eq, inArray, sql } from "drizzle-orm";
 import type { Db } from "@/db";
-import { broadcasts } from "@/db/schema";
+import { broadcasts, conversations, leads } from "@/db/schema";
 import { em } from "./bot-emoji";
 import { type BotButton, type TelegramConfig, ensureBotEmoji, esc, sendMessage } from "./telegram";
 
@@ -28,9 +29,26 @@ export type Audience = keyof typeof AUDIENCES;
 
 export const isAudience = (v: unknown): v is Audience => typeof v === "string" && Object.hasOwn(AUDIENCES, v);
 
+/** Личная кнопка: куда ведёт и надпись по умолчанию. chat — последний чат человека (нет чата — выбор эксперта). */
+export const PERSONAL_PAGES = {
+  den: { label: "«Мой день»", button: "Открыть «Мой день»" },
+  arhetip: { label: "Тест «Ваш архетип»", button: "Пройти тест «Ваш архетип»" },
+  sovmestimost: { label: "Совместимость пары", button: "Узнать совместимость" },
+  "da-net": { label: "«Да или нет»", button: "Задать вопрос картам" },
+  chat: { label: "Чат с экспертом", button: "Открыть чат с экспертом" },
+} as const;
+
+export type PersonalPage = keyof typeof PERSONAL_PAGES;
+
+export const isPersonalPage = (v: unknown): v is PersonalPage => typeof v === "string" && Object.hasOwn(PERSONAL_PAGES, v);
+
 export interface BroadcastInput {
   /** Кому; по умолчанию — всем. */
   audience?: Audience;
+  /** Личная кнопка — куда ведёт; не задана — без неё. */
+  personalPage?: PersonalPage | undefined;
+  /** Надпись личной кнопки; пусто — по умолчанию (PERSONAL_PAGES). */
+  personalText?: string;
   body: string;
   buttonText: string;
   buttonUrl: string;
@@ -47,7 +65,48 @@ export function validateBroadcast(input: BroadcastInput): string | null {
   if ((t === "") !== (u === "")) return "Для кнопки нужны и надпись, и адрес";
   if (t.length > 40) return "Надпись на кнопке — до 40 символов";
   if (u && !/^https:\/\/[^\s]+$/.test(u)) return "Адрес кнопки должен начинаться с https://";
+  if ((input.personalText ?? "").trim().length > 40) return "Надпись личной кнопки — до 40 символов";
   return null;
+}
+
+/** Последняя заявка и последний чат каждого человека Telegram — для личной кнопки. */
+async function personalTargets(db: Db, telegramUserIds: number[]): Promise<Map<number, { leadId: string; chatId: string | null }>> {
+  const out = new Map<number, { leadId: string; chatId: string | null }>();
+  for (let i = 0; i < telegramUserIds.length; i += 500) {
+    const part = telegramUserIds.slice(i, i + 500);
+    const rows = await db
+      .select({ tg: leads.telegramUserId, leadId: leads.id, createdAt: leads.createdAt })
+      .from(leads)
+      .where(inArray(leads.telegramUserId, part));
+    const latest = new Map<number, { leadId: string; at: number }>();
+    for (const r of rows) {
+      if (r.tg === null) continue;
+      const prev = latest.get(r.tg);
+      if (!prev || r.createdAt.getTime() > prev.at) latest.set(r.tg, { leadId: r.leadId, at: r.createdAt.getTime() });
+    }
+    const leadIds = [...latest.values()].map((v) => v.leadId);
+    const chats = leadIds.length
+      ? await db
+          .select({ leadId: conversations.leadId, id: conversations.id, at: conversations.lastMessageAt })
+          .from(conversations)
+          .where(inArray(conversations.leadId, leadIds))
+      : [];
+    const lastChat = new Map<string, { id: string; at: number }>();
+    for (const c of chats) {
+      const prev = lastChat.get(c.leadId);
+      if (!prev || c.at.getTime() > prev.at) lastChat.set(c.leadId, { id: c.id, at: c.at.getTime() });
+    }
+    for (const [tg, v] of latest) out.set(tg, { leadId: v.leadId, chatId: lastChat.get(v.leadId)?.id ?? null });
+  }
+  return out;
+}
+
+/** Адрес личной страницы человека. */
+export function personalUrl(siteUrl: string, page: PersonalPage, target: { leadId: string; chatId: string | null }): string {
+  if (page === "chat") {
+    return target.chatId ? `${siteUrl}/razbor/${target.leadId}/chat?c=${target.chatId}` : `${siteUrl}/razbor/${target.leadId}/eksperty`;
+  }
+  return `${siteUrl}/razbor/${target.leadId}/${page}`;
 }
 
 /** Текст рассылки для Telegram (HTML): **жирный**, значок подарка, внизу — как отключить. */
@@ -56,8 +115,15 @@ export function broadcastHtml(input: BroadcastInput): string {
   return `${input.gift ? em("gift") : ""}${body}\n\n<i>Отключить сообщения — /stop</i>`;
 }
 
-function buttons(input: BroadcastInput): BotButton[] {
-  return input.buttonText.trim() ? [{ text: input.buttonText.trim(), url: input.buttonUrl.trim() }] : [];
+/** Кнопки рассылки: личная (своя у каждого, открывается внутри Telegram) и обычная ссылка. */
+function buttons(input: BroadcastInput, siteUrl?: string, target?: { leadId: string; chatId: string | null }): BotButton[] {
+  const out: BotButton[] = [];
+  if (input.personalPage && siteUrl && target) {
+    const text = input.personalText?.trim() || PERSONAL_PAGES[input.personalPage].button;
+    out.push({ text, webApp: personalUrl(siteUrl, input.personalPage, target), icon: input.personalPage === "chat" ? "chat" : "sparkle" });
+  }
+  if (input.buttonText.trim()) out.push({ text: input.buttonText.trim(), url: input.buttonUrl.trim() });
+  return out;
 }
 
 /**
@@ -100,9 +166,16 @@ export async function listBroadcasts(db: Db, limit = 20): Promise<Broadcast[]> {
 }
 
 /** Проба: отправить рассылку одному человеку (себе), без записи в историю. */
-export async function sendTestBroadcast(cfg: TelegramConfig, chatId: number, input: BroadcastInput): Promise<boolean> {
+export async function sendTestBroadcast(db: Db, cfg: TelegramConfig, chatId: number, input: BroadcastInput): Promise<boolean> {
   await ensureBotEmoji(cfg);
-  return (await sendMessage(cfg, chatId, broadcastHtml(input), buttons(input))) !== null;
+  const target = input.personalPage ? (await personalTargets(db, [chatId])).get(chatId) : undefined;
+  return (await sendMessage(cfg, chatId, broadcastHtml(input), buttons(input, cfg.siteUrl, target))) !== null;
+}
+
+/** Есть ли у этого Telegram заявка — личной кнопке в пробе нужно куда вести. */
+export async function hasLead(db: Db, telegramUserId: number): Promise<boolean> {
+  const [row] = await db.select({ id: leads.id }).from(leads).where(eq(leads.telegramUserId, telegramUserId)).limit(1);
+  return row !== undefined;
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -116,7 +189,14 @@ export async function startBroadcast(db: Db, cfg: TelegramConfig, input: Broadca
   const recipients = await broadcastRecipients(db, audience);
   const [row] = await db
     .insert(broadcasts)
-    .values({ body: input.body.trim(), buttonText: input.buttonText.trim(), buttonUrl: input.buttonUrl.trim(), total: recipients.length, audience })
+    .values({
+      body: input.body.trim(),
+      buttonText: input.buttonText.trim(),
+      buttonUrl: input.buttonUrl.trim(),
+      total: recipients.length,
+      audience,
+      personalPage: input.personalPage ?? "",
+    })
     .returning({ id: broadcasts.id });
   const id = row!.id;
   void runBroadcast(db, cfg, id, recipients, input);
@@ -126,7 +206,7 @@ export async function startBroadcast(db: Db, cfg: TelegramConfig, input: Broadca
 export async function runBroadcast(db: Db, cfg: TelegramConfig, id: number, recipients: number[], input: BroadcastInput): Promise<void> {
   await ensureBotEmoji(cfg);
   const html = broadcastHtml(input);
-  const kb = buttons(input);
+  const targets = input.personalPage ? await personalTargets(db, recipients) : new Map();
   let sent = 0;
   let failed = 0;
   const save = (finished: boolean) =>
@@ -136,7 +216,8 @@ export async function runBroadcast(db: Db, cfg: TelegramConfig, id: number, reci
       .where(sql`${broadcasts.id} = ${id}`);
   try {
     for (let i = 0; i < recipients.length; i++) {
-      if ((await sendMessage(cfg, recipients[i]!, html, kb)) !== null) sent++;
+      const tg = recipients[i]!;
+      if ((await sendMessage(cfg, tg, html, buttons(input, cfg.siteUrl, targets.get(tg)))) !== null) sent++;
       else failed++;
       if ((i + 1) % 25 === 0) await save(false);
       await sleep(1000 / BROADCAST_PER_SECOND);
