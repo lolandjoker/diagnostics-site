@@ -144,6 +144,7 @@ export function ChatThread({
   typingName,
   receipts = "own",
   manageUrl,
+  focusId,
 }: {
   /** GET ?after= и POST — один адрес. */
   url: string;
@@ -187,6 +188,8 @@ export function ChatThread({
    * Исправить — только наши сообщения (эксперт, админ/оператор), удалить — любое.
    */
   manageUrl?: string;
+  /** Открыть на этом сообщении (из поиска по тексту): прокрутить к нему и подсветить. */
+  focusId?: number;
 }) {
   const [items, setItems] = useState<MessageView[]>([]);
   const [typing, setTyping] = useState(false);
@@ -268,10 +271,20 @@ export function ChatThread({
     return () => clearInterval(timer);
   }, [poll]);
 
+  const focused = useRef(false);
   useEffect(() => {
     const el = scroller.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [items.length, typing]);
+    if (focusId !== undefined && !focused.current && items.some((m) => m.id === focusId)) {
+      focused.current = true;
+      const row = document.getElementById(`m-${focusId}`);
+      row?.scrollIntoView({ block: "center" });
+      row?.classList.add("is-found");
+      window.setTimeout(() => row?.classList.remove("is-found"), 2600);
+      return;
+    }
+    // Пока сообщение из поиска не показали — вниз не прокручиваем
+    if (el && (focusId === undefined || focused.current)) el.scrollTop = el.scrollHeight;
+  }, [items.length, typing, focusId]);
 
   function keepAtBottom() {
     const el = scroller.current;
@@ -573,7 +586,7 @@ export function ChatThread({
           const first = !prev || newDay || !sameSender(prev, m);
           const own = isOwn(m);
           return (
-            <div key={m.id} className="chat__row-wrap">
+            <div key={m.id} id={`m-${m.id}`} className="chat__row-wrap">
               {newDay && (
                 <div className="chat__day">
                   <span>{dayLabel(m.createdAt)}</span>

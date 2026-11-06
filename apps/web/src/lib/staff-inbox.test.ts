@@ -1,12 +1,13 @@
 import { eq } from "drizzle-orm";
 import { createTestDb } from "@/db";
 import type { Db } from "@/db";
-import { leads, messages } from "@/db/schema";
+import { conversations, leads, messages } from "@/db/schema";
 import { inbox, markClientRead, messageViews, postMessage, startConversation } from "./chat";
 import { createExpert, setExpertOnline } from "./experts";
 import { clientIp, lookupIp, rememberLeadGeo } from "./geo";
 import { cityName, countryName, flag, geoLabel } from "./geo-label";
 import { geoStats } from "./geo-stats";
+import { inboxExperts, searchMessages, snippetAround, staffInbox } from "./staff-inbox";
 import { createLead } from "./leads";
 
 let db: Db;
@@ -110,5 +111,61 @@ describe("геолокация", () => {
     ]);
     expect(s.cities[0]).toEqual({ country: "RU", city: "Moscow", leads: 2, chats: 1 });
     expect(s.unknown).toBe(1);
+  });
+});
+
+describe("чаты по экспертам, переходы и поиск", () => {
+  it("клиент у двух экспертов: «перешёл от», где разбор, другие чаты; фильтр по эксперту", async () => {
+    const first = await chatWith("Анна");
+    // Тот же клиент (та же заявка) пишет второму эксперту
+    const e2 = await createExpert(db, { name: "Ольга Р | Таролог", login: `olga-${++n}`, password: "пароль-эксперта" });
+    if (!e2.ok) throw new Error(e2.error);
+    await setExpertOnline(db, e2.id, true, new Date());
+    const second = await startConversation(db, first.lead, e2.id, new Date(Date.now() + 1000));
+    if (!second.ok) throw new Error(second.error);
+    await db.update(conversations).set({ fullTextSentAt: new Date(), createdAt: new Date(Date.now() - 60_000) }).where(eq(conversations.id, first.chat.id));
+    await postMessage(db, second.conversation.id, { author: "client", body: "Здравствуйте, Ольга" });
+
+    const list = await inbox(db);
+    const a = list.find((c) => c.id === first.chat.id)!;
+    const b = list.find((c) => c.id === second.conversation.id)!;
+    expect(a).toMatchObject({ diagnosis: true, movedFrom: null, otherChats: [{ id: second.conversation.id, diagnosis: false }] });
+    expect(b).toMatchObject({ diagnosis: false, movedFrom: a.expertName, otherChats: [{ id: first.chat.id, diagnosis: true }] });
+
+    const onlyOlga = await inbox(db, { expertId: e2.id });
+    expect(onlyOlga.map((c) => c.id)).toEqual([second.conversation.id]);
+    const experts = await inboxExperts(db);
+    expect(experts.map((e) => e.id)).toEqual(expect.arrayContaining([first.expertId, e2.id]));
+  });
+
+  it("поиск по тексту сообщений: без регистра, % и _ — как обычные символы, фильтр по эксперту, кусок вокруг", async () => {
+    const a = await chatWith("Вера");
+    const b = await chatWith("Ира");
+    await postMessage(db, a.chat.id, { author: "client", body: "Хочу узнать про СОВМЕСТИМОСТЬ с мужем" });
+    await postMessage(db, b.chat.id, { author: "admin", body: "Совместимость посчитаем по датам" });
+    await postMessage(db, b.chat.id, { author: "client", body: "скидка 50% будет?" });
+
+    const hits = await searchMessages(db, "совместим");
+    expect(hits.map((h) => h.leadName).sort()).toEqual(["Вера", "Ира"]);
+    expect(hits[0]!.snippet.toLowerCase()).toContain("совместим");
+    expect((await searchMessages(db, "совместим", a.expertId)).map((h) => h.leadName)).toEqual(["Вера"]);
+    expect(await searchMessages(db, "с")).toEqual([]);
+    expect((await searchMessages(db, "50%")).map((h) => h.leadName)).toEqual(["Ира"]);
+    expect(await searchMessages(db, "5_%")).toEqual([]);
+    expect(snippetAround("a".repeat(100) + " найди меня " + "b".repeat(200), "найди")).toMatch(/^…a+ найди меня b+…$/);
+  });
+
+  it("список для панели — один запрос к базе на 2 секунды для всех сотрудников", async () => {
+    const { chat } = await chatWith("Кеш");
+    const t = Date.now() + 10_000_000;
+    const first = await staffInbox(db, undefined, t);
+    expect(first.some((c) => c.id === chat.id)).toBe(true);
+    await postMessage(db, chat.id, { author: "client", body: "новое" });
+    // Через секунду — то же самое из кеша
+    expect(await staffInbox(db, undefined, t + 1000)).toBe(first);
+    // Через 2 секунды — свежий список
+    const fresh = await staffInbox(db, undefined, t + 2500);
+    expect(fresh).not.toBe(first);
+    expect(fresh.find((c) => c.id === chat.id)?.lastMessage).toBe("новое");
   });
 });

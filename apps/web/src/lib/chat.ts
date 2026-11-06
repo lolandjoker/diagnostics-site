@@ -6,7 +6,7 @@
  * чата (имя и фото); подпись «Администратор» видят только эксперты и админ.
  * К сообщению можно приложить фото (JPEG, PNG или WebP до MAX_CHAT_PHOTO_BYTES).
  */
-import { type SQL, and, asc, desc, eq, gt, isNull, lte, ne, sql } from "drizzle-orm";
+import { type SQL, and, asc, desc, eq, gt, inArray, isNull, lte, ne, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { conversations, experts, leads, messagePhotos, messages, operators } from "@/db/schema";
 import type { MessageAuthor } from "@/db/schema";
@@ -495,10 +495,47 @@ export interface InboxItem {
   lastOwnRead: boolean | null;
   /** Клиент заблокирован (lib/blocks.ts). */
   blocked: boolean;
+  /** В этом чате клиент получил подробный разбор. */
+  diagnosis: boolean;
+  /** Другие чаты этого же клиента (та же заявка) — с какими экспертами, где разбор; по времени начала. */
+  otherChats: OtherChat[];
+  /** Клиент пришёл в этот чат из другого (чат начат позже другого) — от какого эксперта. */
+  movedFrom: string | null;
+}
+
+/** Ещё один чат того же клиента. */
+export interface OtherChat {
+  id: string;
+  expertName: string;
+  diagnosis: boolean;
+  startedAt: string;
+}
+
+/**
+ * Все чаты каждого из клиентов — одним запросом (для списка и шапки): leadId → чаты по времени начала.
+ */
+export async function chatsOfLeads(db: Db, leadIds: string[]): Promise<Map<string, (OtherChat & { leadId: string })[]>> {
+  const out = new Map<string, (OtherChat & { leadId: string })[]>();
+  const unique = [...new Set(leadIds)];
+  for (let i = 0; i < unique.length; i += 500) {
+    const rows = await db
+      .select({ id: conversations.id, leadId: conversations.leadId, expertName: experts.name, fullTextSentAt: conversations.fullTextSentAt, createdAt: conversations.createdAt })
+      .from(conversations)
+      .innerJoin(experts, eq(experts.id, conversations.expertId))
+      .where(inArray(conversations.leadId, unique.slice(i, i + 500)))
+      .orderBy(asc(conversations.createdAt));
+    for (const r of rows) {
+      const list = out.get(r.leadId) ?? [];
+      list.push({ id: r.id, leadId: r.leadId, expertName: r.expertName, diagnosis: r.fullTextSentAt !== null, startedAt: r.createdAt.toISOString() });
+      out.set(r.leadId, list);
+    }
+  }
+  return out;
 }
 
 /** Все чаты, свежие сверху. Эксперт видит все и может ответить в любом. */
-export async function inbox(db: Db, limit = 300): Promise<InboxItem[]> {
+export async function inbox(db: Db, opts: { limit?: number; expertId?: number | undefined } = {}): Promise<InboxItem[]> {
+  const limit = opts.limit ?? 300;
   const rows = await db
     .select({
       c: conversations,
@@ -525,9 +562,14 @@ export async function inbox(db: Db, limit = 300): Promise<InboxItem[]> {
     .from(conversations)
     .innerJoin(leads, eq(leads.id, conversations.leadId))
     .innerJoin(experts, eq(experts.id, conversations.expertId))
+    .where(opts.expertId !== undefined ? eq(conversations.expertId, opts.expertId) : undefined)
     .orderBy(desc(conversations.lastMessageAt))
     .limit(limit);
-  return rows.map((r) => ({
+  const all = await chatsOfLeads(db, rows.map((r) => r.c.leadId));
+  return rows.map((r) => {
+    const chats = all.get(r.c.leadId) ?? [];
+    const idx = chats.findIndex((c) => c.id === r.c.id);
+    return {
     id: r.c.id,
     leadName: r.leadName,
     expertId: r.c.expertId,
@@ -546,7 +588,11 @@ export async function inbox(db: Db, limit = 300): Promise<InboxItem[]> {
       r.lastAuthor === null || r.lastAuthor === "client"
         ? null
         : r.c.clientReadAt !== null && r.lastAt !== null && r.c.clientReadAt.getTime() >= new Date(r.lastAt).getTime(),
-  }));
+    diagnosis: r.c.fullTextSentAt !== null,
+    otherChats: chats.filter((c) => c.id !== r.c.id).map(({ leadId: _l, ...c }) => c),
+    movedFrom: idx > 0 ? chats[idx - 1]!.expertName : null,
+    };
+  });
 }
 
 /** Шапка чата для сотрудников: кто клиент, какой эксперт, что видит клиент. */
