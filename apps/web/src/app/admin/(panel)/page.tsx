@@ -196,11 +196,11 @@ export default async function DashboardPage(props: PageProps<"/admin">) {
       <section className="admin-section">
         <h2>География</h2>
         <p className="muted">
-          Откуда заявки за период — по IP в момент заявки (сам IP не храним). Определено: {geoTotal}
-          {geo.unknown > 0 && <>, не определено: {geo.unknown} (старые заявки или адрес не нашёлся в базе)</>}.
+          Определено: {geoTotal}
+          {geo.unknown > 0 && <> · не определено: {geo.unknown}</>}
         </p>
         {geoTotal === 0 ? (
-          <p className="muted">Пока нет данных — появятся с новыми заявками.</p>
+          <p className="muted">Пока нет данных.</p>
         ) : (
           <div className="geo-stats">
             <div className="table-wrap">
@@ -255,11 +255,10 @@ export default async function DashboardPage(props: PageProps<"/admin">) {
           </div>
         )}
         <p className="muted geo-stats__credit">
-          Геоданные:{" "}
+          Данные:{" "}
           <a href="https://db-ip.com" target="_blank" rel="noopener noreferrer">
-            IP Geolocation by DB-IP
-          </a>{" "}
-          (CC BY 4.0). Точность — до города, у мобильного интернета город иногда определяется по месту оператора.
+            DB-IP
+          </a>
         </p>
       </section>
 
