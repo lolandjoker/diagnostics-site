@@ -2,29 +2,79 @@
 
 /**
  * Поля рассылки внутри формы: готовые рассылки (шаблон заполняет всё сразу), кому — с числом получателей,
- * текст, значок подарка и кнопка. Отправляет форма вокруг (broadcastAction) — имена полей прежние.
+ * условия (заявка старше N часов, молчит N часов — число получателей пересчитывается сразу), серия сообщений
+ * с фото или видео, значок подарка и кнопка. Отправляет форма вокруг (broadcastAction): поля body_<i>, media_<i>,
+ * messages_count, registered_on/registered_hours, silent_on/silent_hours.
  */
-import { useState } from "react";
-import { AUDIENCES, type Audience, BROADCAST_TEMPLATES } from "@/lib/broadcast-pages";
+import { useEffect, useRef, useState } from "react";
+import {
+  AUDIENCES,
+  type Audience,
+  BROADCAST_TEMPLATES,
+  MAX_BROADCAST_MESSAGES,
+  MAX_CAPTION,
+  MAX_FILTER_HOURS,
+  MAX_MEDIA_BYTES,
+  MAX_PHOTO_BYTES,
+  MEDIA_ACCEPT,
+  mediaKind,
+} from "@/lib/broadcast-pages";
 import { type ButtonKind, ButtonPicker } from "./ButtonPicker";
+
+type Attached = { name: string; size: number; kind: "photo" | "video" | null; url: string };
+type Draft = { id: number; body: string; file: Attached | null };
+type Filter = { on: boolean; hours: number };
+
+const mb = (bytes: number) =>
+  bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} КБ` : `${(bytes / 1024 / 1024).toFixed(1).replace(".", ",")} МБ`;
 
 export function BroadcastComposer({ counts, maxLength }: { counts: Record<Audience, number>; maxLength: number }) {
   const [audience, setAudience] = useState<Audience>("all");
-  const [body, setBody] = useState("");
   const [gift, setGift] = useState(false);
   const [kind, setKind] = useState<ButtonKind>("");
   const [label, setLabel] = useState("");
   const [template, setTemplate] = useState<string | null>(null);
+  const [registered, setRegistered] = useState<Filter>({ on: false, hours: 24 });
+  const [silent, setSilent] = useState<Filter>({ on: false, hours: 24 });
+  const [drafts, setDrafts] = useState<Draft[]>([{ id: 0, body: "", file: null }]);
+  const nextId = useRef(1);
 
   function apply(key: string) {
     const t = BROADCAST_TEMPLATES[key]!;
     setTemplate(key);
     setAudience(t.audience);
-    setBody(t.body);
     setGift(t.gift);
     setKind(t.button);
     setLabel(t.label);
+    setDrafts((list) => list.map((d, i) => (i === 0 ? { ...d, body: t.body } : d)));
   }
+
+  const update = (id: number, patch: Partial<Draft>) => setDrafts((list) => list.map((d) => (d.id === id ? { ...d, ...patch } : d)));
+  const add = () => setDrafts((list) => [...list, { id: nextId.current++, body: "", file: null }]);
+  const remove = (id: number) =>
+    setDrafts((list) => {
+      const gone = list.find((d) => d.id === id);
+      if (gone?.file) URL.revokeObjectURL(gone.file.url);
+      return list.filter((d) => d.id !== id);
+    });
+
+  const filtered = registered.on || silent.on;
+  const live = useLiveCount(audience, registered, silent, filtered);
+  const total = filtered ? live : counts[audience];
+
+  const mediaBytes = drafts.reduce((sum, d) => sum + (d.file?.size ?? 0), 0);
+  const problems = [
+    ...drafts.flatMap((d, i) =>
+      !d.file
+        ? []
+        : !d.file.kind
+          ? [`Сообщение ${i + 1}: подойдут фото JPG, PNG, WebP или видео MP4, MOV`]
+          : d.file.kind === "photo" && d.file.size > MAX_PHOTO_BYTES
+            ? [`Сообщение ${i + 1}: фото больше 10 МБ`]
+            : [],
+    ),
+    ...(mediaBytes > MAX_MEDIA_BYTES ? [`Фото и видео вместе — ${mb(mediaBytes)}, можно до 50 МБ`] : []),
+  ];
 
   return (
     <>
@@ -47,15 +97,197 @@ export function BroadcastComposer({ counts, maxLength }: { counts: Record<Audien
           </label>
         ))}
       </fieldset>
-      <label className="field">
-        <span>Текст (до {maxLength} символов)</span>
-        <textarea name="body" rows={8} maxLength={maxLength} required value={body} onChange={(e) => setBody(e.target.value)} />
-      </label>
+      <fieldset className="audience bc-filters">
+        <legend>Условия — необязательно, вместе с «Кому»</legend>
+        <FilterRow name="registered" value={registered} onChange={setRegistered}>
+          Заявка оставлена больше
+        </FilterRow>
+        <FilterRow name="silent" value={silent} onChange={setSilent} after="(и те, кто не писал вовсе)">
+          Не писали нам в чат больше
+        </FilterRow>
+        <p className="bc-total">
+          Получат: <b>{total ?? "…"}</b>
+          {filtered && <span className="muted"> — из {counts[audience]} по «Кому»</span>}
+        </p>
+      </fieldset>
+
+      <input type="hidden" name="messages_count" value={drafts.length} />
+      <div className="bc-messages">
+        {drafts.map((d, i) => (
+          <MessageEditor
+            key={d.id}
+            index={i}
+            total={drafts.length}
+            draft={d}
+            maxLength={maxLength}
+            onBody={(body) => update(d.id, { body })}
+            onFile={(file) => {
+              if (d.file) URL.revokeObjectURL(d.file.url);
+              update(d.id, { file });
+            }}
+            onRemove={() => remove(d.id)}
+          />
+        ))}
+        {drafts.length < MAX_BROADCAST_MESSAGES && (
+          <button type="button" className="bc-add" onClick={add}>
+            + Ещё сообщение
+          </button>
+        )}
+        <p className="muted bc-note">
+          Сообщения уходят подряд, одно за другим. Кнопка и «Отключить сообщения — /stop» — под последним. Фото — до 10 МБ,
+          все файлы вместе — до 50 МБ.
+        </p>
+        {problems.map((p) => (
+          <p key={p} className="notice notice--error">
+            {p}
+          </p>
+        ))}
+      </div>
+
       <label className="check">
         <input name="gift" type="checkbox" checked={gift} onChange={(e) => setGift(e.target.checked)} />
-        <span>Значок подарка в начале</span>
+        <span>Значок подарка в начале первого сообщения</span>
       </label>
       <ButtonPicker kind={kind} label={label} onKind={setKind} onLabel={setLabel} />
     </>
+  );
+}
+
+/** Условие: галочка и число часов. */
+function FilterRow({
+  name,
+  value,
+  onChange,
+  after,
+  children,
+}: {
+  name: string;
+  value: Filter;
+  onChange: (f: Filter) => void;
+  after?: string;
+  children: string;
+}) {
+  return (
+    <div className="check bc-filter">
+      <input id={`${name}_on`} name={`${name}_on`} type="checkbox" checked={value.on} onChange={(e) => onChange({ ...value, on: e.target.checked })} />
+      <label htmlFor={`${name}_on`}>{children}</label>
+      <input
+        className="bc-hours"
+        name={`${name}_hours`}
+        type="number"
+        inputMode="numeric"
+        min={1}
+        max={MAX_FILTER_HOURS}
+        value={value.hours}
+        aria-label="часов"
+        onChange={(e) => onChange({ on: true, hours: Math.max(0, Math.floor(Number(e.target.value) || 0)) })}
+      />
+      <span>ч{after ? ` ${after}` : ""}</span>
+    </div>
+  );
+}
+
+/** Сколько получат при условиях — с сервера, с паузой после ввода; прошлый запрос отменяется. */
+function useLiveCount(audience: Audience, registered: Filter, silent: Filter, enabled: boolean): number | null {
+  const [count, setCount] = useState<number | null>(null);
+  useEffect(() => {
+    if (!enabled) return;
+    const ctl = new AbortController();
+    const q = new URLSearchParams({ audience });
+    if (registered.on && registered.hours > 0) q.set("registered", String(registered.hours));
+    if (silent.on && silent.hours > 0) q.set("silent", String(silent.hours));
+    const timer = setTimeout(() => {
+      setCount(null);
+      fetch(`/admin/api/broadcast-count?${q}`, { signal: ctl.signal, cache: "no-store" })
+        .then((r) => (r.ok ? (r.json() as Promise<{ count: number }>) : null))
+        .then((r) => r && setCount(r.count))
+        .catch(() => {});
+    }, 300);
+    return () => {
+      clearTimeout(timer);
+      ctl.abort();
+    };
+  }, [audience, registered.on, registered.hours, silent.on, silent.hours, enabled]);
+  return count;
+}
+
+/** Одно сообщение серии: текст и фото или видео. Файл — в обычном поле формы (media_<i>), здесь только превью. */
+function MessageEditor({
+  index,
+  total,
+  draft,
+  maxLength,
+  onBody,
+  onFile,
+  onRemove,
+}: {
+  index: number;
+  total: number;
+  draft: Draft;
+  maxLength: number;
+  onBody: (body: string) => void;
+  onFile: (file: Attached | null) => void;
+  onRemove: () => void;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const f = draft.file;
+  const longCaption = f !== null && draft.body.trim().length > MAX_CAPTION;
+  return (
+    <div className="bc-message">
+      <div className="bc-message__head">
+        <b>{total > 1 ? `Сообщение ${index + 1}` : "Сообщение"}</b>
+        {total > 1 && (
+          <button type="button" className="bc-link" onClick={onRemove}>
+            Удалить
+          </button>
+        )}
+      </div>
+      <textarea
+        name={`body_${index}`}
+        rows={index === 0 ? 8 : 5}
+        maxLength={maxLength}
+        value={draft.body}
+        onChange={(e) => onBody(e.target.value)}
+        placeholder={f ? "Подпись к фото или видео — необязательно" : "Текст сообщения. Жирный — **так**"}
+        aria-label={`Текст сообщения ${index + 1}`}
+      />
+      <div className="bc-media">
+        <label className="bc-file">
+          <input
+            ref={fileRef}
+            type="file"
+            name={`media_${index}`}
+            accept={MEDIA_ACCEPT}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              onFile(file ? { name: file.name, size: file.size, kind: mediaKind(file.type), url: URL.createObjectURL(file) } : null);
+            }}
+          />
+          <span>{f ? "Заменить файл" : "Фото или видео"}</span>
+        </label>
+        {f && (
+          <>
+            {f.kind === "photo" && <img className="bc-thumb" src={f.url} alt="" />}
+            {f.kind === "video" && <video className="bc-thumb" src={f.url} muted playsInline preload="metadata" />}
+            <span className="muted bc-file-name">
+              {f.name} · {mb(f.size)}
+            </span>
+            <button
+              type="button"
+              className="bc-link"
+              onClick={() => {
+                if (fileRef.current) fileRef.current.value = "";
+                onFile(null);
+              }}
+            >
+              Убрать
+            </button>
+          </>
+        )}
+      </div>
+      {longCaption && (
+        <p className="muted bc-note">Текст длиннее {MAX_CAPTION} символов — в подпись не влезет: сначала уйдёт файл, следом текст.</p>
+      )}
+    </div>
   );
 }

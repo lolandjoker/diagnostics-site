@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getDb } from "@/db";
 import { isAdmin } from "@/lib/admin-auth";
-import { AUDIENCES, type Audience, BROADCAST_GAP_MS, MAX_BROADCAST_LENGTH, PERSONAL_PAGES, type PersonalPage, audienceCounts, listBroadcasts } from "@/lib/broadcasts";
+import { AUDIENCES, type Audience, BROADCAST_GAP_MS, type Broadcast, MAX_BROADCAST_LENGTH, PERSONAL_PAGES, type PersonalPage, audienceCounts, listBroadcasts } from "@/lib/broadcasts";
 import { telegramConfig } from "@/lib/telegram";
 import { ActionForm } from "../../ActionForm";
 import { BroadcastComposer } from "./BroadcastComposer";
@@ -16,6 +16,14 @@ const when = new Intl.DateTimeFormat("ru-RU", {
   hour: "2-digit",
   minute: "2-digit",
 });
+
+/** «3 сообщения: фото, видео» — для истории. */
+function seriesNote(parts: Broadcast["parts"]): string {
+  const n = parts.length;
+  const word = n % 10 === 1 && n % 100 !== 11 ? "сообщение" : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? "сообщения" : "сообщений";
+  const media = parts.flatMap((p) => (p.media ? [p.media.kind === "photo" ? "фото" : "видео"] : []));
+  return `${n} ${word}${media.length ? `: ${media.join(", ")}` : ""}`;
+}
 
 /** Незаконченная рассылка старше часа — значит, её прервал перезапуск сайта. */
 const STALLED_MS = 60 * 60 * 1000;
@@ -33,7 +41,8 @@ export default async function BroadcastsPage() {
     <>
       <h1>Рассылки в Telegram-бот</h1>
       <p className="muted">
-        Подключили бота: <b>{counts.all}</b>. Внизу каждой рассылки бот добавляет «Отключить сообщения — /stop». Жирный текст — **так**. Сначала отправьте пробу себе: впишите свой
+        Подключили бота: <b>{counts.all}</b>. В рассылке может быть несколько сообщений подряд, к каждому — фото или видео. Внизу
+        последнего бот добавляет «Отключить сообщения — /stop». Жирный текст — **так**. Сначала отправьте пробу себе: впишите свой
         Telegram ID (узнать его можно у @userinfobot).
       </p>
       <p className="muted">
@@ -82,11 +91,16 @@ export default async function BroadcastsPage() {
                     <td>{when.format(b.createdAt)}</td>
                     <td>
                       {b.audience in AUDIENCES ? AUDIENCES[b.audience as Audience].split(" — ")[0] : "все"}
+                      {b.registeredHours && <span className="muted"> · заявка старше {b.registeredHours} ч</span>}
+                      {b.silentHours && <span className="muted"> · молчат {b.silentHours} ч</span>}
                       {b.personalPage && b.personalPage in PERSONAL_PAGES && (
                         <span className="muted"> · кнопка: {PERSONAL_PAGES[b.personalPage as PersonalPage].label}</span>
                       )}
                     </td>
-                    <td>{b.body.length > 120 ? `${b.body.slice(0, 120)}…` : b.body}</td>
+                    <td>
+                      {b.body.length > 120 ? `${b.body.slice(0, 120)}…` : b.body}
+                      {b.parts.length > 0 && <span className="muted"> · {seriesNote(b.parts)}</span>}
+                    </td>
                     <td>{b.total}</td>
                     <td>{b.sent}</td>
                     <td title="заблокировали бота или удалили аккаунт">{b.failed}</td>

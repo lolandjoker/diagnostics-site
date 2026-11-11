@@ -36,7 +36,17 @@ import {
 import { NO_METHOD, VARIATION_MODES, deleteVariation, getVariation, getVariationTexts, saveVariationTexts, setVariationMode } from "@/lib/variations";
 import type { VariationMode } from "@/lib/variations";
 import { TEXT_DEFS, saveTexts } from "@/lib/texts";
-import { hasLead, isAudience, isPersonalPage, sendTestBroadcast, startBroadcast, validateBroadcast } from "@/lib/broadcasts";
+import {
+  type BroadcastMessage,
+  MAX_BROADCAST_MESSAGES,
+  hasLead,
+  isAudience,
+  isPersonalPage,
+  mediaKind,
+  sendTestBroadcast,
+  startBroadcast,
+  validateBroadcast,
+} from "@/lib/broadcasts";
 import { telegramConfig } from "@/lib/telegram";
 import type { TextKey } from "@/lib/texts";
 import type { ActionResult } from "./ActionForm";
@@ -117,11 +127,28 @@ export async function broadcastAction(_prev: ActionResult, form: FormData): Prom
   const audience = str(form, "audience");
   // Кнопка: "" — нет, url — своя ссылка, иначе — личный раздел (PERSONAL_PAGES)
   const kind = str(form, "button_kind");
+  // Серия: body_0…body_N и файлы media_0…media_N (BroadcastComposer)
+  const count = Math.min(Math.max(int(form, "messages_count") ?? 1, 1), MAX_BROADCAST_MESSAGES + 1);
+  const messages: BroadcastMessage[] = [];
+  for (let i = 0; i < count; i++) {
+    const file = form.get(`media_${i}`);
+    const message: BroadcastMessage = { body: str(form, `body_${i}`) };
+    if (file instanceof File && file.size > 0) {
+      const media = mediaKind(file.type);
+      if (!media) return fail(`Сообщение ${i + 1}: подойдут фото JPG, PNG, WebP или видео MP4, MOV`);
+      message.media = { kind: media, data: Buffer.from(await file.arrayBuffer()), name: file.name || `${media}`, type: file.type };
+    }
+    messages.push(message);
+  }
+  // Условия: галочка и число часов
+  const hours = (key: string) => (form.get(`${key}_on`) === "on" ? (int(form, `${key}_hours`) ?? 0) : undefined);
   const input = {
     audience: isAudience(audience) ? audience : ("all" as const),
     personalPage: isPersonalPage(kind) ? kind : undefined,
     personalText: isPersonalPage(kind) ? str(form, "button_label") : "",
-    body: str(form, "body"),
+    body: messages[0]!.body,
+    messages,
+    filters: { registeredHours: hours("registered"), silentHours: hours("silent") },
     buttonText: kind === "url" ? str(form, "button_label") : "",
     buttonUrl: kind === "url" ? str(form, "button_url") : "",
     gift: form.get("gift") === "on",

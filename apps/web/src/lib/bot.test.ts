@@ -10,7 +10,7 @@ import { handleExpertCallback, showExperts } from "./bot-experts";
 import { handleClientMessage } from "./bot-inbox";
 import { handleCallback } from "./bot-reviews";
 import { botStats } from "./bot-stats";
-import { broadcastHtml, personalUrl, runBroadcast, validateBroadcast } from "./broadcasts";
+import { broadcastHtml, personalUrl, runBroadcast, sendTestBroadcast, validateBroadcast } from "./broadcasts";
 import { markClientRead, messageViews, startConversation } from "./chat";
 import { createExpert, setExpertOnline } from "./experts";
 import { createLead } from "./leads";
@@ -64,6 +64,8 @@ describe("переписка в Telegram-боте", () => {
       const result =
         method === "sendPhoto"
           ? { message_id: ++nextId, photo: [{ file_id: "small" }, { file_id: `card-${nextId}` }] }
+          : method === "sendVideo"
+            ? { message_id: ++nextId, video: { file_id: `video-${nextId}` } }
           : method === "sendMessage"
             ? { message_id: ++nextId }
             : true;
@@ -312,6 +314,70 @@ describe("переписка в Telegram-боте", () => {
     expect(after).toMatchObject({ sent: 1, failed: 1 });
     expect(after!.finishedAt).not.toBeNull();
     expect(calls()[0]!.body.reply_markup).toEqual({ inline_keyboard: [[{ text: "Забрать", url: "https://taromba.com" }]] });
+  });
+
+  it("серия: фото и видео грузятся один раз, дальше по file_id; кнопка и /stop — под последним; длинный текст — после файла", async () => {
+    await chatFor(TG);
+    const photo = { kind: "photo" as const, data: Buffer.from("png"), name: "a.png", type: "image/png" };
+    const video = { kind: "video" as const, data: Buffer.from("mp4"), name: "v.mp4", type: "video/mp4" };
+    const long = "Длинный текст. ".repeat(80);
+    const input = {
+      body: "Привет",
+      buttonText: "Забрать",
+      buttonUrl: "https://taromba.com",
+      gift: false,
+      messages: [{ body: "Привет" }, { body: "**Смотрите** фото", media: photo }, { body: long, media: video }],
+    };
+    expect(validateBroadcast(input)).toBeNull();
+    const [b] = await db.insert(broadcasts).values({ body: "Привет", total: 3 }).returning();
+    // 13 заблокировал бота: первое не ушло — остальное ему не шлём
+    await runBroadcast(db, cfg, b!.id, [TG, 13, 555], input);
+    const [after] = await db.select().from(broadcasts);
+    expect(after).toMatchObject({ sent: 2, failed: 1 });
+
+    const log = calls();
+    expect(log.map((c) => `${c.method}:${String(c.body.chat_id)}`)).toEqual([
+      `sendMessage:${TG}`,
+      `sendPhoto:${TG}`,
+      `sendVideo:${TG}`,
+      `sendMessage:${TG}`,
+      "sendMessage:13",
+      "sendMessage:555",
+      "sendPhoto:555",
+      "sendVideo:555",
+      "sendMessage:555",
+    ]);
+    // Первое — без /stop и кнопки
+    expect(log[0]!.body.text).toBe("Привет");
+    expect(log[0]!.body.reply_markup).toBeUndefined();
+    // Фото — файлом первому, подпись с жирным
+    expect(log[1]!.body).toMatchObject({ photo: "<file>", caption: "<b>Смотрите</b> фото", parse_mode: "HTML" });
+    // Видео с длинным текстом — без подписи, текст следом, под ним /stop и кнопка
+    expect(log[2]!.body).toMatchObject({ video: "<file>", supports_streaming: "true" });
+    expect(log[2]!.body.caption).toBeUndefined();
+    expect(String(log[3]!.body.text)).toMatch(/^Длинный текст\.[\s\S]*\n\n<i>Отключить сообщения — \/stop<\/i>$/);
+    expect(log[3]!.body.reply_markup).toEqual({ inline_keyboard: [[{ text: "Забрать", url: "https://taromba.com" }]] });
+    // Следующему — по file_id, без повторной загрузки
+    expect(log[6]!.body.photo).toMatch(/^card-/);
+    expect(log[7]!.body.video).toMatch(/^video-/);
+
+    // Проба — вся серия одному
+    fetchMock.mockClear();
+    expect(await sendTestBroadcast(db, cfg, TG, { ...input, messages: [{ body: "", media: photo }] })).toBe(true);
+    expect(calls()).toEqual([
+      { method: "sendPhoto", body: expect.objectContaining({ caption: "<i>Отключить сообщения — /stop</i>", photo: "<file>" }) },
+    ]);
+  });
+
+  it("серия: проверка полей — число сообщений, пустое сообщение, размер фото, часы в условиях", () => {
+    const base = { body: "", buttonText: "", buttonUrl: "", gift: false };
+    const photo = (size: number) => ({ kind: "photo" as const, data: Buffer.alloc(size), name: "a.jpg", type: "image/jpeg" });
+    expect(validateBroadcast({ ...base, messages: Array.from({ length: 6 }, () => ({ body: "a" })) })).toBe("Не больше 5 сообщений в рассылке");
+    expect(validateBroadcast({ ...base, messages: [{ body: "a" }, { body: "  " }] })).toBe("Сообщение 2: нужен текст, фото или видео");
+    expect(validateBroadcast({ ...base, messages: [{ body: "", media: photo(10) }] })).toBeNull();
+    expect(validateBroadcast({ ...base, messages: [{ body: "", media: photo(10 * 1024 * 1024 + 1) }] })).toBe("фото больше 10 МБ");
+    expect(validateBroadcast({ ...base, body: "a", filters: { silentHours: 0 } })).toBe("Часы в условиях — от 1 до 8760");
+    expect(validateBroadcast({ ...base, body: "a", filters: { registeredHours: 24, silentHours: 48 } })).toBeNull();
   });
 
   it("рассылка с личной кнопкой: каждому — его последняя заявка внутри Telegram; чат — последний или выбор эксперта", async () => {
