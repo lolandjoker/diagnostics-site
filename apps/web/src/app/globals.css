@@ -6440,3 +6440,42 @@ body:has(.admin[data-theme="sea"]) {
   margin: 0 0 16px;
   font-size: 0.85rem;
 }
+
+/* Окно «Куда прислать ваш разбор?» перед чатом с экспертом — без кнопки закрытия */
+.email-gate .tg-invite__card {
+  text-align: center;
+}
+
+.email-gate__field {
+  width: 100%;
+  margin: 4px 0 12px;
+}
+
+.email-gate__field input {
+  width: 100%;
+  padding: 13px 16px;
+  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 16px;
+  text-align: center;
+}
+
+.email-gate__go {
+  width: 100%;
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+}
+
+.email-gate__go:disabled {
+  opacity: 0.7;
+}
+
+.email-gate__note {
+  margin: 12px 0 0;
+  font-size: 0.8rem;
+  opacity: 0.7;
+}

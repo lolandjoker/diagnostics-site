@@ -128,8 +128,8 @@ export default async function ClientChatPage(props: PageProps<"/razbor/[id]/chat
                   text: t["chat.tg_invite_text"],
                   button: t["chat.tg_invite_button"],
                   later: "Не сейчас",
-                  // Почта — если отправка писем настроена (lib/mail.ts)
-                  email: mailConfig() ? { url: `/api/chat/${lead.id}/email`, current: lead.emailOptOutAt ? null : lead.email } : undefined,
+                  // Почта — только у старых заявок без почты (новые указывают её до чата) и если письма настроены
+                  email: mailConfig() && !lead.email ? { url: `/api/chat/${lead.id}/email`, current: null } : undefined,
                 }
               : undefined
           }

@@ -16,7 +16,7 @@ import { PhotoGallery } from "../../PhotoGallery";
 import { PriceInline, getPrice } from "../../PriceTag";
 import { Footer } from "../../Footer";
 import { ReviewsPager } from "../../ReviewsPager";
-import { chooseExpert } from "../../razbor/[id]/eksperty/actions";
+import { ExpertChooseForm } from "../../ExpertChooseForm";
 
 export const dynamic = "force-dynamic";
 
@@ -99,13 +99,15 @@ export default async function ExpertProfilePage(props: PageProps<"/ekspert/[id]"
                 ) : (
                   // Первый чат — только с экспертом в сети; когда чаты уже есть, написать можно любому
                   (chats.length > 0 || isOnline(expert, new Date())) && (
-                    <form action={chooseExpert}>
-                      <input type="hidden" name="leadId" value={lead.id} />
-                      <input type="hidden" name="expertId" value={expert.id} />
-                      <input type="hidden" name="return" value={self} />
-                      <button className="button">{chats.length > 0 ? "Написать эксперту" : t["experts.choose"]}</button>
+                    <ExpertChooseForm
+                      leadId={lead.id}
+                      expertId={expert.id}
+                      returnTo={self}
+                      label={chats.length > 0 ? "Написать эксперту" : t["experts.choose"]}
+                      needEmail={!lead.email}
+                    >
                       <PriceInline price={price} />
-                    </form>
+                    </ExpertChooseForm>
                   )
                 )}
               </div>

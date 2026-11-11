@@ -293,7 +293,7 @@ describe("чат", () => {
     let client = await messageViews(db, res.conversation, 0, "client");
     expect(client).toHaveLength(1);
     expect(client[0]).toMatchObject({ author: "expert", authorName: "Мария" });
-    expect(client[0]!.body).toMatch(/^Здравствуйте! Ваша диагностика будет готова в течение 3-4 минут/);
+    expect(client[0]!.body).toMatch(/^Здравствуйте! Ваш подробный разбор будет готов в течение 40 минут/);
     const staff = await messageViews(db, res.conversation, 0, "staff");
     expect(staff[0]!.authorName).toBe("Мария · автоприветствие");
     // После приветствия снова «печатает…» — до самой диагностики
