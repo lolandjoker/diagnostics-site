@@ -31,7 +31,7 @@ export async function editMessage(db: Db, conversationId: string, messageId: num
   if (!canEdit(m.author)) return { ok: false, error: "Это сообщение можно только удалить", status: 400 };
   const body = raw.trim();
   if (body.length > MAX_MESSAGE_LENGTH) return { ok: false, error: `Сообщение длиннее ${MAX_MESSAGE_LENGTH} символов`, status: 400 };
-  if (body === "") {
+  if (body === "" && !m.mediaId) {
     const [photo] = await db.select({ id: messagePhotos.messageId }).from(messagePhotos).where(eq(messagePhotos.messageId, m.id));
     if (!photo) return { ok: false, error: "Пустое сообщение — лучше удалите его", status: 400 };
   }

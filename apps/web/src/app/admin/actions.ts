@@ -36,7 +36,9 @@ import {
 import { NO_METHOD, VARIATION_MODES, deleteVariation, getVariation, getVariationTexts, saveVariationTexts, setVariationMode } from "@/lib/variations";
 import type { VariationMode } from "@/lib/variations";
 import { TEXT_DEFS, saveTexts } from "@/lib/texts";
+import { startExpertBroadcast, testExpertBroadcast } from "@/lib/expert-broadcasts";
 import {
+  type BroadcastFilters,
   type BroadcastMessage,
   MAX_BROADCAST_MESSAGES,
   hasLead,
@@ -120,14 +122,8 @@ export async function deleteOperatorAction(form: FormData): Promise<void> {
 
 // --- Рассылки в Telegram-бот (только админ) ---
 
-export async function broadcastAction(_prev: ActionResult, form: FormData): Promise<ActionResult> {
-  await requireAdmin();
-  const cfg = telegramConfig();
-  if (!cfg) return fail("Telegram-бот не подключён");
-  const audience = str(form, "audience");
-  // Кнопка: "" — нет, url — своя ссылка, иначе — личный раздел (PERSONAL_PAGES)
-  const kind = str(form, "button_kind");
-  // Серия: body_0…body_N и файлы media_0…media_N (BroadcastComposer)
+/** Серия из формы рассылки: body_0…body_N и файлы media_0…media_N (BroadcastComposer); ошибка — текстом. */
+async function broadcastMessages(form: FormData): Promise<BroadcastMessage[] | string> {
   const count = Math.min(Math.max(int(form, "messages_count") ?? 1, 1), MAX_BROADCAST_MESSAGES + 1);
   const messages: BroadcastMessage[] = [];
   for (let i = 0; i < count; i++) {
@@ -135,20 +131,73 @@ export async function broadcastAction(_prev: ActionResult, form: FormData): Prom
     const message: BroadcastMessage = { body: str(form, `body_${i}`) };
     if (file instanceof File && file.size > 0) {
       const media = mediaKind(file.type);
-      if (!media) return fail(`Сообщение ${i + 1}: подойдут фото JPG, PNG, WebP или видео MP4, MOV`);
-      message.media = { kind: media, data: Buffer.from(await file.arrayBuffer()), name: file.name || `${media}`, type: file.type };
+      if (!media) return `Сообщение ${i + 1}: подойдут фото JPG, PNG, WebP или видео MP4, MOV`;
+      message.media = { kind: media, data: Buffer.from(await file.arrayBuffer()), name: file.name || media, type: file.type };
     }
     messages.push(message);
   }
-  // Условия: галочка и число часов
+  return messages;
+}
+
+/** Условия рассылки из формы: галочка и число часов. */
+function broadcastFilters(form: FormData): BroadcastFilters {
   const hours = (key: string) => (form.get(`${key}_on`) === "on" ? (int(form, `${key}_hours`) ?? 0) : undefined);
+  return { registeredHours: hours("registered"), silentHours: hours("silent") };
+}
+
+/** Рассылка от экспертов: каждому — в его чат с экспертом и оттуда в Telegram. */
+export async function expertBroadcastAction(_prev: ActionResult, form: FormData): Promise<ActionResult> {
+  await requireAdmin();
+  const messages = await broadcastMessages(form);
+  if (typeof messages === "string") return fail(messages);
+  const audience = str(form, "audience");
+  const expert = int(form, "expert");
+  const input = {
+    audience: isAudience(audience) ? audience : ("all" as const),
+    filters: broadcastFilters(form),
+    expertId: expert !== null && expert > 0 ? expert : undefined,
+    messages,
+  };
+  const error = validateBroadcast({ ...input, body: messages[0]!.body, buttonText: "", buttonUrl: "", gift: false });
+  if (error) return fail(error);
+  const db = await getDb();
+  const testId = str(form, "test_id").trim();
+  if (testId) {
+    if (!/^\d{3,15}$/.test(testId)) return fail("Telegram ID — только цифры");
+    const res = await testExpertBroadcast(db, Number(testId), input);
+    if (res === "no-chat") {
+      return fail(
+        input.expertId
+          ? "У этого Telegram нет чата с выбранным экспертом. Откройте чат с ним на сайте или выберите «Всем»"
+          : "У этого Telegram нет чата с экспертом — подключите Telegram к своей заявке и откройте чат",
+      );
+    }
+    return res === "ok"
+      ? done("Проба отправлена в ваш чат и в Telegram. Сообщения пробы остались в чате — их можно удалить там. Чтобы разослать всем, сотрите ID.")
+      : fail("Не получилось записать сообщение в чат");
+  }
+  if (form.get("confirm") !== "on") return fail("Отметьте «Отправить» — или впишите свой Telegram ID для пробы");
+  const { total } = await startExpertBroadcast(db, input);
+  refresh();
+  return done(`Рассылка началась: ${total} чатов. Обновите страницу, чтобы увидеть, сколько ушло.`);
+}
+
+export async function broadcastAction(_prev: ActionResult, form: FormData): Promise<ActionResult> {
+  await requireAdmin();
+  const cfg = telegramConfig();
+  if (!cfg) return fail("Telegram-бот не подключён");
+  const audience = str(form, "audience");
+  // Кнопка: "" — нет, url — своя ссылка, иначе — личный раздел (PERSONAL_PAGES)
+  const kind = str(form, "button_kind");
+  const messages = await broadcastMessages(form);
+  if (typeof messages === "string") return fail(messages);
   const input = {
     audience: isAudience(audience) ? audience : ("all" as const),
     personalPage: isPersonalPage(kind) ? kind : undefined,
     personalText: isPersonalPage(kind) ? str(form, "button_label") : "",
     body: messages[0]!.body,
     messages,
-    filters: { registeredHours: hours("registered"), silentHours: hours("silent") },
+    filters: broadcastFilters(form),
     buttonText: kind === "url" ? str(form, "button_label") : "",
     buttonUrl: kind === "url" ? str(form, "button_url") : "",
     gift: form.get("gift") === "on",

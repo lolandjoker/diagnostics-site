@@ -38,6 +38,8 @@ export async function remindUnread(db: Db, now: Date): Promise<number> {
         isNotNull(leads.telegramUserId),
         isNull(experts.archivedAt),
         inArray(messages.author, ["expert", "admin", "system"]),
+        // Рассылка от экспертов — не ответ: о ней не напоминаем
+        isNull(messages.broadcastId),
         lte(messages.createdAt, new Date(now.getTime() - REMIND_AFTER_MS)),
         gt(messages.createdAt, new Date(now.getTime() - REMIND_UNTIL_MS)),
         or(isNull(conversations.clientReadAt), lt(conversations.clientReadAt, messages.createdAt)),

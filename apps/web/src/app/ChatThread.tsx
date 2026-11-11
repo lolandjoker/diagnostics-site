@@ -630,15 +630,23 @@ export function ChatThread({
                       )}
                     </div>
                   )}
-                  <div className={`msg msg--${m.author} ${own ? "msg--own" : ""} ${m.photo && !m.body ? "msg--photo" : ""}`}>
+                  <div className={`msg msg--${m.author} ${own ? "msg--own" : ""} ${(m.photo || m.video) && !m.body ? "msg--photo" : ""}`}>
                     {first && !own && <div className="msg__author">{m.authorName}</div>}
                     {m.photo && (
                       <button type="button" className="msg__photo" onClick={() => setZoom(m.photo ?? null)}>
                         <img src={m.photo} alt="Фото" loading="lazy" onLoad={keepAtBottom} />
                       </button>
                     )}
+                    {m.video && (
+                      <video className="msg__video" src={m.video} controls playsInline preload="metadata" onLoadedMetadata={keepAtBottom} />
+                    )}
                     {messageBody(m)}
                     <time className="msg__time" dateTime={m.createdAt}>
+                      {m.broadcast && (
+                        <span className="msg__broadcast" title="Массовое сообщение — рассылка от экспертов">
+                          рассылка
+                        </span>
+                      )}
                       {m.editedAt && <span className="msg__edited">изменено</span>}
                       {m.viaTelegram && (
                         <span className="msg__via" title="Клиент ответил из Telegram">

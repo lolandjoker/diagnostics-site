@@ -232,6 +232,13 @@
       "when": 1794388671839,
       "tag": "0032_broadcast_series",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1794389922832,
+      "tag": "0033_expert_broadcasts",
+      "breakpoints": true
     }
   ]
 }

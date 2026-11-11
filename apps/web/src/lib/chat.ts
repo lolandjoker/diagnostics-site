@@ -8,7 +8,7 @@
  */
 import { type SQL, and, asc, desc, eq, gt, inArray, isNull, lte, ne, sql } from "drizzle-orm";
 import type { Db } from "@/db";
-import { conversations, experts, leads, messagePhotos, messages, operators } from "@/db/schema";
+import { chatMedia, conversations, experts, leads, messagePhotos, messages, operators } from "@/db/schema";
 import type { MessageAuthor } from "@/db/schema";
 import { detectImageMime, expertPhotoUrls, expertStatus, getExpert, isOnline, listExperts } from "./experts";
 import type { Lead } from "./leads";
@@ -90,6 +90,7 @@ export async function clientChats(db: Db, leadId: string): Promise<ClientChatIte
       ),
       lastMessage: sql<string>`coalesce((select case when m.product_id is not null then 'Предложение продукта'
           when m.body = '' and exists (select 1 from ${messagePhotos} p where p.message_id = m.id) then 'Фото'
+          when m.body = '' and m.media_id is not null then (select case when f.kind = 'video' then 'Видео' else 'Фото' end from ${chatMedia} f where f.id = m.media_id)
           else left(m.body, 120) end
         from ${messages} m where m.conversation_id = ${conversations.id} order by m.id desc limit 1), '')`,
     })
@@ -290,13 +291,19 @@ export type PostInput = {
   photo?: Buffer;
   automatic?: boolean;
   viaTelegram?: boolean;
+  /** Фото или видео из общего хранилища (chat_media) — рассылка от экспертов. */
+  mediaId?: string;
+  /** Сообщение рассылки от экспертов. */
+  broadcastId?: number;
+  /** Не слать клиенту в Telegram сразу — отправитель сам вызовет notifyClient (рассылка идёт по очереди). */
+  quiet?: boolean;
 };
 export type PostResult = { ok: true; id: number } | { ok: false; error: string };
 
 export async function postMessage(db: Db, conversationId: string, input: PostInput): Promise<PostResult> {
   const body = (input.body ?? "").replace(/\r\n/g, "\n").trim();
   const photo = input.photo;
-  if (photo === undefined && body === "") return { ok: false, error: "Пустое сообщение" };
+  if (photo === undefined && !input.mediaId && body === "") return { ok: false, error: "Пустое сообщение" };
   if (body.length > MAX_MESSAGE_LENGTH) return { ok: false, error: `Сообщение длиннее ${MAX_MESSAGE_LENGTH} символов` };
   const photoMime = photo === undefined ? null : detectImageMime(photo);
   if (photo !== undefined) {
@@ -330,6 +337,8 @@ export async function postMessage(db: Db, conversationId: string, input: PostInp
         operatorId: input.author === "admin" ? (input.operatorId ?? null) : null,
         automatic: input.automatic ?? false,
         viaTelegram: input.author === "client" && input.viaTelegram === true,
+        mediaId: input.mediaId ?? null,
+        broadcastId: input.broadcastId ?? null,
       })
       .returning({ id: messages.id });
     const messageId = (m as { id: number }).id;
@@ -340,12 +349,18 @@ export async function postMessage(db: Db, conversationId: string, input: PostInp
     return messageId;
   });
   // Клиенту из Telegram-бота — ответ эксперта в бот (не ждём: чат не должен тормозить из-за Telegram)
-  if (input.author === "expert" || input.author === "admin") {
+  if ((input.author === "expert" || input.author === "admin") && !input.quiet) {
     void notifyClient(db, conversationId, { kind: "message", messageId: id });
   }
   // Сотрудникам с привязанным Telegram — новое сообщение клиента
   if (input.author === "client") void notifyStaff(db, conversationId, id);
   return { ok: true, id };
+}
+
+/** Файл из общего хранилища (chat_media) — по его id (uuid, не угадать). */
+export async function getChatMedia(db: Db, id: string) {
+  const [f] = await db.select({ mime: chatMedia.mime, data: chatMedia.data }).from(chatMedia).where(eq(chatMedia.id, id));
+  return f ?? null;
 }
 
 /** Фото сообщения — только из чата этой заявки (адрес фото знает тот, кто знает адрес чата). */
@@ -372,6 +387,10 @@ export interface MessageView {
   body: string;
   /** Адрес приложенного фото. */
   photo?: string;
+  /** Адрес приложенного видео (рассылка от экспертов). */
+  video?: string;
+  /** Сотрудникам: сообщение из рассылки от экспертов. */
+  broadcast?: boolean;
   createdAt: string;
   /** Сотрудникам: клиент написал это из Telegram-бота. */
   viaTelegram?: boolean;
@@ -412,11 +431,18 @@ export async function chatSync(db: Db, conversation: Conversation, since: string
 
 async function viewsWhere(db: Db, conversation: Conversation, filter: SQL, viewer: "client" | "staff"): Promise<MessageView[]> {
   const rows = await db
-    .select({ m: messages, expertName: experts.name, operatorName: operators.name, photoId: messagePhotos.messageId })
+    .select({
+      m: messages,
+      expertName: experts.name,
+      operatorName: operators.name,
+      photoId: messagePhotos.messageId,
+      mediaKind: chatMedia.kind,
+    })
     .from(messages)
     .leftJoin(experts, eq(experts.id, messages.expertId))
     .leftJoin(operators, eq(operators.id, messages.operatorId))
     .leftJoin(messagePhotos, eq(messagePhotos.messageId, messages.id))
+    .leftJoin(chatMedia, eq(chatMedia.id, messages.mediaId))
     .where(and(eq(messages.conversationId, conversation.id), filter))
     .orderBy(asc(messages.id))
     .limit(500);
@@ -429,7 +455,7 @@ async function viewsWhere(db: Db, conversation: Conversation, filter: SQL, viewe
   const chatExpert = viewer === "client" ? await getExpert(db, conversation.expertId) : null;
 
   const out: MessageView[] = [];
-  for (const { m, expertName, operatorName, photoId } of rows) {
+  for (const { m, expertName, operatorName, photoId, mediaKind } of rows) {
     // Для клиента сообщение админа неотличимо от сообщения эксперта чата
     const asExpert = viewer === "client" && m.author === "admin";
     const author = asExpert ? "expert" : m.author;
@@ -439,8 +465,8 @@ async function viewsWhere(db: Db, conversation: Conversation, filter: SQL, viewe
         ? clientName
         : author === "expert"
           ? ((asExpert ? chatExpert?.name : expertName) ?? "Эксперт") +
-            // Сотрудники видят, что это приветствие сайта, а не эксперт сам написал
-            (viewer === "staff" && m.automatic ? " · автоприветствие" : "")
+            // Сотрудники видят, что это приветствие сайта или рассылка, а не эксперт сам написал
+            (viewer === "staff" && m.automatic ? (m.broadcastId !== null ? " · рассылка" : " · автоприветствие") : "")
           : author === "admin"
             ? operatorName
               ? `Оператор: ${operatorName}`
@@ -458,6 +484,8 @@ async function viewsWhere(db: Db, conversation: Conversation, filter: SQL, viewe
       createdAt: m.createdAt.toISOString(),
     };
     if (photoId !== null) view.photo = `/api/chat/${conversation.leadId}/photo/${m.id}`;
+    if (m.mediaId && mediaKind) view[mediaKind] = `/api/chat/media/${m.mediaId}`;
+    if (viewer === "staff" && m.broadcastId !== null) view.broadcast = true;
     if (viewer === "staff" && m.viaTelegram) view.viaTelegram = true;
     if (m.editedAt) view.editedAt = m.editedAt.toISOString();
     out.push(view);
@@ -563,6 +591,7 @@ export async function inbox(db: Db, opts: { limit?: number; expertId?: number | 
       lastAt: sql<string | null>`(select m.created_at from ${messages} m where m.conversation_id = ${conversations.id} order by m.id desc limit 1)`,
       lastMessage: sql<string>`coalesce((select case when m.product_id is not null then '[предложение продукта]'
           when m.body = '' and exists (select 1 from ${messagePhotos} p where p.message_id = m.id) then '[фото]'
+          when m.body = '' and m.media_id is not null then (select case when f.kind = 'video' then '[видео]' else '[фото]' end from ${chatMedia} f where f.id = m.media_id)
           else left(m.body, 120) end
         from ${messages} m where m.conversation_id = ${conversations.id} order by m.id desc limit 1), '')`,
     })
