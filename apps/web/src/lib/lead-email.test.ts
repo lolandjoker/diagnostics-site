@@ -6,11 +6,11 @@ import { FULL_TEXT_DELAY_MS, deliverDueFullTexts, startConversation } from "./ch
 import { createExpert, setExpertFullText, setExpertOnline } from "./experts";
 import { EMAIL_CHANGE_GAP_MS, connectEmail, leadFromOptOutCode, normalizeEmail, optOutCode, optOutEmail, sendFullTextEmail } from "./lead-email";
 import { createLead } from "./leads";
-import { mailConfig, setMailTransport } from "./mail";
+import { DEFAULT_UNISENDER_GO_API_URL, mailConfig, sendMail, setMailTransport } from "./mail";
 
 const SECRET = "test-secret-test-secret-test-secret";
 let db: Db;
-let sent: { to: string; subject: string; text: string; html: string; headers?: Record<string, string> }[];
+let sent: { to: string; from: string; subject: string; text: string; html: string }[];
 let failNext = false;
 let n = 0;
 
@@ -20,9 +20,7 @@ beforeEach(async () => {
   failNext = false;
   vi.stubEnv("SESSION_SECRET", SECRET);
   vi.stubEnv("SITE_DOMAIN", "taromba.test");
-  vi.stubEnv("SMTP_HOST", "smtp.example.test");
-  vi.stubEnv("SMTP_USER", "user");
-  vi.stubEnv("SMTP_PASS", "pass");
+  vi.stubEnv("UNISENDER_GO_API_KEY", "test-key");
   vi.stubEnv("MAIL_FROM", "Таромба <noreply@taromba.test>");
   setMailTransport({
     sendMail: async (m: object) => {
@@ -84,11 +82,8 @@ describe("почта клиента", () => {
     expect(m.html).toContain("Эксперт <b>Мария</b>");
     const unsub = `https://taromba.test/pochta/otpiska?t=${optOutCode(SECRET, lead.id)}`;
     expect(m.text).toContain(unsub);
-    expect(m.headers).toEqual({
-      "List-Unsubscribe": `<${unsub}>`,
-      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
-      "X-UNISENDER-GO": '{"global_language":"ru"}',
-    });
+    expect(m.html).toContain(unsub);
+    expect(m.from).toBe("Таромба <noreply@taromba.test>");
   });
 
   it("почта после разбора — письмо сразу; не ушло — отметки нет, можно снова", async () => {
@@ -123,7 +118,7 @@ describe("почта клиента", () => {
   });
 
   it("почта не настроена — адрес сохраняем, письмо не уходит и не отмечается", async () => {
-    vi.stubEnv("SMTP_PASS", "");
+    vi.stubEnv("UNISENDER_GO_API_KEY", "");
     expect(mailConfig()).toBeNull();
     const { lead } = await chat();
     await deliverDueFullTexts(db, later());
@@ -131,5 +126,60 @@ describe("почта клиента", () => {
     const [row] = await db.select().from(leads).where(eq(leads.id, lead.id));
     expect(row).toMatchObject({ email: "anna@mail.ru", emailFullTextSentAt: null });
     expect(await connectEmail(db, lead.id, "плохо", new Date())).toMatchObject({ ok: false, status: 400 });
+  });
+});
+
+describe("отправка через Web API UniSender Go", () => {
+  const realFetch = globalThis.fetch;
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    globalThis.fetch = realFetch;
+  });
+
+  it("настройки из .env, запрос email/send.json с ключом, ответ: успех, отказ по адресу, ошибка сервиса", async () => {
+    setMailTransport(null);
+    expect(mailConfig({ UNISENDER_GO_API_KEY: "k", MAIL_FROM: "Таромба <noreply@taromba.com>" })).toEqual({
+      apiUrl: DEFAULT_UNISENDER_GO_API_URL,
+      apiKey: "k",
+      fromEmail: "noreply@taromba.com",
+      fromName: "Таромба",
+    });
+    expect(mailConfig({ UNISENDER_GO_API_KEY: "k", MAIL_FROM: "noreply@taromba.com", UNISENDER_GO_API_URL: "https://go1.example/api/" })).toMatchObject({
+      apiUrl: "https://go1.example/api",
+      fromName: "",
+    });
+    expect(mailConfig({ UNISENDER_GO_API_KEY: "k", MAIL_FROM: "не адрес" })).toBeNull();
+
+    const replies = [
+      { status: 200, body: { status: "success", job_id: "1", emails: ["a@b.ru"] } },
+      { status: 200, body: { status: "success", job_id: "2", emails: [], failed_emails: { "a@b.ru": "unsubscribed" } } },
+      { status: 400, body: { status: "error", message: "domain not verified" } },
+    ];
+    const fetchMock = vi.fn(async () => {
+      const r = replies.shift()!;
+      return new Response(JSON.stringify(r.body), { status: r.status });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const cfg = mailConfig({ UNISENDER_GO_API_KEY: "secret", MAIL_FROM: "Таромба <noreply@taromba.com>" })!;
+    const mail = { to: "a@b.ru", subject: "Тема", html: "<p>Привет</p>", text: "Привет" };
+    expect(await sendMail(cfg, mail)).toBe(true);
+    expect(await sendMail(cfg, mail)).toBe(false);
+    expect(await sendMail(cfg, mail)).toBe(false);
+
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe(`${DEFAULT_UNISENDER_GO_API_URL}/email/send.json`);
+    expect((init.headers as Record<string, string>)["X-API-KEY"]).toBe("secret");
+    expect(JSON.parse(String(init.body))).toEqual({
+      message: {
+        recipients: [{ email: "a@b.ru" }],
+        subject: "Тема",
+        body: { html: "<p>Привет</p>", plaintext: "Привет" },
+        from_email: "noreply@taromba.com",
+        from_name: "Таромба",
+        global_language: "ru",
+        track_links: 0,
+        track_read: 0,
+      },
+    });
   });
 });
