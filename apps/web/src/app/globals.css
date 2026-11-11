@@ -6375,3 +6375,68 @@ body:has(.admin[data-theme="sea"]) {
   opacity: 0.75;
   cursor: pointer;
 }
+
+/* Сводка: готовые периоды и свой — с даты по дату */
+.period-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+  margin: 8px 0 4px;
+}
+
+.period-bar .filter {
+  margin: 0;
+}
+
+.period-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.period-form.is-current {
+  border-color: var(--gold);
+  background: color-mix(in srgb, var(--gold) 8%, transparent);
+}
+
+.period-form label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+.period-form input[type="date"] {
+  width: auto;
+  min-height: 0;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.875rem;
+}
+
+.period-form button {
+  padding: 6px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--gold);
+  color: #fff;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.period-now {
+  margin: 0 0 16px;
+  font-size: 0.85rem;
+}

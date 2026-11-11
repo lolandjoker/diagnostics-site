@@ -5,9 +5,10 @@
  *   берётся из данных (заявка, чат, сообщения, Telegram).
  * Заявки считаются когортой: созданные за период, и для них — до какого шага дошли.
  */
-import { and, countDistinct, eq, gte, inArray, isNotNull, min, sql } from "drizzle-orm";
+import { and, countDistinct, eq, inArray, isNotNull, min, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { conversations, funnelEvents, leads, messages } from "@/db/schema";
+import { type Period, mskToday, within } from "./period";
 
 /** Шаги, которые пишет страница; остальные шаги воронки — из данных. */
 export const TRACKED_STEPS = ["home", "form_start", "result", "experts"] as const;
@@ -61,13 +62,13 @@ export interface FunnelStep {
 }
 
 /** Воронка с since (null — за всё время). */
-export async function funnel(db: Db, since: Date | null): Promise<FunnelStep[]> {
-  const inPeriod = since ? gte(leads.createdAt, since) : undefined;
+export async function funnel(db: Db, since: Date | null, until: Date | null = null): Promise<FunnelStep[]> {
+  const inPeriod = within(leads.createdAt, since, until);
   const visitors = (step: TrackedStep) =>
     db
       .select({ n: countDistinct(funnelEvents.visitorId) })
       .from(funnelEvents)
-      .where(and(eq(funnelEvents.step, step), since ? gte(funnelEvents.createdAt, since) : undefined));
+      .where(and(eq(funnelEvents.step, step), within(funnelEvents.createdAt, since, until)));
   const leadsWithEvent = (step: TrackedStep) =>
     db
       .select({ n: countDistinct(funnelEvents.leadId) })
@@ -114,21 +115,27 @@ export async function funnel(db: Db, since: Date | null): Promise<FunnelStep[]> 
   ];
 }
 
-export type FunnelPeriod = "today" | "week" | "month" | "all";
+export type FunnelPeriod = "today" | "yesterday" | "week" | "month" | "all";
 
 export const FUNNEL_PERIODS: { key: FunnelPeriod; label: string }[] = [
   { key: "today", label: "Сегодня" },
+  { key: "yesterday", label: "Вчера" },
   { key: "week", label: "7 дней" },
   { key: "month", label: "30 дней" },
   { key: "all", label: "Всё время" },
 ];
 
-/** Начало периода; «сегодня» — с полуночи по Москве. */
+/** Начало периода; «сегодня» и «вчера» — с полуночи по Москве. */
 export function periodStart(period: FunnelPeriod, now: Date): Date | null {
   const DAY = 86_400_000;
   if (period === "all") return null;
+  if (period === "yesterday") return new Date(mskToday(now).getTime() - DAY);
   if (period === "week") return new Date(now.getTime() - 7 * DAY);
   if (period === "month") return new Date(now.getTime() - 30 * DAY);
-  const MSK = 3 * 3_600_000;
-  return new Date(Math.floor((now.getTime() + MSK) / DAY) * DAY - MSK);
+  return mskToday(now);
+}
+
+/** Готовый период целиком: «вчера» кончается сегодняшней полуночью, остальные — сейчас (без границы). */
+export function presetPeriod(period: FunnelPeriod, now: Date): Period {
+  return { since: periodStart(period, now), until: period === "yesterday" ? mskToday(now) : null };
 }
