@@ -71,9 +71,9 @@ const calls = () =>
       return { method: String(url).split("/").pop(), body };
     });
 
-/** Фоновая рассылка закончилась. */
+/** Фоновая рассылка закончилась (под нагрузкой полного прогона — до 25 с, лимит теста 30 с). */
 async function finished(id: number) {
-  for (let i = 0; i < 200; i++) {
+  for (let i = 0; i < 500; i++) {
     const [b] = await db.select().from(broadcasts).where(eq(broadcasts.id, id));
     if (b?.finishedAt) return b;
     await new Promise((r) => setTimeout(r, 50));

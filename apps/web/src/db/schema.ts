@@ -212,6 +212,17 @@ export const leads = pgTable(
     /** Ответ на вопрос «Откуда вы о нас узнали?» на странице разбора (HEARD_FROM); null — не ответил. */
     heardFrom: text("heard_from"),
     /**
+     * Почта для уведомлений (lib/lead-email.ts): человек указал её в окне «Подключите Telegram» в чате.
+     * Сейчас уходит одно письмо — подробный разбор готов. null — не указывал.
+     */
+    email: text("email"),
+    /** Когда указал почту (и последний раз менял). */
+    emailAt: timestamp("email_at", { withTimezone: true }),
+    /** Отписался по ссылке из письма — больше не пишем; null — подписан. */
+    emailOptOutAt: timestamp("email_opt_out_at", { withTimezone: true }),
+    /** Письмо с подробным разбором ушло (одно на заявку). */
+    emailFullTextSentAt: timestamp("email_full_text_sent_at", { withTimezone: true }),
+    /**
      * Откуда человек по IP (lib/geo.ts, база DB-IP на нашем сервере): код страны (RU) и город, как в базе
      * (Moscow). Сам IP не храним. null — не определили (старая заявка, локальный адрес, нет в базе).
      */
