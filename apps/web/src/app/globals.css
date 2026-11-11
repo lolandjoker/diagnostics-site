@@ -6104,3 +6104,128 @@ body:has(.admin[data-theme="sea"]) {
   background: color-mix(in srgb, var(--gold) 12%, transparent);
   font-weight: 700;
 }
+
+/* Рассылки: условия с часами и серия сообщений с фото или видео */
+.audience .bc-filter {
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+}
+
+.bc-filter input[type="checkbox"] {
+  margin: 0;
+}
+
+.bc-filter label {
+  cursor: pointer;
+}
+
+.admin-form .bc-hours {
+  width: 72px;
+  min-height: 0;
+  height: 34px;
+  padding: 4px 8px;
+  border-radius: 10px;
+  text-align: center;
+}
+
+.bc-total {
+  margin: 4px 0 0;
+  color: var(--text);
+}
+
+.bc-messages {
+  display: grid;
+  gap: 12px;
+}
+
+.bc-message {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.bc-message__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.9rem;
+}
+
+.bc-media {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  font-size: 0.85rem;
+}
+
+.bc-file {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 14px;
+  border: 1px dashed var(--gold);
+  border-radius: 999px;
+  color: var(--gold);
+  cursor: pointer;
+}
+
+.bc-file input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.bc-file:focus-within {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.bc-thumb {
+  width: 64px;
+  height: 64px;
+  border-radius: 10px;
+  object-fit: cover;
+  background: var(--line);
+}
+
+.bc-file-name {
+  overflow-wrap: anywhere;
+}
+
+.bc-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--gold);
+  font: inherit;
+  font-size: 0.85rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.bc-add {
+  justify-self: start;
+  padding: 8px 16px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.bc-add:hover {
+  border-color: var(--gold);
+}
+
+.bc-note {
+  margin: 0;
+  font-size: 0.82rem;
+}

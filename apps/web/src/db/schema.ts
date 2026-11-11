@@ -11,6 +11,7 @@ import {
   date,
   index,
   integer,
+  jsonb,
   pgTable,
   primaryKey,
   serial,
@@ -525,6 +526,18 @@ export const broadcasts = pgTable("broadcasts", {
   audience: text("audience").notNull().default("all"),
   /** Личная кнопка (lib/broadcasts.ts, PERSONAL_PAGES): каждому — его страница внутри Telegram; "" — нет. */
   personalPage: text("personal_page").notNull().default(""),
+  /**
+   * Серия сообщений (lib/broadcasts.ts): текст и вложение каждого — без самих файлов (имя и размер).
+   * [] — одно текстовое сообщение, его текст в body.
+   */
+  parts: jsonb("parts")
+    .$type<{ body: string; media: { kind: "photo" | "video"; name: string; size: number } | null }[]>()
+    .notNull()
+    .default([]),
+  /** Условие к «Кому»: первая заявка старше N часов; null — без условия. */
+  registeredHours: integer("registered_hours"),
+  /** Условие к «Кому»: клиент не писал нам больше N часов; null — без условия. */
+  silentHours: integer("silent_hours"),
 });
 
 /** Фото в сообщении чата: JPEG, PNG или WebP, одно на сообщение. */

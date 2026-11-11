@@ -1,7 +1,9 @@
 /**
  * Рассылки — данные без зависимостей (их показывает и форма в браузере): кому (AUDIENCES), личная кнопка
- * (PERSONAL_PAGES) и готовые рассылки под каждый квиз (BROADCAST_TEMPLATES). Отбор получателей — lib/broadcasts.ts.
+ * (PERSONAL_PAGES), готовые рассылки под каждый квиз (BROADCAST_TEMPLATES), лимиты серии и файлов.
+ * Отбор получателей и отправка — lib/broadcasts.ts.
  */
+
 export const PERSONAL_PAGES = {
   den: { label: "«Мой день»", button: "Открыть «Мой день»" },
   arhetip: { label: "Тест «Ваш архетип»", button: "Пройти тест «Ваш архетип»" },
@@ -82,3 +84,27 @@ export const BROADCAST_TEMPLATES: Record<string, BroadcastTemplate> = {
     body: "**Эксперт ответил вам — и ждёт продолжения** 🔮\n\nВ вашем чате есть ответ эксперта. Если вопрос ещё актуален — напишите пару слов прямо в чат, и мы продолжим с того места, где остановились 🤍",
   },
 };
+
+export const MAX_BROADCAST_MESSAGES = 5;
+/** Подпись к фото и видео — до 1024 символов у Telegram; с запасом на значок и «/stop». Длиннее — текст отдельным сообщением. */
+export const MAX_CAPTION = 980;
+export const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
+/** Всех файлов рассылки вместе: Bot API принимает загрузку до 50 МБ. */
+export const MAX_MEDIA_BYTES = 50 * 1024 * 1024;
+export const MAX_FILTER_HOURS = 24 * 365;
+/** Пауза между сообщениями серии одному человеку: Telegram не любит очередь сообщений в один чат. */
+export const SERIES_GAP_MS = 400;
+
+const MEDIA_TYPES: Record<string, "photo" | "video"> = {
+  "image/jpeg": "photo",
+  "image/png": "photo",
+  "image/webp": "photo",
+  "video/mp4": "video",
+  "video/quicktime": "video",
+};
+
+/** Фото или видео по типу файла; другое — null. */
+export const mediaKind = (type: string): "photo" | "video" | null => MEDIA_TYPES[type] ?? null;
+
+/** Какие файлы можно приложить (поле выбора файла). */
+export const MEDIA_ACCEPT = Object.keys(MEDIA_TYPES).join(",");

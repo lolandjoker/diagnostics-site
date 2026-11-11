@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import type { Mock } from "vitest";
 import { createTestDb } from "@/db";
 import type { Db } from "@/db";
-import { leads, telegramBlocks } from "@/db/schema";
+import { leads, messages, telegramBlocks } from "@/db/schema";
 import { blockClient, inheritBlock, isTelegramBlocked, unblockClient } from "./blocks";
 import { broadcastRecipients } from "./broadcasts";
 import { drawDailyCard } from "./club";
@@ -127,6 +127,34 @@ describe("кому рассылка", () => {
     expect(await broadcastRecipients(db, "all")).toEqual([8001, 8002, 8003]);
     expect(await broadcastRecipients(db, "silent")).toEqual([8001]);
     expect(await broadcastRecipients(db, "never")).toEqual([8003]);
+  });
+
+  it("условия: заявка старше N часов, не писал нам N часов (или не писал вовсе)", async () => {
+    const e = await expert();
+    const now = new Date();
+    const hoursAgo = (h: number) => new Date(now.getTime() - h * 3_600_000);
+    // Заявка двое суток назад, ни разу не писал
+    const old = await chat(8201, e, "Давно");
+    await db.update(leads).set({ createdAt: hoursAgo(48) }).where(eq(leads.id, old.lead.id));
+    // Новая заявка, написал только что
+    const fresh = await chat(8202, e, "Новый");
+    await postMessage(db, fresh.c.id, { author: "client", body: "вопрос" });
+    // Новая заявка, писал 30 часов назад
+    const quiet = await chat(8203, e, "Затих");
+    await postMessage(db, quiet.c.id, { author: "client", body: "вопрос" });
+    await db.update(messages).set({ createdAt: hoursAgo(30) }).where(eq(messages.conversationId, quiet.c.id));
+    // У того же человека есть и старая заявка — регистрация по первой
+    const again = await chat(8202, e, "Новый снова");
+    await db.update(leads).set({ createdAt: hoursAgo(100) }).where(eq(leads.id, again.lead.id));
+
+    expect(await broadcastRecipients(db, "all", {}, now)).toEqual([8201, 8202, 8203]);
+    expect(await broadcastRecipients(db, "all", { registeredHours: 24 }, now)).toEqual([8201, 8202]);
+    expect(await broadcastRecipients(db, "all", { silentHours: 24 }, now)).toEqual([8201, 8203]);
+    expect(await broadcastRecipients(db, "all", { registeredHours: 24, silentHours: 24 }, now)).toEqual([8201]);
+    expect(await broadcastRecipients(db, "all", { silentHours: 48 }, now)).toEqual([8201]);
+    // Вместе с «Кому»: писали — и молчат сутки
+    expect(await broadcastRecipients(db, "silent", { silentHours: 24 }, now)).toEqual([]);
+    expect(await broadcastRecipients(db, "never", { registeredHours: 24 }, now)).toEqual([8201]);
   });
 
   it("по квизам: не проходили архетип / «Да или нет» / не тянули карту / ни одного квиза", async () => {
