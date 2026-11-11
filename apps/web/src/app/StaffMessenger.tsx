@@ -77,6 +77,7 @@ export function StaffChatEmpty({ children }: { children?: ReactNode }) {
 export function StaffChatHead({
   name,
   birthDate,
+  email,
   expertName,
   mine,
   telegram,
@@ -93,6 +94,8 @@ export function StaffChatHead({
   name: string;
   /** ГГГГ-ММ-ДД */
   birthDate: string | null;
+  /** Админ и операторы: почта клиента для писем; null — не указал. */
+  email?: string | null;
   expertName: string | null;
   /** Эксперт открыл свой чат — «(вы)». */
   mine?: boolean;
@@ -136,6 +139,7 @@ export function StaffChatHead({
           <p className="staff-chat__tags">
             <GeoTag country={geoCountry} city={geoCity} />
             {birthDate && <span>{birthDate.split("-").reverse().join(".")}</span>}
+            {email && <span title="Клиент указал почту — подробный разбор приходит и письмом">✉ {email}</span>}
             {expertName && (
               <span>
                 Эксперт: {expertName}

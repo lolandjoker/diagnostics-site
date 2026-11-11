@@ -6286,3 +6286,92 @@ body:has(.admin[data-theme="sea"]) {
   margin-right: 6px;
   opacity: 0.8;
 }
+
+/* Окно «Подключите Telegram»: почта для письма с разбором */
+.email-connect {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+  text-align: left;
+}
+
+.email-connect__title {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.email-connect__row {
+  display: flex;
+  gap: 8px;
+}
+
+.email-connect__row input {
+  flex: 1;
+  min-width: 0;
+  padding: 11px 14px;
+  border: 1px solid color-mix(in srgb, currentColor 22%, transparent);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 16px;
+}
+
+.email-connect__row button {
+  flex: none;
+  padding: 11px 18px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--gold, #c9a45c);
+  color: #1b1526;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.email-connect__row button:disabled {
+  opacity: 0.6;
+}
+
+.email-connect__note,
+.email-connect__error {
+  margin: 0;
+  font-size: 0.78rem;
+  opacity: 0.7;
+}
+
+.email-connect__error {
+  color: #e5484d;
+  opacity: 1;
+}
+
+.email-connect--done {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px 10px;
+  text-align: center;
+}
+
+.email-connect--done p {
+  margin: 0;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.email-connect__change {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 0.85rem;
+  text-decoration: underline;
+  opacity: 0.75;
+  cursor: pointer;
+}

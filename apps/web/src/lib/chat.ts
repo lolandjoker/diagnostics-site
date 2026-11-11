@@ -13,6 +13,7 @@ import type { MessageAuthor } from "@/db/schema";
 import { detectImageMime, expertPhotoUrls, expertStatus, getExpert, isOnline, listExperts } from "./experts";
 import type { Lead } from "./leads";
 import { notifyClient } from "./bot-delivery";
+import { sendFullTextEmail } from "./lead-email";
 import { notifyStaff } from "./staff-telegram";
 import { fillTemplate, getTexts } from "./texts";
 
@@ -276,7 +277,13 @@ export async function deliverDueFullTexts(db: Db, now: Date, conversationId?: st
     // Одна диагностика на человека: уже получил в другом чате — в этот не отправляем
     if (lead && expert?.fullText && !(await leadGotFullText(db, c.leadId))) {
       const sent = await postMessage(db, c.id, { author: "system", body: fillTemplate(expert.fullText, { name: lead.name }) });
-      if (sent.ok) void notifyClient(db, c.id, { kind: "fullText", messageId: sent.id });
+      if (sent.ok) {
+        void notifyClient(db, c.id, { kind: "fullText", messageId: sent.id });
+        // Указал почту — разбор ещё и письмом
+        void sendFullTextEmail(db, c.leadId, now).catch((err: unknown) =>
+          console.warn(`Письмо с разбором: ${err instanceof Error ? err.message : String(err)}`),
+        );
+      }
     }
   }
 }
@@ -643,6 +650,8 @@ export async function conversationHeader(db: Db, conversation: Conversation) {
       source: leads.source,
       leadId: leads.id,
       blocked: sql<boolean>`${leads.blockedAt} is not null`.mapWith(Boolean),
+      /** Почта для писем (отписался — null). */
+      email: sql<string | null>`case when ${leads.emailOptOutAt} is null then ${leads.email} end`,
       expertName: experts.name,
       expertArchived: sql<boolean>`${experts.archivedAt} is not null`.mapWith(Boolean),
     })

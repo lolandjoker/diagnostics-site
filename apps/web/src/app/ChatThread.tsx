@@ -10,6 +10,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import type { MessageView } from "@/lib/chat";
 import { Avatar } from "./Avatar";
+import { EmailConnect } from "./EmailConnect";
 import { ReadTicks, TelegramIcon } from "./StaffBits";
 import { pageAway, telegramInitData } from "./telegramWebApp";
 
@@ -33,6 +34,8 @@ export interface TelegramInvite {
   text: string;
   button: string;
   later: string;
+  /** Почта для уведомлений (подробный разбор письмом) — если почта на сайте включена. */
+  email?: { url: string; current: string | null } | undefined;
 }
 
 /**
@@ -794,6 +797,7 @@ export function ChatThread({
             >
               {telegramInvite.button}
             </a>
+            {telegramInvite.email && <EmailConnect url={telegramInvite.email.url} current={telegramInvite.email.current} />}
             <button type="button" className="tg-invite__later" onClick={() => setInviteOpen(false)}>
               {telegramInvite.later}
             </button>

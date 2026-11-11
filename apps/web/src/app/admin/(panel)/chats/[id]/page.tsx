@@ -31,6 +31,7 @@ export default async function AdminChatPage(props: PageProps<"/admin/chats/[id]"
         telegram={header?.telegram ?? false}
         geoCountry={header?.geoCountry ?? null}
         geoCity={header?.geoCity ?? null}
+        email={header?.email ?? null}
         chats={(leadChats.get(conversation.leadId) ?? []).map((c) => ({ id: c.id, expertName: c.expertName, diagnosis: c.diagnosis }))}
         currentId={conversation.id}
         club={club}
