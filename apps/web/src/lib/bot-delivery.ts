@@ -11,7 +11,7 @@
  */
 import { and, desc, eq } from "drizzle-orm";
 import type { Db } from "@/db";
-import { conversations, expertPhotos, experts, leads, messagePhotos, messages, telegramMessages } from "@/db/schema";
+import { chatMedia, conversations, expertPhotos, experts, leads, messagePhotos, messages, telegramMessages } from "@/db/schema";
 import { expertCardPng } from "./bot-card";
 import { em } from "./bot-emoji";
 import { expertStatus } from "./experts";
@@ -295,13 +295,40 @@ async function sendChunks(cfg: TelegramConfig, chatId: number, chunks: string[],
   return ids;
 }
 
+/** Файл сообщения: своё фото (message_photos) или общий файл (chat_media, с file_id после первой загрузки). */
+type FileToSend = { kind: "photo" | "video"; data: Buffer; mime: string; fileId?: string | null; mediaId?: string };
+
+/** Фото или видео в бот; общий файл после первой загрузки запоминает file_id — дальше без загрузки. */
+async function sendFile(db: Db, cfg: TelegramConfig, f: FileToSend, fields: Record<string, unknown>): Promise<number | null> {
+  const method = f.kind === "photo" ? "sendPhoto" : "sendVideo";
+  const body = { ...fields, ...(f.kind === "video" && { supports_streaming: true }) };
+  if (f.fileId) {
+    const id = sentId(await botCall(cfg.token, method, { ...body, [f.kind]: f.fileId }));
+    if (id !== null) return id;
+  }
+  const sent = await botCall(cfg.token, method, body, { field: f.kind, data: f.data, name: f.kind, type: f.mime });
+  if (f.mediaId) {
+    const r = sent as { photo?: { file_id?: string }[]; video?: { file_id?: string }; animation?: { file_id?: string }; document?: { file_id?: string } } | null;
+    const fileId = f.kind === "photo" ? r?.photo?.at(-1)?.file_id : (r?.video ?? r?.animation ?? r?.document)?.file_id;
+    if (fileId) await db.update(chatMedia).set({ tgFileId: fileId }).where(eq(chatMedia.id, f.mediaId));
+  }
+  return sentId(sent);
+}
+
 /** Сообщение эксперта (или админа от его имени) — в бот. force — даже если клиент сейчас на сайте. */
 async function deliverMessage(db: Db, cfg: TelegramConfig, messageId: number, now: Date, force: boolean): Promise<void> {
   const [m] = await db.select().from(messages).where(eq(messages.id, messageId));
   if (!m || (m.author !== "expert" && m.author !== "admin")) return;
   const ctx = await chatContext(db, cfg, m.conversationId, now, force);
   if (!ctx) return;
-  const [photo] = await db.select({ data: messagePhotos.data, mime: messagePhotos.mime }).from(messagePhotos).where(eq(messagePhotos.messageId, m.id));
+  const [own] = await db.select({ data: messagePhotos.data, mime: messagePhotos.mime }).from(messagePhotos).where(eq(messagePhotos.messageId, m.id));
+  // Фото или видео из общего хранилища (рассылка от экспертов): уже в Telegram — по file_id
+  const [shared] = m.mediaId ? await db.select().from(chatMedia).where(eq(chatMedia.id, m.mediaId)) : [];
+  const photo: FileToSend | null = own
+    ? { kind: "photo", data: own.data, mime: own.mime }
+    : shared
+      ? { kind: shared.kind, data: shared.data, mime: shared.mime, fileId: shared.tgFileId, mediaId: shared.id }
+      : null;
   if (!photo && m.body.trim() === "") return;
 
   // Сообщение админа клиент видит от эксперта чата
@@ -318,14 +345,11 @@ async function deliverMessage(db: Db, cfg: TelegramConfig, messageId: number, no
     const [e] = await db.select({ name: experts.name }).from(experts).where(eq(experts.id, expertId));
     const short = body.length <= CAPTION_LIMIT;
     const caption = (withCard && e ? `<b>${esc(e.name)}</b>\n` : "") + (short ? esc(body) + hint : "");
-    const id = sentId(
-      await botCall(
-        cfg.token,
-        "sendPhoto",
-        { chat_id: ctx.chatId, ...(caption && { caption, parse_mode: "HTML" }), ...(short ? keyboard(buttons) : {}) },
-        { field: "photo", data: photo.data, name: "photo", type: photo.mime },
-      ),
-    );
+    const id = await sendFile(db, cfg, photo, {
+      chat_id: ctx.chatId,
+      ...(caption && { caption, parse_mode: "HTML" }),
+      ...(short ? keyboard(buttons) : {}),
+    });
     await remember(db, cfg, ctx, id, { ...info, withButtons: short });
     if (!short) {
       const chunks = splitText(body).map(esc);

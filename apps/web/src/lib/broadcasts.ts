@@ -323,8 +323,9 @@ export async function audienceCounts(db: Db): Promise<Record<Audience, number>> 
   return Object.fromEntries(keys.map((a, i) => [a, lists[i]!.length])) as Record<Audience, number>;
 }
 
-export async function listBroadcasts(db: Db, limit = 20): Promise<Broadcast[]> {
-  return db.select().from(broadcasts).orderBy(desc(broadcasts.createdAt)).limit(limit);
+/** История: системные (bot) или от экспертов (chat). */
+export async function listBroadcasts(db: Db, kind: Broadcast["kind"] = "bot", limit = 20): Promise<Broadcast[]> {
+  return db.select().from(broadcasts).where(eq(broadcasts.kind, kind)).orderBy(desc(broadcasts.createdAt)).limit(limit);
 }
 
 /** Проба: отправить рассылку одному человеку (себе), без записи в историю. */

@@ -1,10 +1,13 @@
 "use client";
 
 /**
- * Поля рассылки внутри формы: готовые рассылки (шаблон заполняет всё сразу), кому — с числом получателей,
- * условия (заявка старше N часов, молчит N часов — число получателей пересчитывается сразу), серия сообщений
- * с фото или видео, значок подарка и кнопка. Отправляет форма вокруг (broadcastAction): поля body_<i>, media_<i>,
- * messages_count, registered_on/registered_hours, silent_on/silent_hours.
+ * Поля рассылки внутри формы, два режима:
+ * - chat — от экспертов: кому, условия, «клиентам эксперта», серия сообщений с фото или видео (уходят в чаты);
+ * - bot — системная от бота: готовые рассылки (шаблон заполняет всё сразу), кому, условия, одно сообщение,
+ *   значок подарка и кнопка.
+ * Условия — заявка старше N часов, молчит N часов; число получателей пересчитывается сразу.
+ * Отправляет форма вокруг (broadcastAction / expertBroadcastAction): поля body_<i>, media_<i>, messages_count,
+ * registered_on/registered_hours, silent_on/silent_hours, expert.
  */
 import { useEffect, useRef, useState } from "react";
 import {
@@ -28,8 +31,20 @@ type Filter = { on: boolean; hours: number };
 const mb = (bytes: number) =>
   bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} КБ` : `${(bytes / 1024 / 1024).toFixed(1).replace(".", ",")} МБ`;
 
-export function BroadcastComposer({ counts, maxLength }: { counts: Record<Audience, number>; maxLength: number }) {
+export function BroadcastComposer({
+  counts,
+  maxLength,
+  mode,
+  experts = [],
+}: {
+  counts: Record<Audience, number>;
+  maxLength: number;
+  mode: "bot" | "chat";
+  experts?: { id: number; name: string }[];
+}) {
+  const chat = mode === "chat";
   const [audience, setAudience] = useState<Audience>("all");
+  const [expert, setExpert] = useState("");
   const [gift, setGift] = useState(false);
   const [kind, setKind] = useState<ButtonKind>("");
   const [label, setLabel] = useState("");
@@ -59,8 +74,9 @@ export function BroadcastComposer({ counts, maxLength }: { counts: Record<Audien
     });
 
   const filtered = registered.on || silent.on;
-  const live = useLiveCount(audience, registered, silent, filtered);
-  const total = filtered ? live : counts[audience];
+  // От экспертов считаем всегда: нужен подходящий чат, а не просто Telegram
+  const live = useLiveCount({ audience, registered, silent, kind: mode, expert }, filtered || chat);
+  const total = filtered || chat ? live : counts[audience];
 
   const mediaBytes = drafts.reduce((sum, d) => sum + (d.file?.size ?? 0), 0);
   const problems = [
@@ -78,14 +94,16 @@ export function BroadcastComposer({ counts, maxLength }: { counts: Record<Audien
 
   return (
     <>
-      <div className="bc-templates" role="group" aria-label="Готовые рассылки">
-        <span className="muted">Готовые рассылки:</span>
-        {Object.entries(BROADCAST_TEMPLATES).map(([key, t]) => (
-          <button key={key} type="button" className={template === key ? "bc-template is-current" : "bc-template"} onClick={() => apply(key)}>
-            {t.title} <span className="muted">· {counts[t.audience]}</span>
-          </button>
-        ))}
-      </div>
+      {!chat && (
+        <div className="bc-templates" role="group" aria-label="Готовые рассылки">
+          <span className="muted">Готовые рассылки:</span>
+          {Object.entries(BROADCAST_TEMPLATES).map(([key, t]) => (
+            <button key={key} type="button" className={template === key ? "bc-template is-current" : "bc-template"} onClick={() => apply(key)}>
+              {t.title} <span className="muted">· {counts[t.audience]}</span>
+            </button>
+          ))}
+        </div>
+      )}
       <fieldset className="audience">
         <legend>Кому</legend>
         {(Object.keys(AUDIENCES) as Audience[]).map((a) => (
@@ -105,10 +123,29 @@ export function BroadcastComposer({ counts, maxLength }: { counts: Record<Audien
         <FilterRow name="silent" value={silent} onChange={setSilent} after="(и те, кто не писал вовсе)">
           Не писали нам в чат больше
         </FilterRow>
+        {chat && (
+          <label className="field bc-expert">
+            <span>Клиентам эксперта</span>
+            <select name="expert" value={expert} onChange={(e) => setExpert(e.target.value)}>
+              <option value="">Всем — каждому от эксперта его чата</option>
+              {experts.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <p className="bc-total">
           Получат: <b>{total ?? "…"}</b>
-          {filtered && <span className="muted"> — из {counts[audience]} по «Кому»</span>}
+          {(filtered || chat) && <span className="muted"> — из {counts[audience]} по «Кому»</span>}
         </p>
+        {chat && (
+          <p className="muted bc-note">
+            Сообщение встанет в чат клиента от имени эксперта и придёт ему в Telegram. Если чатов несколько — в самый
+            свежий (с выбранным экспертом). Нет чата — не получит.
+          </p>
+        )}
       </fieldset>
 
       <input type="hidden" name="messages_count" value={drafts.length} />
@@ -119,6 +156,7 @@ export function BroadcastComposer({ counts, maxLength }: { counts: Record<Audien
             index={i}
             total={drafts.length}
             draft={d}
+            media={chat}
             maxLength={maxLength}
             onBody={(body) => update(d.id, { body })}
             onFile={(file) => {
@@ -128,14 +166,15 @@ export function BroadcastComposer({ counts, maxLength }: { counts: Record<Audien
             onRemove={() => remove(d.id)}
           />
         ))}
-        {drafts.length < MAX_BROADCAST_MESSAGES && (
+        {chat && drafts.length < MAX_BROADCAST_MESSAGES && (
           <button type="button" className="bc-add" onClick={add}>
             + Ещё сообщение
           </button>
         )}
         <p className="muted bc-note">
-          Сообщения уходят подряд, одно за другим. Кнопка и «Отключить сообщения — /stop» — под последним. Фото — до 10 МБ,
-          все файлы вместе — до 50 МБ.
+          {chat
+            ? "Сообщения уходят подряд, одно за другим. {имя} в тексте заменится на имя клиента. Фото — до 10 МБ, все файлы вместе — до 50 МБ."
+            : "Внизу бот добавит «Отключить сообщения — /stop»."}
         </p>
         {problems.map((p) => (
           <p key={p} className="notice notice--error">
@@ -144,11 +183,15 @@ export function BroadcastComposer({ counts, maxLength }: { counts: Record<Audien
         ))}
       </div>
 
-      <label className="check">
-        <input name="gift" type="checkbox" checked={gift} onChange={(e) => setGift(e.target.checked)} />
-        <span>Значок подарка в начале первого сообщения</span>
-      </label>
-      <ButtonPicker kind={kind} label={label} onKind={setKind} onLabel={setLabel} />
+      {!chat && (
+        <>
+          <label className="check">
+            <input name="gift" type="checkbox" checked={gift} onChange={(e) => setGift(e.target.checked)} />
+            <span>Значок подарка в начале</span>
+          </label>
+          <ButtonPicker kind={kind} label={label} onKind={setKind} onLabel={setLabel} />
+        </>
+      )}
     </>
   );
 }
@@ -188,12 +231,16 @@ function FilterRow({
 }
 
 /** Сколько получат при условиях — с сервера, с паузой после ввода; прошлый запрос отменяется. */
-function useLiveCount(audience: Audience, registered: Filter, silent: Filter, enabled: boolean): number | null {
+function useLiveCount(
+  { audience, registered, silent, kind, expert }: { audience: Audience; registered: Filter; silent: Filter; kind: "bot" | "chat"; expert: string },
+  enabled: boolean,
+): number | null {
   const [count, setCount] = useState<number | null>(null);
   useEffect(() => {
     if (!enabled) return;
     const ctl = new AbortController();
-    const q = new URLSearchParams({ audience });
+    const q = new URLSearchParams({ audience, kind });
+    if (expert) q.set("expert", expert);
     if (registered.on && registered.hours > 0) q.set("registered", String(registered.hours));
     if (silent.on && silent.hours > 0) q.set("silent", String(silent.hours));
     const timer = setTimeout(() => {
@@ -207,7 +254,7 @@ function useLiveCount(audience: Audience, registered: Filter, silent: Filter, en
       clearTimeout(timer);
       ctl.abort();
     };
-  }, [audience, registered.on, registered.hours, silent.on, silent.hours, enabled]);
+  }, [audience, registered.on, registered.hours, silent.on, silent.hours, kind, expert, enabled]);
   return count;
 }
 
@@ -216,6 +263,7 @@ function MessageEditor({
   index,
   total,
   draft,
+  media,
   maxLength,
   onBody,
   onFile,
@@ -224,6 +272,8 @@ function MessageEditor({
   index: number;
   total: number;
   draft: Draft;
+  /** Можно приложить фото или видео. */
+  media: boolean;
   maxLength: number;
   onBody: (body: string) => void;
   onFile: (file: Attached | null) => void;
@@ -248,9 +298,10 @@ function MessageEditor({
         maxLength={maxLength}
         value={draft.body}
         onChange={(e) => onBody(e.target.value)}
-        placeholder={f ? "Подпись к фото или видео — необязательно" : "Текст сообщения. Жирный — **так**"}
+        placeholder={f ? "Подпись к фото или видео — необязательно" : media ? "Текст сообщения. {имя} — имя клиента" : "Текст сообщения. Жирный — **так**"}
         aria-label={`Текст сообщения ${index + 1}`}
       />
+      {media && (
       <div className="bc-media">
         <label className="bc-file">
           <input
@@ -285,6 +336,7 @@ function MessageEditor({
           </>
         )}
       </div>
+      )}
       {longCaption && (
         <p className="muted bc-note">Текст длиннее {MAX_CAPTION} символов — в подпись не влезет: сначала уйдёт файл, следом текст.</p>
       )}

@@ -372,6 +372,10 @@ export const messages = pgTable(
     viaTelegram: boolean("via_telegram").notNull().default(false),
     /** Админ или оператор исправил текст — когда (клиент видит пометку «изменено»); null — не правили. */
     editedAt: timestamp("edited_at", { withTimezone: true }),
+    /** Фото или видео из общего хранилища (chat_media) — у сообщений рассылки от экспертов; null — нет. */
+    mediaId: uuid("media_id").references(() => chatMedia.id),
+    /** Сообщение из рассылки от экспертов (broadcasts, kind = chat); null — обычное. */
+    broadcastId: integer("broadcast_id").references(() => broadcasts.id),
   },
   (t) => [index("messages_conversation_idx").on(t.conversationId, t.id)],
 );
@@ -527,6 +531,13 @@ export const broadcasts = pgTable("broadcasts", {
   /** Личная кнопка (lib/broadcasts.ts, PERSONAL_PAGES): каждому — его страница внутри Telegram; "" — нет. */
   personalPage: text("personal_page").notNull().default(""),
   /**
+   * bot — системная рассылка от бота (только в Telegram, с /stop); chat — сообщения от экспертов: каждому
+   * в его чат с экспертом (и оттуда в Telegram), lib/expert-broadcasts.ts.
+   */
+  kind: text("kind", { enum: ["bot", "chat"] }).notNull().default("bot"),
+  /** chat: только клиентам этого эксперта; null — всем (каждому от эксперта его чата). */
+  expertId: integer("expert_id").references(() => experts.id),
+  /**
    * Серия сообщений (lib/broadcasts.ts): текст и вложение каждого — без самих файлов (имя и размер).
    * [] — одно текстовое сообщение, его текст в body.
    */
@@ -538,6 +549,22 @@ export const broadcasts = pgTable("broadcasts", {
   registeredHours: integer("registered_hours"),
   /** Условие к «Кому»: клиент не писал нам больше N часов; null — без условия. */
   silentHours: integer("silent_hours"),
+});
+
+/**
+ * Общее хранилище фото и видео для сообщений чата: один файл на много сообщений (рассылка от экспертов
+ * шлёт одно видео сотням людей — храним его один раз). Адрес — /api/chat/media/<id> (id не угадать).
+ * tgFileId — файл уже загружен в Telegram, дальше шлём по нему.
+ */
+export const chatMedia = pgTable("chat_media", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  kind: text("kind", { enum: ["photo", "video"] }).notNull(),
+  mime: text("mime").notNull(),
+  name: text("name").notNull().default(""),
+  size: integer("size").notNull(),
+  data: bytea("data").notNull(),
+  tgFileId: text("tg_file_id"),
+  createdAt: createdAt(),
 });
 
 /** Фото в сообщении чата: JPEG, PNG или WebP, одно на сообщение. */
