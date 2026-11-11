@@ -9,10 +9,11 @@
  * → «Источники» (source.r1 …). Новый источник: ключ в SOURCES и папка app/<ключ>/route.ts
  * с `export const GET = sourceEntry("<ключ>")`.
  */
-import { and, count, countDistinct, eq, exists, gt, gte, isNotNull, isNull, or, sql } from "drizzle-orm";
+import { and, count, countDistinct, eq, exists, gt, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { cookies } from "next/headers";
 import type { Db } from "@/db";
 import { conversations, funnelEvents, leads, messages } from "@/db/schema";
+import { within } from "./period";
 
 export const SOURCES = {
   karta: "TikTok · Твоя карта",
@@ -128,14 +129,14 @@ export const RETURN_AFTER_HOURS = 24;
  * Воронка по источникам за период (since; null — за всё время). Как в общей воронке: «Открыли главную» —
  * по браузерам, остальное — по заявкам, созданным за период.
  */
-export async function sourceStats(db: Db, since: Date | null): Promise<SourceRow[]> {
-  const leadsInPeriod = since ? gte(leads.createdAt, since) : undefined;
+export async function sourceStats(db: Db, since: Date | null, until: Date | null = null): Promise<SourceRow[]> {
+  const leadsInPeriod = within(leads.createdAt, since, until);
   const later = sql`${leads.createdAt} + make_interval(hours => ${RETURN_AFTER_HOURS})`;
   const [visitorRows, leadRows, chatRows, wroteRows, returnedRows] = await Promise.all([
     db
       .select({ key: funnelEvents.source, n: countDistinct(funnelEvents.visitorId) })
       .from(funnelEvents)
-      .where(and(eq(funnelEvents.step, "home"), since ? gte(funnelEvents.createdAt, since) : undefined))
+      .where(and(eq(funnelEvents.step, "home"), within(funnelEvents.createdAt, since, until)))
       .groupBy(funnelEvents.source),
     db.select({ key: leads.source, n: count() }).from(leads).where(leadsInPeriod).groupBy(leads.source),
     db
@@ -197,8 +198,8 @@ export interface HeardFromRow {
 }
 
 /** Ответы на «Откуда вы о нас узнали?» среди заявок за период и сколько из них начали чат. */
-export async function heardFromStats(db: Db, since: Date | null): Promise<HeardFromRow[]> {
-  const inPeriod = and(isNotNull(leads.heardFrom), since ? gte(leads.createdAt, since) : undefined);
+export async function heardFromStats(db: Db, since: Date | null, until: Date | null = null): Promise<HeardFromRow[]> {
+  const inPeriod = and(isNotNull(leads.heardFrom), within(leads.createdAt, since, until));
   const [leadRows, chatRows] = await Promise.all([
     db.select({ key: leads.heardFrom, n: count() }).from(leads).where(inPeriod).groupBy(leads.heardFrom),
     db

@@ -1,7 +1,8 @@
 /** Telegram-бот в «Сводке»: сколько подключили, отвечают ли из бота, что бот отправил сам (за период). */
-import { and, count, countDistinct, eq, gte, isNotNull, isNull } from "drizzle-orm";
+import { and, count, countDistinct, eq, isNotNull, isNull } from "drizzle-orm";
 import type { Db } from "@/db";
 import { clubQuizzes, conversations, leads, messages, telegramMessages } from "@/db/schema";
+import { within } from "./period";
 
 export interface BotStats {
   /** Сейчас подключены (могут получать сообщения и рассылки) — за всё время. */
@@ -21,34 +22,34 @@ export interface BotStats {
   quizzesWaiting: number;
 }
 
-export async function botStats(db: Db, since: Date | null): Promise<BotStats> {
+export async function botStats(db: Db, since: Date | null, until: Date | null = null): Promise<BotStats> {
   const [subscribers, linked, replied, reminders, asks, quizzes, waiting] = await Promise.all([
     db.select({ n: countDistinct(leads.telegramUserId) }).from(leads).where(isNotNull(leads.telegramUserId)),
     db
       .select({ n: count() })
       .from(leads)
-      .where(and(isNotNull(leads.telegramUserId), since ? gte(leads.createdAt, since) : undefined)),
+      .where(and(isNotNull(leads.telegramUserId), within(leads.createdAt, since, until))),
     db
       .select({ leadsN: countDistinct(conversations.leadId), messagesN: count() })
       .from(messages)
       .innerJoin(conversations, eq(conversations.id, messages.conversationId))
-      .where(and(eq(messages.viaTelegram, true), since ? gte(messages.createdAt, since) : undefined)),
+      .where(and(eq(messages.viaTelegram, true), within(messages.createdAt, since, until))),
     db
       .select({ n: count() })
       .from(telegramMessages)
-      .where(and(eq(telegramMessages.purpose, "reminder"), since ? gte(telegramMessages.createdAt, since) : undefined)),
+      .where(and(eq(telegramMessages.purpose, "reminder"), within(telegramMessages.createdAt, since, until))),
     db
       .select({ n: count() })
       .from(telegramMessages)
-      .where(and(eq(telegramMessages.purpose, "review"), since ? gte(telegramMessages.createdAt, since) : undefined)),
+      .where(and(eq(telegramMessages.purpose, "review"), within(telegramMessages.createdAt, since, until))),
     db
       .select({ n: count(), people: countDistinct(clubQuizzes.leadId) })
       .from(clubQuizzes)
-      .where(since ? gte(clubQuizzes.createdAt, since) : undefined),
+      .where(within(clubQuizzes.createdAt, since, until)),
     db
       .select({ n: countDistinct(clubQuizzes.leadId) })
       .from(clubQuizzes)
-      .where(and(isNull(clubQuizzes.sentAt), since ? gte(clubQuizzes.createdAt, since) : undefined)),
+      .where(and(isNull(clubQuizzes.sentAt), within(clubQuizzes.createdAt, since, until))),
   ]);
   return {
     subscribers: Number(subscribers[0]?.n ?? 0),

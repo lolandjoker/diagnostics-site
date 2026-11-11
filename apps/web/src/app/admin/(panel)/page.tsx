@@ -2,7 +2,8 @@ import Link from "next/link";
 import { count, sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { calls } from "@/db/schema";
-import { FUNNEL_PERIODS, funnel, funnelStart, periodStart, trackingSince } from "@/lib/funnel";
+import { FUNNEL_PERIODS, funnel, funnelStart, presetPeriod, trackingSince } from "@/lib/funnel";
+import { customPeriod, mskDay } from "@/lib/period";
 import type { FunnelPeriod } from "@/lib/funnel";
 import { botStats } from "@/lib/bot-stats";
 import { cityName, countryName } from "@/lib/geo-label";
@@ -35,25 +36,45 @@ const day = new Intl.DateTimeFormat("ru-RU", {
   minute: "2-digit",
 });
 
+/** «9 ноября» или «2 — 8 ноября 2026»: подпись выбранного периода (дни по Москве). */
+const dayLabel = new Intl.DateTimeFormat("ru-RU", { timeZone: "UTC", day: "numeric", month: "long" });
+const periodLabel = (from: string, to: string) => {
+  const d = (s: string) => dayLabel.format(new Date(`${s}T00:00:00Z`));
+  return from === to ? d(from) : `${d(from)} — ${d(to)}`;
+};
+
+const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
+
+/**
+ * Сводка за период: готовые (?period=today|yesterday|week|month|all, по умолчанию 7 дней) или свой — с даты по дату
+ * включительно (?from=2026-11-02&to=2026-11-08; один день — одна и та же дата). Дни — по Москве.
+ */
 export default async function DashboardPage(props: PageProps<"/admin">) {
-  const { period: raw } = await props.searchParams;
+  const sp = await props.searchParams;
+  const now = new Date();
+  const custom = customPeriod(one(sp.from), one(sp.to));
+  const raw = one(sp.period);
   const period: FunnelPeriod = FUNNEL_PERIODS.some((p) => p.key === raw) ? (raw as FunnelPeriod) : "week";
+  const { since, until } = custom ?? presetPeriod(period, now);
   const db = await getDb();
   const tracking = await trackingSince(db);
-  const since = periodStart(period, new Date());
+  // Поля «с» и «по»: выбранный период; «всё время» — с начала сбора данных
+  const today = mskDay(now);
+  const fromValue = custom?.from ?? mskDay(since ?? tracking ?? now);
+  const toValue = custom?.to ?? (until ? mskDay(new Date(until.getTime() - 1)) : today);
   const cfg = telegramConfig();
   const [steps, [callRow], sources, heard, sourceNames, bot, botName, geo] = await Promise.all([
-    tracking ? funnel(db, funnelStart(since, tracking)) : Promise.resolve([]),
+    tracking ? funnel(db, funnelStart(since, tracking), until) : Promise.resolve([]),
     db
       .select({ n: count() })
       .from(calls)
       .where(sql`${calls.answeredAt} is not null`),
-    sourceStats(db, since),
-    heardFromStats(db, since),
+    sourceStats(db, since, until),
+    heardFromStats(db, since, until),
     getTexts(db, REF_TEXT_KEYS),
-    botStats(db, since),
+    botStats(db, since, until),
     cfg ? botUsername(cfg) : Promise.resolve(null),
-    geoStats(db, since),
+    geoStats(db, since, until),
   ]);
   const geoTotal = geo.countries.reduce((s, c) => s + c.leads, 0);
   const heardTotal = heard.reduce((sum, h) => sum + h.leads, 0);
@@ -74,13 +95,30 @@ export default async function DashboardPage(props: PageProps<"/admin">) {
   return (
     <>
       <h1>Сводка</h1>
-      <nav className="filter">
-        {FUNNEL_PERIODS.map((p) => (
-          <Link key={p.key} href={`/admin?period=${p.key}`} className={p.key === period ? "is-current" : ""}>
-            {p.label}
-          </Link>
-        ))}
-      </nav>
+      <div className="period-bar">
+        <nav className="filter" aria-label="Период">
+          {FUNNEL_PERIODS.map((p) => (
+            <Link key={p.key} href={`/admin?period=${p.key}`} className={!custom && p.key === period ? "is-current" : ""}>
+              {p.label}
+            </Link>
+          ))}
+        </nav>
+        {/* Свой период: обычная форма GET — работает и без скриптов */}
+        <form className={custom ? "period-form is-current" : "period-form"} method="get" action="/admin">
+          <label>
+            <span>с</span>
+            <input type="date" name="from" defaultValue={fromValue} max={today} required />
+          </label>
+          <label>
+            <span>по</span>
+            <input type="date" name="to" defaultValue={toValue} max={today} required />
+          </label>
+          <button type="submit">Показать</button>
+        </form>
+      </div>
+      <p className="period-now muted">
+        Период: <b>{periodLabel(fromValue, toValue)}</b> · по московскому времени
+      </p>
 
       <section className="admin-section">
         <h2>Воронка</h2>
