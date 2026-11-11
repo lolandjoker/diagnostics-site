@@ -140,7 +140,13 @@ export async function sendFullTextEmail(db: Db, leadId: string, now: Date, cfg: 
   const ok = await sendMail(cfg, {
     to: lead.email,
     ...mail,
-    headers: { "List-Unsubscribe": `<${optOutUrl}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" },
+    headers: {
+      "List-Unsubscribe": `<${optOutUrl}>`,
+      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+      // UniSender Go: свою ссылку отписки он дописывает сам (наши List-* заголовки срезает, пока поддержка не
+      // разрешит) — пусть она будет по-русски; отписка у него — его список, у нас — /pochta/otpiska
+      "X-UNISENDER-GO": JSON.stringify({ global_language: "ru" }),
+    },
   });
   // Не ушло — снимаем отметку: следующий повод (новая почта) попробует снова
   if (!ok) await release();

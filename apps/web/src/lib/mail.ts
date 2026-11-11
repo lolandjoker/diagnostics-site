@@ -1,5 +1,6 @@
 /**
- * Отправка писем по SMTP (сейчас — UniSender Go: smtp.go1.unisender.ru, логин — id пользователя, пароль — API-ключ).
+ * Отправка писем по SMTP (сейчас — UniSender Go: smtp.go2.unisender.ru — аккаунт на go2, логин — id пользователя,
+ * пароль — API-ключ; только TLS).
  * Настройки в .env сервера: SMTP_HOST, SMTP_PORT (587 по умолчанию; 465 — сразу TLS), SMTP_USER, SMTP_PASS,
  * MAIL_FROM («Таромба <noreply@taromba.com>»). Чего-то нет — почта выключена: сайт работает, письма не уходят.
  * Ошибки отправки не ломают сайт — пишем в журнал и возвращаем false.
@@ -50,6 +51,8 @@ function transportFor(cfg: MailConfig): Transport {
       host: cfg.host,
       port: cfg.port,
       secure: cfg.port === 465,
+      // UniSender Go не принимает открытые соединения: на 587 — только STARTTLS
+      requireTLS: cfg.port !== 465,
       auth: { user: cfg.user, pass: cfg.pass },
       pool: true,
       maxConnections: 2,

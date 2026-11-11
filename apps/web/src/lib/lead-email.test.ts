@@ -84,7 +84,11 @@ describe("почта клиента", () => {
     expect(m.html).toContain("Эксперт <b>Мария</b>");
     const unsub = `https://taromba.test/pochta/otpiska?t=${optOutCode(SECRET, lead.id)}`;
     expect(m.text).toContain(unsub);
-    expect(m.headers).toEqual({ "List-Unsubscribe": `<${unsub}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" });
+    expect(m.headers).toEqual({
+      "List-Unsubscribe": `<${unsub}>`,
+      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+      "X-UNISENDER-GO": '{"global_language":"ru"}',
+    });
   });
 
   it("почта после разбора — письмо сразу; не ушло — отметки нет, можно снова", async () => {
