@@ -36,6 +36,9 @@ jobs:
       - name: Проверка скриптов выката (shellcheck)
         run: shellcheck -S warning deploy/*.sh
 
+      - name: Тест проверки SSH-ключа
+        run: bash deploy/test-prepare-key.sh
+
       - name: Проверка типов
         run: pnpm typecheck
 

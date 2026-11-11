@@ -81,8 +81,8 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p ~/.ssh && chmod 700 ~/.ssh
-          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
+          # Проверяет, что ключ целый, и печатает его отпечаток (сам ключ не выводится)
+          bash deploy/prepare-key.sh ~/.ssh/deploy_key
           ssh-keyscan -T 20 -t ed25519 "$HOST" 2>/dev/null > ~/.ssh/known_hosts
           fp=$(ssh-keygen -lf ~/.ssh/known_hosts -E sha256 | awk '{print $2}')
           if [ "$fp" != "$HOST_FINGERPRINT" ]; then
