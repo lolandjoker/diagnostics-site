@@ -3,8 +3,8 @@
  * сейчас на неё уходит одно письмо: «Подробный разбор готов» с текстом разбора и кнопкой в чат.
  * - Письмо одно на заявку (leads.email_full_text_sent_at; отметка одним UPDATE — два опроса не отправят дважды).
  * - Почту указали, когда разбор уже пришёл, — письмо уходит сразу.
- * - В каждом письме — «Отписаться» (ссылка с подписью SESSION_SECRET и заголовок List-Unsubscribe): после неё
- *   не пишем. Новая почта в окне снова подписывает.
+ * - В каждом письме — «Отписаться» (ссылка с подписью SESSION_SECRET): после неё не пишем; новая почта в окне
+ *   снова подписывает. Ещё одну ссылку отписки дописывает UniSender Go — отписавшимся там он сам не шлёт.
  * - Почта выключена (lib/mail.ts) — адрес сохраняем, письмо не уходит и не отмечается.
  */
 import { createHmac, timingSafeEqual } from "node:crypto";
@@ -137,17 +137,8 @@ export async function sendFullTextEmail(db: Db, leadId: string, now: Date, cfg: 
     chatUrl: `${site}/razbor/${leadId}/chat?c=${row.conversationId}`,
     optOutUrl,
   });
-  const ok = await sendMail(cfg, {
-    to: lead.email,
-    ...mail,
-    headers: {
-      "List-Unsubscribe": `<${optOutUrl}>`,
-      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
-      // UniSender Go: свою ссылку отписки он дописывает сам (наши List-* заголовки срезает, пока поддержка не
-      // разрешит) — пусть она будет по-русски; отписка у него — его список, у нас — /pochta/otpiska
-      "X-UNISENDER-GO": JSON.stringify({ global_language: "ru" }),
-    },
-  });
+  // Свою ссылку отписки UniSender Go дописывает сам (его список); наша — /pochta/otpiska в подвале письма
+  const ok = await sendMail(cfg, { to: lead.email, ...mail });
   // Не ушло — снимаем отметку: следующий повод (новая почта) попробует снова
   if (!ok) await release();
   return ok;

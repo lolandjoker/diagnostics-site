@@ -26,8 +26,8 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
   transpilePackages: ["@diag/engine"],
-  // Драйверы базы и почта (nodemailer) грузятся из node_modules как есть, без упаковки сборщиком
-  serverExternalPackages: ["pg", "@electric-sql/pglite", "nodemailer"],
+  // Драйверы базы грузятся из node_modules как есть, без упаковки сборщиком
+  serverExternalPackages: ["pg", "@electric-sql/pglite"],
   // С диска читаются: шрифты картинок для бота (lib/bot-card.tsx) и геобаза DB-IP (lib/geo.ts) — взять их в сборку
   outputFileTracingIncludes: { "/**": ["./assets/fonts/*.woff", "./node_modules/@ip-location-db/dbip-city-mmdb/*.mmdb"] },
   // Фото эксперта и сертификаты загружаются через серверные действия, по нескольку файлов за раз
