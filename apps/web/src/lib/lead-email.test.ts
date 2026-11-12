@@ -2,9 +2,9 @@ import { eq } from "drizzle-orm";
 import { createTestDb } from "@/db";
 import type { Db } from "@/db";
 import { leads } from "@/db/schema";
-import { FULL_TEXT_DELAY_MS, deliverDueFullTexts, startConversation } from "./chat";
+import { FULL_TEXT_DELAY_MS, deliverDueFullTexts, inbox, startConversation } from "./chat";
 import { createExpert, setExpertFullText, setExpertOnline } from "./experts";
-import { EMAIL_CHANGE_GAP_MS, connectEmail, leadFromOptOutCode, normalizeEmail, optOutCode, optOutEmail, sendFullTextEmail } from "./lead-email";
+import { EMAIL_CHANGE_GAP_MS, connectEmail, emailStats, leadFromOptOutCode, normalizeEmail, optOutCode, optOutEmail, sendFullTextEmail } from "./lead-email";
 import { createLead } from "./leads";
 import { DEFAULT_UNISENDER_GO_API_URL, mailConfig, sendMail, setMailTransport } from "./mail";
 
@@ -181,5 +181,25 @@ describe("отправка через Web API UniSender Go", () => {
         track_read: 0,
       },
     });
+  });
+});
+
+describe("статистика почты для «Сводки» и пометка в списке чатов", () => {
+  it("по заявкам за период: указали, письмо ушло, отписались; в списке чатов — email только у подписанных", async () => {
+    const { lead } = await chat("Анна");
+    const { lead: second } = await chat("Ольга");
+    await chat("Без почты");
+    await connectEmail(db, lead.id, "anna@mail.ru", new Date());
+    await connectEmail(db, second.id, "olga@mail.ru", new Date());
+    await deliverDueFullTexts(db, later());
+    await waitMail(2);
+    await optOutEmail(db, second.id, new Date());
+
+    expect(await emailStats(db, null)).toEqual({ leads: 3, withEmail: 2, sent: 2, optedOut: 1 });
+    expect(await emailStats(db, new Date(Date.now() + 60_000))).toEqual({ leads: 0, withEmail: 0, sent: 0, optedOut: 0 });
+
+    const items = await inbox(db, {});
+    const byName = Object.fromEntries(items.map((i) => [i.leadName, i.email]));
+    expect(byName).toEqual({ Анна: true, Ольга: false, "Без почты": false });
   });
 });

@@ -8,10 +8,11 @@
  * - Почта выключена (lib/mail.ts) — адрес сохраняем, письмо не уходит и не отмечается.
  */
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, count, eq, isNull } from "drizzle-orm";
 import type { Db } from "@/db";
 import { conversations, experts, leads, messages } from "@/db/schema";
 import { type MailConfig, mailConfig, sendMail } from "./mail";
+import { within } from "./period";
 
 /** Не чаще раза в минуту менять почту: защита от перебора адресов чужими руками. */
 export const EMAIL_CHANGE_GAP_MS = 60_000;
@@ -142,4 +143,34 @@ export async function sendFullTextEmail(db: Db, leadId: string, now: Date, cfg: 
   // Не ушло — снимаем отметку: следующий повод (новая почта) попробует снова
   if (!ok) await release();
   return ok;
+}
+
+export interface EmailStats {
+  /** Все заявки за период — для доли. */
+  leads: number;
+  /** Заявки за период, указавшие почту. */
+  withEmail: number;
+  /** Из них письмо с подробным разбором ушло. */
+  sent: number;
+  /** Из них отписались. */
+  optedOut: number;
+}
+
+/** «Сводка» → «Почта»: по заявкам, созданным за период. */
+export async function emailStats(db: Db, since: Date | null, until: Date | null = null): Promise<EmailStats> {
+  const [row] = await db
+    .select({
+      leads: count(),
+      withEmail: count(leads.email),
+      sent: count(leads.emailFullTextSentAt),
+      optedOut: count(leads.emailOptOutAt),
+    })
+    .from(leads)
+    .where(within(leads.createdAt, since, until));
+  return {
+    leads: Number(row?.leads ?? 0),
+    withEmail: Number(row?.withEmail ?? 0),
+    sent: Number(row?.sent ?? 0),
+    optedOut: Number(row?.optedOut ?? 0),
+  };
 }

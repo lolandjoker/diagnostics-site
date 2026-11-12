@@ -1,6 +1,6 @@
 /**
  * Мелочи чатов сотрудников (без состояния — работают и на сервере, и в браузере):
- * значок «Telegram подключён», метка города, птички прочтения.
+ * значки «Telegram подключён» и «указал почту», метка города, птички прочтения.
  */
 import { geoLabel } from "@/lib/geo-label";
 
@@ -9,6 +9,17 @@ export function TelegramIcon({ size = 14 }: { size?: number }) {
     <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden="true">
       <circle cx="12" cy="12" r="12" fill="#2aabee" />
       <path fill="#fff" d="M5.4 11.7 16.9 7.3c.5-.2 1 .1.8.9l-1.9 9.2c-.1.6-.5.8-1.1.5l-3-2.2-1.4 1.4c-.2.2-.3.3-.6.3l.2-3.1 5.6-5c.2-.2 0-.3-.3-.1l-6.9 4.3-3-.9c-.6-.2-.6-.6.1-.9Z" />
+    </svg>
+  );
+}
+
+/** Конверт — клиент указал почту (подробный разбор приходит и письмом). */
+export function MailIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden="true">
+      <circle cx="12" cy="12" r="12" fill="#c9a45c" />
+      <rect x="6" y="8" width="12" height="8.5" rx="1.6" fill="none" stroke="#fff" strokeWidth="1.6" />
+      <path d="m6.8 9 5.2 4 5.2-4" fill="none" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }

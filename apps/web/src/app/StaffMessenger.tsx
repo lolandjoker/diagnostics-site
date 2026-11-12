@@ -13,7 +13,7 @@ import { type ReactNode, createContext, useContext, useState } from "react";
 import { Avatar } from "./Avatar";
 import { InboxList } from "./InboxList";
 import type { ClubStatus } from "@/lib/club-status";
-import { GeoTag, TelegramBadge } from "./StaffBits";
+import { GeoTag, MailIcon, TelegramBadge } from "./StaffBits";
 
 /** Куда «назад» (список) и база адресов чатов — для шапки открытого чата. */
 const Nav = createContext<{ listHref: string; linkBase: string } | null>(null);
@@ -78,6 +78,7 @@ export function StaffChatHead({
   name,
   birthDate,
   email,
+  hasEmail = false,
   expertName,
   mine,
   telegram,
@@ -96,6 +97,8 @@ export function StaffChatHead({
   birthDate: string | null;
   /** Админ и операторы: почта клиента для писем; null — не указал. */
   email?: string | null;
+  /** Эксперт: клиент указал почту (без адреса). */
+  hasEmail?: boolean;
   expertName: string | null;
   /** Эксперт открыл свой чат — «(вы)». */
   mine?: boolean;
@@ -139,7 +142,11 @@ export function StaffChatHead({
           <p className="staff-chat__tags">
             <GeoTag country={geoCountry} city={geoCity} />
             {birthDate && <span>{birthDate.split("-").reverse().join(".")}</span>}
-            {email && <span title="Клиент указал почту — подробный разбор приходит и письмом">✉ {email}</span>}
+            {(email || hasEmail) && (
+              <span className="staff-chat__mail" title="Клиент указал почту — подробный разбор приходит и письмом">
+                <MailIcon size={14} /> {email || "почта"}
+              </span>
+            )}
             {expertName && (
               <span>
                 Эксперт: {expertName}
