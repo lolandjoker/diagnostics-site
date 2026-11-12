@@ -243,7 +243,7 @@ function ClubBar({ club }: { club: ClubStatus }) {
       ) : (
         remind("yesno", "Да/нет — нет")
       )}
-      {!club.telegram && <span className="club-chip club-chip--muted">без Telegram — результаты у клиента закрыты</span>}
+      {!club.telegram && !club.email && <span className="club-chip club-chip--muted">без Telegram и почты — результаты у клиента закрыты</span>}
     </div>
   );
 }

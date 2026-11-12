@@ -2,7 +2,8 @@
 
 /**
  * Квизы «Клуба Таромбы» со страниц разбора. Доступ — по id заявки (как ко всей странице разбора).
- * Результат сохраняется всегда; на страницу он попадает только с подключённым Telegram, туда же и уходит.
+ * Результат сохраняется всегда; на страницу он попадает только с подключённым Telegram или указанной почтой;
+ * в Telegram он и уходит (если подключён).
  */
 import { after } from "next/server";
 import { getDb } from "@/db";
@@ -12,6 +13,7 @@ import { type ArchetypeView, archetypeView, runArchetype } from "@/lib/quiz-arch
 import { type CompatView, compatView, parseCompatInput, runCompat } from "@/lib/quiz-compat";
 import { type YesNoView, cleanQuestion, runYesNo, yesNoView } from "@/lib/quiz-yesno";
 import { type QuizRow, nextAttemptAt } from "@/lib/quizzes";
+import { clubUnlocked } from "@/lib/club-access";
 import { telegramLink } from "@/lib/telegram";
 
 type Fail = { error: string };
@@ -21,7 +23,7 @@ async function start(leadId: string) {
   const lead = await getLead(db, String(leadId));
   if (!lead) return null;
   const telegram = await telegramLink(lead);
-  return { db, lead, unlocked: !telegram || telegram.connected };
+  return { db, lead, unlocked: clubUnlocked(lead, telegram) };
 }
 
 function finish(db: Awaited<ReturnType<typeof getDb>>, row: QuizRow) {

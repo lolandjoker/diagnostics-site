@@ -12,6 +12,8 @@ import { ANSWER_LABEL } from "./quiz-yesno-data";
 import { type QuizKind, latestQuiz, nextAttemptFrom, parseJson } from "./quizzes";
 
 export interface ClubStatus {
+  /** Указал почту — результаты открыты и без Telegram (lib/club-access.ts). */
+  email: boolean;
   telegram: boolean;
   /** Подписан на карту дня по утрам в боте. */
   forecast: boolean;
@@ -24,7 +26,10 @@ export interface ClubStatus {
 }
 
 export async function clubStatus(db: Db, leadId: string, now = new Date()): Promise<ClubStatus | null> {
-  const [lead] = await db.select({ tg: leads.telegramUserId, birthDate: leads.birthDate }).from(leads).where(eq(leads.id, leadId));
+  const [lead] = await db
+    .select({ tg: leads.telegramUserId, birthDate: leads.birthDate, email: leads.email })
+    .from(leads)
+    .where(eq(leads.id, leadId));
   if (!lead) return null;
   const [[total], streak, today, compat, arch, yn, sub] = await Promise.all([
     db.select({ n: count() }).from(dailyCards).where(eq(dailyCards.leadId, leadId)),
@@ -41,6 +46,7 @@ export async function clubStatus(db: Db, leadId: string, now = new Date()): Prom
   const y = yn ? { input: parseJson<{ question: string }>(yn.input), result: parseJson<{ card: number; answer: keyof typeof ANSWER_LABEL | null }>(yn.result) } : null;
   return {
     telegram: lead.tg !== null,
+    email: lead.email !== null,
     forecast: sub[0]?.on === true,
     cards: { total: Number(total?.n ?? 0), streak, today: today ? (ARCANA[today.card]?.name ?? null) : null },
     compat: compat ? { at: compat.createdAt.toISOString(), total: c?.result?.scores.total ?? null, partner: c?.input?.partnerName ?? "", again: again(compat, "compat") } : null,

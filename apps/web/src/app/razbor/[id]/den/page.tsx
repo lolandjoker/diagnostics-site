@@ -1,3 +1,4 @@
+import { clubUnlocked } from "@/lib/club-access";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getDb } from "@/db";
@@ -36,8 +37,8 @@ export default async function MyDayPage(props: PageProps<"/razbor/[id]/den">) {
     clientChats(db, lead.id),
     conversationForLead(db, lead.id),
   ]);
-  // Бот выключен — клуб открыт всем, без замка
-  const unlocked = !telegram || telegram.connected;
+  // Telegram или почта открывают расшифровку; бот выключен — клуб открыт всем, без замка
+  const unlocked = clubUnlocked(lead, telegram);
   const expert = chat ? await getExpert(db, chat.expertId) : null;
   const expertOnline = expert ? expertStatus(expert, now) === "online" : false;
   const unread = chats.reduce((s, c) => s + c.unread, 0);

@@ -1,9 +1,9 @@
 "use client";
 
-/** Общее для квизов клуба: замок без Telegram, вопрос эксперту, обновление после подключения. */
+/** Общее для квизов клуба: замок (Telegram или почта), вопрос эксперту, обновление после подключения. */
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 
 /** Результат закрыт — ждём, что человек подключит Telegram и вернётся на вкладку: тогда страница обновится сама. */
 export function useRefreshOnFocus(enabled: boolean) {
@@ -21,7 +21,11 @@ export function askWith(askHref: string, text: string): string {
   return askHref.includes("/chat") ? `${askHref}&q=${encodeURIComponent(text.slice(0, 300))}` : askHref;
 }
 
-export function QuizLocked({ title, text, telegramHref }: { title: string; text: string; telegramHref: string | null }) {
+/**
+ * Результат закрыт: открыть — подключить Telegram или указать почту (обязательно одно из двух).
+ * Почта — сразу здесь: после неё страница обновляется и результат открывается.
+ */
+export function QuizLocked({ title, text, telegramHref, leadId }: { title: string; text: string; telegramHref: string | null; leadId: string }) {
   return (
     <section className="daily__secret daily__secret--locked">
       <span className="eyebrow">Только для Клуба Таромбы</span>
@@ -32,7 +36,64 @@ export function QuizLocked({ title, text, telegramHref }: { title: string; text:
           Получить в Telegram
         </a>
       )}
+      <UnlockByEmail leadId={leadId} />
     </section>
+  );
+}
+
+/** «Или укажите почту — откроем результат сразу»: почта в заявку (как в чате), затем страница обновляется. */
+export function UnlockByEmail({ leadId }: { leadId: string }) {
+  const router = useRouter();
+  const [email, setEmail] = useState("");
+  const [state, setState] = useState<"idle" | "sending" | "done">("idle");
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setState("sending");
+    setError(null);
+    try {
+      const res = await fetch(`/api/chat/${leadId}/email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        setState("idle");
+        setError(data.error ?? "Не получилось — попробуйте ещё раз");
+        return;
+      }
+      setState("done");
+      router.refresh();
+    } catch {
+      setState("idle");
+      setError("Нет связи — попробуйте ещё раз");
+    }
+  }
+
+  return (
+    <form className="unlock-email" onSubmit={submit}>
+      <span className="unlock-email__or">или укажите почту — откроем результат сразу</span>
+      <div className="unlock-email__row">
+        <input
+          type="email"
+          inputMode="email"
+          autoComplete="email"
+          required
+          maxLength={254}
+          placeholder="ваша@почта.ru"
+          aria-label="Ваша почта"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
+        <button type="submit" disabled={state !== "idle"}>
+          {state === "idle" ? "Открыть" : "…"}
+        </button>
+      </div>
+      {error && <small className="unlock-email__error">{error}</small>}
+      <small className="unlock-email__note">Без спама — только ваши результаты и разбор.</small>
+    </form>
   );
 }
 

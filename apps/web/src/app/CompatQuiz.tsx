@@ -210,8 +210,9 @@ export function CompatQuiz({
             ) : (
               <QuizLocked
                 title="Совместимость посчитана"
-                text="Вступите в Клуб Таромбы — откроем проценты и разбор пары здесь и пришлём их в Telegram."
+                text="Вступите в Клуб Таромбы через Telegram — откроем проценты и разбор пары здесь и пришлём их туда."
                 telegramHref={telegramHref}
+                leadId={leadId}
               />
             )}
             {next ? (
