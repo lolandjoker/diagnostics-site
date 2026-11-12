@@ -2,10 +2,11 @@
  * Сколько получат рассылку при выбранных «Кому» и условиях — для формы рассылки (только админ):
  * ?audience=<AUDIENCES>&registered=<часы>&silent=<часы>. Пустое или 0 — без условия.
  * kind=chat — рассылка от экспертов: считаем тех, у кого есть подходящий чат (&expert=<id> — с этим экспертом).
+ * Системная: count — в Telegram, email — адресов почты (&skip_tg=1 — только тех, кто не подключал Telegram).
  */
 import { getDb } from "@/db";
 import { isAdmin } from "@/lib/admin-auth";
-import { MAX_FILTER_HOURS, broadcastRecipients, isAudience } from "@/lib/broadcasts";
+import { MAX_FILTER_HOURS, broadcastRecipients, emailRecipients, isAudience } from "@/lib/broadcasts";
 import { expertBroadcastTargets } from "@/lib/expert-broadcasts";
 import { jsonError, noStore } from "@/lib/http";
 
@@ -32,5 +33,9 @@ export async function GET(req: Request) {
     });
     return Response.json({ count: targets.length }, { headers: noStore });
   }
-  return Response.json({ count: (await broadcastRecipients(db, audience, filters)).length }, { headers: noStore });
+  const [tg, mail] = await Promise.all([
+    broadcastRecipients(db, audience, filters),
+    emailRecipients(db, audience, { filters, skipTelegram: q.get("skip_tg") === "1" }),
+  ]);
+  return Response.json({ count: tg.length, email: mail.length }, { headers: noStore });
 }

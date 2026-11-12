@@ -1,6 +1,6 @@
 /**
- * Рассылки — данные без зависимостей (их показывает и форма в браузере): кому (AUDIENCES), личная кнопка
- * (PERSONAL_PAGES), готовые рассылки под каждый квиз (BROADCAST_TEMPLATES), лимиты серии и файлов.
+ * Рассылки — данные без зависимостей (их показывает и форма в браузере): куда (CHANNELS), кому (AUDIENCES),
+ * личная кнопка (PERSONAL_PAGES), готовые рассылки под каждый квиз (BROADCAST_TEMPLATES), лимиты серии и файлов.
  * Отбор получателей и отправка — lib/broadcasts.ts.
  */
 
@@ -16,9 +16,33 @@ export type PersonalPage = keyof typeof PERSONAL_PAGES;
 
 export const isPersonalPage = (v: unknown): v is PersonalPage => typeof v === "string" && Object.hasOwn(PERSONAL_PAGES, v);
 
-/** Кому рассылать (все — подключившие Telegram; заблокированных нет никогда). */
+/** Куда уходит системная рассылка: в Telegram-бот, на почту (указали почту и не отписались) или туда и туда. */
+export const CHANNELS = {
+  telegram: "Telegram",
+  email: "Почта",
+  both: "Telegram и почта",
+} as const;
+
+export type Channels = keyof typeof CHANNELS;
+
+export const isChannels = (v: unknown): v is Channels => typeof v === "string" && Object.hasOwn(CHANNELS, v);
+
+/** Есть ли в выборе этот канал. */
+export const hasTelegram = (c: Channels) => c !== "email";
+export const hasEmail = (c: Channels) => c !== "telegram";
+
+/** Получателей по каналам: в Telegram — людей с ботом, на почту — адресов. */
+export interface ChannelCount {
+  telegram: number;
+  email: number;
+}
+
+/** Тема письма — до стольких символов. */
+export const MAX_SUBJECT = 150;
+
+/** Кому рассылать (заблокированных нет никогда): в Telegram — подключившим бота, на почту — указавшим почту. */
 export const AUDIENCES = {
-  all: "Всем, кто подключил Telegram",
+  all: "Всем",
   silent: "Не ответили нам в чате — последнее сообщение наше, клиент молчит",
   never: "Ни разу не написали в чат",
   no_archetype: "Не проходили тест «Ваш архетип»",
@@ -39,11 +63,14 @@ export interface BroadcastTemplate {
   gift: boolean;
   button: PersonalPage;
   label: string;
+  /** Тема письма, если рассылка уходит и на почту. */
+  subject: string;
 }
 
 /** Готовые рассылки: шаблон заполняет форму целиком — останется проверить пробой и отправить. */
 export const BROADCAST_TEMPLATES: Record<string, BroadcastTemplate> = {
   archetype: {
+    subject: "Подарок для вас: тест «Ваш архетип» ✨",
     title: "Ваш архетип",
     audience: "no_archetype",
     gift: true,
@@ -52,6 +79,7 @@ export const BROADCAST_TEMPLATES: Record<string, BroadcastTemplate> = {
     body: "**У нас для вас подарок** ✨\n\nМы подготовили бесплатный тест **«Ваш архетип»** — 5 вопросов о вас, и вы узнаете, какая карта Таро описывает ваш характер: ваша сила, как вы любите и что мешает двигаться вперёд.\n\nВ конце — красивая картинка с вашим результатом, её можно выложить в сторис 🌙",
   },
   compat: {
+    subject: "Насколько вы совпадаете с любимым человеком? 💞",
     title: "Совместимость",
     audience: "no_compat",
     gift: true,
@@ -60,6 +88,7 @@ export const BROADCAST_TEMPLATES: Record<string, BroadcastTemplate> = {
     body: "**Насколько вы совпадаете с любимым человеком?** 💞\n\nВведите его дату рождения — и узнайте вашу совместимость по знакам зодиака и числам судьбы: общий процент, чувства, быт и страсть.\n\nЭто бесплатно и займёт минуту. А если захочется разобрать вашу пару подробнее — эксперт на связи 🤍",
   },
   yesno: {
+    subject: "Есть вопрос? Спросите у карт 🃏",
     title: "Да или нет",
     audience: "no_yesno",
     gift: false,
@@ -68,6 +97,7 @@ export const BROADCAST_TEMPLATES: Record<string, BroadcastTemplate> = {
     body: "**Есть вопрос, который не даёт покоя?** 🃏\n\nСформулируйте его так, чтобы можно было ответить «да» или «нет», — и вытяните одну карту. Она ответит и подскажет, что делать дальше.\n\nБесплатно, один вопрос в день 🤍",
   },
   card: {
+    subject: "Ваша карта дня уже ждёт ✨",
     title: "Карта дня",
     audience: "no_card",
     gift: false,
@@ -76,6 +106,7 @@ export const BROADCAST_TEMPLATES: Record<string, BroadcastTemplate> = {
     body: "**Ваша карта дня уже ждёт** ✨\n\nКаждый день — новая карта с расшифровкой лично для вас: что главное сегодня, в любви, в делах и деньгах, и совет дня.\n\nВыберите одну из пяти — доверьтесь первому порыву 🌙",
   },
   chat: {
+    subject: "Эксперт ответил вам и ждёт продолжения",
     title: "Эксперт ждёт",
     audience: "silent",
     gift: false,

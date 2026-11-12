@@ -9,11 +9,13 @@ import {
   type Audience,
   BROADCAST_GAP_MS,
   type Broadcast,
+  CHANNELS,
   MAX_BROADCAST_LENGTH,
   PERSONAL_PAGES,
   type PersonalPage,
   audienceCounts,
   listBroadcasts,
+  mailEnv,
 } from "@/lib/broadcasts";
 import { telegramConfig } from "@/lib/telegram";
 import { ActionForm } from "../../ActionForm";
@@ -38,6 +40,17 @@ function seriesNote(parts: Broadcast["parts"]): string {
   return `${n} ${word}${media.length ? `: ${media.join(", ")}` : ""}`;
 }
 
+/** Число по каналам рассылки: «120», «✉ 40» или «120 · ✉ 40». */
+function byChannel(b: Broadcast, telegram: number, email: number) {
+  if (b.channels === "telegram") return telegram;
+  if (b.channels === "email") return <span title="на почту">✉ {email}</span>;
+  return (
+    <>
+      {telegram} · <span title="на почту">✉ {email}</span>
+    </>
+  );
+}
+
 /** Незаконченная рассылка старше часа — значит, её прервал перезапуск сайта. */
 const STALLED_MS = 60 * 60 * 1000;
 
@@ -45,7 +58,8 @@ const STALLED_MS = 60 * 60 * 1000;
  * Рассылки — только админ. Две вкладки:
  * - «От экспертов» (по умолчанию): массовое сообщение каждому в его чат с экспертом и оттуда в Telegram
  *   (lib/expert-broadcasts.ts) — видно в переписке, ответ приходит в тот же чат;
- * - «Системные от бота» (?tab=bot): только в Telegram, от имени бота, с /stop — подарки, квизы (lib/broadcasts.ts).
+ * - «Системные» (?tab=bot): от имени бота в Telegram (с /stop) и/или письмом на почту — подарки, квизы
+ *   (lib/broadcasts.ts).
  */
 export default async function BroadcastsPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   if (!(await isAdmin())) redirect("/admin");
@@ -74,8 +88,8 @@ export default async function BroadcastsPage({ searchParams }: { searchParams: P
           <span>в чат и в Telegram</span>
         </Link>
         <Link href="/admin/rassylki?tab=bot" className={tab === "bot" ? "bc-tab is-current" : "bc-tab"} aria-current={tab === "bot" ? "page" : undefined}>
-          Системные от бота
-          <span>подарки, квизы, новости</span>
+          Системные
+          <span>бот и почта: подарки, квизы</span>
         </Link>
       </nav>
 
@@ -88,15 +102,17 @@ export default async function BroadcastsPage({ searchParams }: { searchParams: P
         </p>
       ) : (
         <p className="muted">
-          Подключили бота: <b>{counts.all}</b>. Сообщение от бота — только в Telegram, в чатах на сайте его нет. Внизу бот
-          добавляет «Отключить сообщения — /stop». Жирный текст — **так**. Сначала отправьте пробу себе: впишите свой
-          Telegram ID (узнать его можно у @userinfobot).
+          Подключили бота: <b>{counts.all.telegram}</b>, указали почту: <b>{counts.all.email}</b>. Сообщение от бота уходит
+          в Telegram (внизу бот добавляет «Отключить сообщения — /stop»), письмо — на почту (внизу «Отписаться»); в чатах
+          на сайте его нет. Жирный текст — **так**. Сначала отправьте пробу себе: впишите свой Telegram ID (узнать его
+          можно у @userinfobot) и/или свою почту.
         </p>
       )}
       <p className="muted">
         Пишите не чаще раза в день и только по делу: частые рассылки люди блокируют, а Telegram может ограничить бота.
       </p>
       {!telegramConfig() && <p className="notice notice--error">Telegram-бот не подключён — в Telegram ничего не уйдёт.</p>}
+      {tab === "bot" && !mailEnv() && <p className="notice notice--error">Почта не настроена — письма не уйдут.</p>}
       {recent && <p className="notice notice--error">Последняя рассылка на этой вкладке была {when.format(last.createdAt)} — меньше суток назад.</p>}
 
       {/* key: при переключении вкладки форма собирается заново */}
@@ -106,9 +122,15 @@ export default async function BroadcastsPage({ searchParams }: { searchParams: P
           <span>Проба: только на этот Telegram ID</span>
           <input name="test_id" inputMode="numeric" pattern="\d*" placeholder="например, 123456789" />
         </label>
+        {tab === "bot" && (
+          <label className="field field--short">
+            <span>Проба письма: только на эту почту</span>
+            <input name="test_email" type="email" inputMode="email" placeholder="ваша@почта.ru" />
+          </label>
+        )}
         <label className="check">
           <input name="confirm" type="checkbox" />
-          <span>Отправить выбранным — если ID для пробы пустой</span>
+          <span>Отправить выбранным — если поля пробы пустые</span>
         </label>
         <button className="button">Отправить</button>
       </ActionForm>
@@ -134,7 +156,9 @@ export default async function BroadcastsPage({ searchParams }: { searchParams: P
                   <tr key={b.id}>
                     <td>{when.format(b.createdAt)}</td>
                     <td>
+                      {tab === "bot" && <span>{CHANNELS[b.channels]} · </span>}
                       {b.audience in AUDIENCES ? AUDIENCES[b.audience as Audience].split(" — ")[0] : "все"}
+                      {b.emailSkipTelegram && <span className="muted"> · почта — без Telegram</span>}
                       {b.expertId !== null && <span className="muted"> · клиентам: {expertName.get(b.expertId) ?? "эксперт"}</span>}
                       {b.registeredHours && <span className="muted"> · заявка старше {b.registeredHours} ч</span>}
                       {b.silentHours && <span className="muted"> · молчат {b.silentHours} ч</span>}
@@ -143,12 +167,15 @@ export default async function BroadcastsPage({ searchParams }: { searchParams: P
                       )}
                     </td>
                     <td>
+                      {b.subject && <b>{b.subject}. </b>}
                       {b.body.length > 120 ? `${b.body.slice(0, 120)}…` : b.body}
                       {b.parts.length > 0 && <span className="muted"> · {seriesNote(b.parts)}</span>}
                     </td>
-                    <td>{b.total}</td>
-                    <td>{b.sent}</td>
-                    <td title={tab === "chat" ? "не записалось в чат" : "заблокировали бота или удалили аккаунт"}>{b.failed}</td>
+                    <td>{byChannel(b, b.total, b.emailTotal)}</td>
+                    <td>{byChannel(b, b.sent, b.emailSent)}</td>
+                    <td title={tab === "chat" ? "не записалось в чат" : "заблокировали бота, удалили аккаунт, отписались или адрес не принял письмо"}>
+                      {byChannel(b, b.failed, b.emailFailed)}
+                    </td>
                     <td>
                       {b.finishedAt ? "готово" : now - b.createdAt.getTime() > STALLED_MS ? "прервана перезапуском" : "идёт…"}
                     </td>

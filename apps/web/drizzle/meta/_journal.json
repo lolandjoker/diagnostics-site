@@ -246,6 +246,13 @@
       "when": 1794393791631,
       "tag": "0034_lead_email",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1794488394838,
+      "tag": "0035_broadcast_email",
+      "breakpoints": true
     }
   ]
 }
