@@ -15,7 +15,7 @@ import { Footer } from "../../../Footer";
 import { PriceInline, getPrice } from "../../../PriceTag";
 import { ReviewsPager } from "../../../ReviewsPager";
 import { Track } from "../../../Track";
-import { chooseExpert } from "./actions";
+import { ExpertChooseForm } from "../../../ExpertChooseForm";
 
 export const dynamic = "force-dynamic";
 
@@ -109,21 +109,22 @@ export default async function ExpertsPage(props: PageProps<"/razbor/[id]/ekspert
                       </Link>
                     </p>
                   ) : (
-                    <form action={chooseExpert} className="card__action">
-                      <input type="hidden" name="leadId" value={lead.id} />
-                      <input type="hidden" name="expertId" value={e.id} />
-                      <button className="button button--ghost">Написать эксперту</button>
+                    <ExpertChooseForm
+                      className="card__action"
+                      leadId={lead.id}
+                      expertId={e.id}
+                      label="Написать эксперту"
+                      buttonClassName="button button--ghost"
+                      needEmail={!lead.email}
+                    >
                       <PriceInline price={price} />
-                    </form>
+                    </ExpertChooseForm>
                   )
                 ) : (
                   e.isOnline && (
-                    <form action={chooseExpert} className="card__action">
-                      <input type="hidden" name="leadId" value={lead.id} />
-                      <input type="hidden" name="expertId" value={e.id} />
-                      <button className="button">{t["experts.choose"]}</button>
+                    <ExpertChooseForm className="card__action" leadId={lead.id} expertId={e.id} label={t["experts.choose"]} needEmail={!lead.email}>
                       <PriceInline price={price} />
-                    </form>
+                    </ExpertChooseForm>
                   )
                 )}
               </article>
