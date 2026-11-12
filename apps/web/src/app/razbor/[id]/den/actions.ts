@@ -4,6 +4,7 @@
 import { getDb } from "@/db";
 import { type DailyCardView, cardView, drawDailyCard } from "@/lib/club";
 import { getLead } from "@/lib/leads";
+import { clubUnlocked } from "@/lib/club-access";
 import { telegramLink } from "@/lib/telegram";
 
 export async function drawCardAction(leadId: string, position: number): Promise<DailyCardView | { error: string }> {
@@ -14,5 +15,5 @@ export async function drawCardAction(leadId: string, position: number): Promise<
   if (!row) return { error: "Не получилось вытянуть карту — попробуйте ещё раз" };
   // Расшифровка — только с подключённым Telegram (бот выключен — открываем всем)
   const telegram = await telegramLink(lead);
-  return cardView(row, !telegram || telegram.connected, lead.birthDate);
+  return cardView(row, clubUnlocked(lead, telegram), lead.birthDate);
 }

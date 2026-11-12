@@ -6495,3 +6495,56 @@ body:has(.admin[data-theme="sea"]) {
   align-items: center;
   gap: 4px;
 }
+
+/* Замок результата клуба: «или укажите почту — откроем результат сразу» */
+.unlock-email {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  margin-top: 6px;
+}
+
+.unlock-email__or {
+  font-size: 0.85rem;
+  opacity: 0.8;
+}
+
+.unlock-email__row {
+  display: flex;
+  gap: 8px;
+}
+
+.unlock-email__row input {
+  flex: 1;
+  min-width: 0;
+  padding: 11px 14px;
+  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 16px;
+}
+
+.unlock-email__row button {
+  flex: none;
+  padding: 11px 18px;
+  border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.unlock-email__note,
+.unlock-email__error {
+  font-size: 0.75rem;
+  opacity: 0.65;
+}
+
+.unlock-email__error {
+  color: #e5484d;
+  opacity: 1;
+}

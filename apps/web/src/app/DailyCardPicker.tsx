@@ -7,6 +7,7 @@
  * Без Telegram видны только заголовки блоков, текст размыт: вместо него — «Получить в Telegram».
  * Вернулся на вкладку после подключения — страница обновляется сама и показывает расшифровку.
  */
+import { UnlockByEmail } from "./QuizParts";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -195,6 +196,7 @@ export function DailyCardPicker({
                   Получить в Telegram
                 </a>
               )}
+              <UnlockByEmail leadId={leadId} />
             </section>
           )}
           <p className="daily__next">Следующая карта — завтра.</p>

@@ -146,8 +146,9 @@ export function YesNoQuiz({
               </p>
               <QuizLocked
                 title="Ответ карты готов"
-                text="Вступите в Клуб Таромбы — откроем ответ и объяснение здесь и пришлём их в Telegram."
+                text="Вступите в Клуб Таромбы через Telegram — откроем ответ и объяснение здесь и пришлём их туда."
                 telegramHref={telegramHref}
+                leadId={leadId}
               />
             </>
           )}

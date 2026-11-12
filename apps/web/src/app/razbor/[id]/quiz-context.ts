@@ -5,12 +5,13 @@ import { clientChats, conversationForLead } from "@/lib/chat";
 import { splitExpertName } from "@/lib/expert-name";
 import { getExpert } from "@/lib/experts";
 import { type Lead, getLead } from "@/lib/leads";
+import { clubUnlocked } from "@/lib/club-access";
 import { telegramLink } from "@/lib/telegram";
 
 export interface QuizContext {
   db: Db;
   lead: Lead;
-  /** Результат открыт: Telegram подключён (или бот выключен). */
+  /** Результат открыт: Telegram подключён или почта указана (или бот выключен). */
   unlocked: boolean;
   /** Ссылка на бота, пока Telegram не подключён. */
   telegramHref: string | null;
@@ -27,7 +28,7 @@ export async function quizContext(id: string): Promise<QuizContext> {
   if (!lead) redirect("/");
   const [telegram, chats, chat] = await Promise.all([telegramLink(lead), clientChats(db, lead.id), conversationForLead(db, lead.id)]);
   const expert = chat ? await getExpert(db, chat.expertId) : null;
-  const unlocked = !telegram || telegram.connected;
+  const unlocked = clubUnlocked(lead, telegram);
   return {
     db,
     lead,

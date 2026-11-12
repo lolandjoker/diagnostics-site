@@ -193,8 +193,9 @@ export function ArchetypeQuiz({
       ) : (
         <QuizLocked
           title="Ваш архетип готов"
-          text="Вступите в Клуб Таромбы — откроем архетип и картинку с результатом здесь и пришлём их в Telegram."
+          text="Вступите в Клуб Таромбы через Telegram — откроем архетип и картинку с результатом здесь и пришлём их туда."
           telegramHref={telegramHref}
+          leadId={leadId}
         />
       )}
       {next ? (
