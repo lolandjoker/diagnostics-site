@@ -387,8 +387,19 @@ export const messages = pgTable(
     mediaId: uuid("media_id").references(() => chatMedia.id),
     /** Сообщение из рассылки от экспертов (broadcasts, kind = chat); null — обычное. */
     broadcastId: integer("broadcast_id").references(() => broadcasts.id),
+    /**
+     * Письмо «Вам написал эксперт» (lib/lead-email.ts, deliverDueMessageEmails): когда отправлено (или была
+     * попытка); null — не отправляли.
+     */
+    emailNotifiedAt: timestamp("email_notified_at", { withTimezone: true }),
   },
-  (t) => [index("messages_conversation_idx").on(t.conversationId, t.id)],
+  (t) => [
+    index("messages_conversation_idx").on(t.conversationId, t.id),
+    // Поиск сообщений эксперта, которым пора письмо: только неотправленные, по времени
+    index("messages_email_due_idx")
+      .on(t.createdAt)
+      .where(sql`${t.emailNotifiedAt} is null and ${t.author} in ('expert', 'admin') and ${t.automatic} = false`),
+  ],
 );
 
 /**

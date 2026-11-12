@@ -2,9 +2,21 @@ import { eq } from "drizzle-orm";
 import { createTestDb } from "@/db";
 import type { Db } from "@/db";
 import { leads } from "@/db/schema";
-import { FULL_TEXT_DELAY_MS, deliverDueFullTexts, inbox, startConversation } from "./chat";
+import { blockClient } from "./blocks";
+import { FULL_TEXT_DELAY_MS, deliverDueFullTexts, inbox, markClientRead, postMessage, startConversation } from "./chat";
 import { createExpert, setExpertFullText, setExpertOnline } from "./experts";
-import { EMAIL_CHANGE_GAP_MS, connectEmail, emailStats, leadFromOptOutCode, normalizeEmail, optOutCode, optOutEmail, sendFullTextEmail } from "./lead-email";
+import {
+  EMAIL_CHANGE_GAP_MS,
+  MESSAGE_EMAIL_DELAY_MS,
+  MESSAGE_EMAIL_WINDOW_MS,
+  connectEmail,
+  deliverDueMessageEmails,
+  emailStats, leadFromOptOutCode,
+  normalizeEmail,
+  optOutCode,
+  optOutEmail,
+  sendFullTextEmail,
+} from "./lead-email";
 import { createLead } from "./leads";
 import { DEFAULT_UNISENDER_GO_API_URL, mailConfig, sendMail, setMailTransport } from "./mail";
 
@@ -201,5 +213,64 @@ describe("статистика почты для «Сводки» и помет�
     const items = await inbox(db, {});
     const byName = Object.fromEntries(items.map((i) => [i.leadName, i.email]));
     expect(byName).toEqual({ Анна: true, Ольга: false, "Без почты": false });
+  });
+});
+
+describe("письмо «Вам написал эксперт»", () => {
+  const at = (ms: number) => new Date(Date.now() + ms);
+  const due = () => at(MESSAGE_EMAIL_DELAY_MS + 5_000);
+
+  async function withEmail(name = "Анна Петрова") {
+    const x = await chat(name);
+    await db.update(leads).set({ email: "anna@mail.ru", emailAt: new Date() }).where(eq(leads.id, x.lead.id));
+    return x;
+  }
+
+  it("на каждое сообщение эксперта без ответа через 2 минуты — письмо, один раз", async () => {
+    const { lead, c } = await withEmail();
+    await postMessage(db, c.id, { author: "expert", expertId: c.expertId, body: "Анна, вижу у вас <важный> период.\n\nРасскажите подробнее?" });
+    await postMessage(db, c.id, { author: "admin", body: "И ещё вопрос" });
+    expect(await deliverDueMessageEmails(db, at(60_000))).toBe(0);
+    expect(await deliverDueMessageEmails(db, due())).toBe(2);
+    expect(await deliverDueMessageEmails(db, due())).toBe(0);
+    expect(sent).toHaveLength(2);
+    const m = sent[0]!;
+    expect(m.to).toBe("anna@mail.ru");
+    expect(m.subject).toBe("Вам написал эксперт Мария");
+    expect(m.html).toContain("Анна, вам написал эксперт Мария");
+    expect(m.html).toContain("&lt;важный&gt;");
+    expect(m.html).toContain(`/razbor/${lead.id}/chat?c=${c.id}`);
+    expect(leadFromOptOutCode(SECRET, /otpiska\?t=([^"&\s]+)/.exec(m.html)?.[1] ?? "")).toBe(lead.id);
+    expect(sent[1]!.text).toContain("И ещё вопрос");
+  });
+
+  it("ответил или открыл чат — письма нет; приветствие, разбор, старые сообщения — тоже", async () => {
+    const a = await withEmail();
+    await postMessage(db, a.c.id, { author: "expert", expertId: a.c.expertId, body: "Вопрос 1" });
+    await postMessage(db, a.c.id, { author: "client", body: "Ответ" });
+    const b = await withEmail("Ольга");
+    await postMessage(db, b.c.id, { author: "expert", expertId: b.c.expertId, body: "Вопрос 2" });
+    await markClientRead(db, b.c.id, at(1_000));
+    const c = await withEmail("Ирина");
+    await postMessage(db, c.c.id, { author: "expert", expertId: c.c.expertId, body: "Привет", automatic: true });
+    await postMessage(db, c.c.id, { author: "system", body: "Разбор" });
+    expect(await deliverDueMessageEmails(db, due())).toBe(0);
+    // Сообщение старше окна — без письма
+    await postMessage(db, c.c.id, { author: "expert", expertId: c.c.expertId, body: "Давно" });
+    expect(await deliverDueMessageEmails(db, at(MESSAGE_EMAIL_WINDOW_MS + 60_000))).toBe(0);
+    expect(sent).toHaveLength(0);
+  });
+
+  it("без почты, отписался или заблокирован — письма нет", async () => {
+    const none = await chat("Без почты");
+    await postMessage(db, none.c.id, { author: "expert", expertId: none.c.expertId, body: "Вопрос" });
+    const out = await withEmail("Отписалась");
+    await optOutEmail(db, out.lead.id, new Date());
+    await postMessage(db, out.c.id, { author: "expert", expertId: out.c.expertId, body: "Вопрос" });
+    const blocked = await withEmail("Спам");
+    await blockClient(db, blocked.lead.id);
+    await postMessage(db, blocked.c.id, { author: "admin", body: "Вопрос" });
+    expect(await deliverDueMessageEmails(db, due())).toBe(0);
+    expect(sent).toHaveLength(0);
   });
 });

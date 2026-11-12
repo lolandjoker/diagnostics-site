@@ -1,0 +1,2 @@
+ALTER TABLE "messages" ADD COLUMN "email_notified_at" timestamp with time zone;--> statement-breakpoint
+CREATE INDEX "messages_email_due_idx" ON "messages" USING btree ("created_at") WHERE "messages"."email_notified_at" is null and "messages"."author" in ('expert', 'admin') and "messages"."automatic" = false;
