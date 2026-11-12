@@ -6,6 +6,8 @@ import { FUNNEL_PERIODS, funnel, funnelStart, presetPeriod, trackingSince } from
 import { customPeriod, mskDay } from "@/lib/period";
 import type { FunnelPeriod } from "@/lib/funnel";
 import { botStats } from "@/lib/bot-stats";
+import { emailStats } from "@/lib/lead-email";
+import { mailConfig } from "@/lib/mail";
 import { cityName, countryName } from "@/lib/geo-label";
 import { geoStats } from "@/lib/geo-stats";
 import { heardFromStats, sourceStats } from "@/lib/sources";
@@ -63,7 +65,7 @@ export default async function DashboardPage(props: PageProps<"/admin">) {
   const fromValue = custom?.from ?? mskDay(since ?? tracking ?? now);
   const toValue = custom?.to ?? (until ? mskDay(new Date(until.getTime() - 1)) : today);
   const cfg = telegramConfig();
-  const [steps, [callRow], sources, heard, sourceNames, bot, botName, geo] = await Promise.all([
+  const [steps, [callRow], sources, heard, sourceNames, bot, botName, geo, mail] = await Promise.all([
     tracking ? funnel(db, funnelStart(since, tracking), until) : Promise.resolve([]),
     db
       .select({ n: count() })
@@ -75,6 +77,7 @@ export default async function DashboardPage(props: PageProps<"/admin">) {
     botStats(db, since, until),
     cfg ? botUsername(cfg) : Promise.resolve(null),
     geoStats(db, since, until),
+    emailStats(db, since, until),
   ]);
   const geoTotal = geo.countries.reduce((s, c) => s + c.leads, 0);
   const heardTotal = heard.reduce((sum, h) => sum + h.leads, 0);
@@ -298,6 +301,25 @@ export default async function DashboardPage(props: PageProps<"/admin">) {
             DB-IP
           </a>
         </p>
+      </section>
+
+      <section className="admin-section">
+        <h2>Почта</h2>
+        <p className="muted">
+          По заявкам за период. Почту спрашиваем в окне перед чатом с экспертом; на неё уходит письмо с подробным
+          разбором, когда он готов.{!mailConfig() && " Сейчас отправка писем выключена — почту собираем, письма не уходят."}
+        </p>
+        <div className="stats">
+          <div>
+            <b>{mail.withEmail}</b> указали почту <span className="muted">({pct(mail.withEmail, mail.leads)} от {mail.leads} заявок)</span>
+          </div>
+          <div>
+            <b>{mail.sent}</b> писем с разбором ушло
+          </div>
+          <div>
+            <b>{mail.optedOut}</b> отписались
+          </div>
+        </div>
       </section>
 
       <section className="admin-section">

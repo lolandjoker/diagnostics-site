@@ -89,6 +89,7 @@ export async function funnel(db: Db, since: Date | null, until: Date | null = nu
     db.select({ n: sql<number>`count(*)`.mapWith(Number) }).from(leads).where(inPeriod),
     leadsWithEvent("result"),
     leadsWithEvent("experts"),
+    db.select({ n: sql<number>`count(*)`.mapWith(Number) }).from(leads).where(and(isNotNull(leads.email), inPeriod)),
     db
       .select({ n: countDistinct(conversations.leadId) })
       .from(conversations)
@@ -108,10 +109,11 @@ export async function funnel(db: Db, since: Date | null, until: Date | null = nu
     { key: "lead", label: "Отправили форму", hint: "заявки", count: n(2) },
     { key: "result", label: "Дождались разбора", hint: "досмотрели загрузку", count: n(3) },
     { key: "experts", label: "Открыли список экспертов", hint: "нажали «Написать эксперту»", count: n(4) },
-    { key: "chat", label: "Начали чат", hint: "выбрали эксперта", count: n(5) },
-    { key: "wrote", label: "Написали эксперту", hint: "хотя бы одно сообщение", count: n(6) },
-    { key: "replied", label: "Получили ответ", hint: "эксперт или админ ответили", count: n(7) },
-    { key: "telegram", label: "Подключили Telegram", hint: "уведомления в боте", count: n(8) },
+    { key: "email", label: "Указали почту", hint: "окно перед чатом с экспертом", count: n(5) },
+    { key: "chat", label: "Начали чат", hint: "выбрали эксперта", count: n(6) },
+    { key: "wrote", label: "Написали эксперту", hint: "хотя бы одно сообщение", count: n(7) },
+    { key: "replied", label: "Получили ответ", hint: "эксперт или админ ответили", count: n(8) },
+    { key: "telegram", label: "Подключили Telegram", hint: "уведомления в боте", count: n(9) },
   ];
 }
 

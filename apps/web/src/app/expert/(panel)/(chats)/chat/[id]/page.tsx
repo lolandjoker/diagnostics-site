@@ -33,6 +33,7 @@ export default async function ExpertChatPage(props: PageProps<"/expert/chat/[id]
         telegram={header?.telegram ?? false}
         geoCountry={header?.geoCountry ?? null}
         geoCity={header?.geoCity ?? null}
+        hasEmail={!!header?.email}
         chats={(leadChats.get(conversation.leadId) ?? []).map((c) => ({ id: c.id, expertName: c.expertName, diagnosis: c.diagnosis }))}
         currentId={conversation.id}
         club={club}

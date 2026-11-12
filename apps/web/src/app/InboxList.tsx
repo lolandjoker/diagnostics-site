@@ -19,7 +19,7 @@ import type { InboxItem } from "@/lib/chat";
 import { cityName } from "@/lib/geo-label";
 import type { InboxExpert, SearchHit } from "@/lib/staff-inbox";
 import { Avatar } from "./Avatar";
-import { ReadTicks, TelegramIcon } from "./StaffBits";
+import { MailIcon, ReadTicks, TelegramIcon } from "./StaffBits";
 
 const POLL_MS = 5000;
 const POLL_HIDDEN_MS = 30_000;
@@ -288,6 +288,11 @@ export function InboxList({
                       {c.telegram && (
                         <span className="inbox__tg" title="Подключил Telegram">
                           <TelegramIcon size={16} />
+                        </span>
+                      )}
+                      {c.email && (
+                        <span className="inbox__mail" title="Указал почту — разбор приходит и письмом">
+                          <MailIcon size={16} />
                         </span>
                       )}
                     </span>

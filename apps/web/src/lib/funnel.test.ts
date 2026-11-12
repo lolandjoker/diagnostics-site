@@ -1,6 +1,7 @@
 import { createTestDb } from "@/db";
 import type { Db } from "@/db";
-import { messages } from "@/db/schema";
+import { eq } from "drizzle-orm";
+import { leads, messages } from "@/db/schema";
 import { postMessage, startConversation } from "./chat";
 import { createExpert, setExpertOnline } from "./experts";
 import { funnel, funnelStart, periodStart, trackStep, trackingSince } from "./funnel";
@@ -32,6 +33,8 @@ describe("воронка", () => {
     await trackStep(db, "a", "result", anna.id);
     await trackStep(db, "b", "result", oleg.id);
     await trackStep(db, "a", "experts", anna.id);
+    // Анна указала почту в окне перед чатом
+    await db.update(leads).set({ email: "anna@mail.ru", emailAt: new Date() }).where(eq(leads.id, anna.id));
 
     const chat = await startConversation(db, anna, expert.id, new Date());
     if (!chat.ok) throw new Error(chat.error);
@@ -44,6 +47,7 @@ describe("воронка", () => {
       lead: 2,
       result: 2,
       experts: 1,
+      email: 1,
       chat: 1,
       wrote: 1,
       replied: 1,

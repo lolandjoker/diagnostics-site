@@ -522,6 +522,8 @@ export interface InboxItem {
   callRequested: boolean;
   /** Клиент подключил Telegram — ответы уходят ему и в бот. */
   telegram: boolean;
+  /** Клиент указал почту (и не отписался) — подробный разбор приходит и письмом. */
+  email: boolean;
   /** Откуда клиент по IP (lib/geo.ts): код страны и город; null — не знаем. */
   geoCountry: string | null;
   geoCity: string | null;
@@ -592,6 +594,7 @@ export async function inbox(db: Db, opts: { limit?: number; expertId?: number | 
         Number,
       ),
       telegram: sql<boolean>`${leads.telegramUserId} is not null`.mapWith(Boolean),
+      email: sql<boolean>`${leads.email} is not null and ${leads.emailOptOutAt} is null`.mapWith(Boolean),
       geoCountry: leads.geoCountry,
       geoCity: leads.geoCity,
       blockedAt: leads.blockedAt,
@@ -626,6 +629,7 @@ export async function inbox(db: Db, opts: { limit?: number; expertId?: number | 
     unread: r.unread,
     callRequested: r.c.callRequestedAt !== null,
     telegram: r.telegram,
+    email: r.email,
     geoCountry: r.geoCountry,
     geoCity: r.geoCity,
     // Заблокированному не отвечаем — в «Без ответа» он не нужен

@@ -6479,3 +6479,19 @@ body:has(.admin[data-theme="sea"]) {
   font-size: 0.8rem;
   opacity: 0.7;
 }
+
+/* Список чатов: конверт — клиент указал почту (слева снизу у аватарки; Telegram — справа) */
+.inbox__mail {
+  position: absolute;
+  left: -3px;
+  bottom: -3px;
+  display: flex;
+  border: 2px solid var(--surface);
+  border-radius: 50%;
+}
+
+.staff-chat__mail {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
