@@ -253,6 +253,13 @@
       "when": 1794488394838,
       "tag": "0035_broadcast_email",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1794491505015,
+      "tag": "0036_message_email",
+      "breakpoints": true
     }
   ]
 }
