@@ -369,6 +369,29 @@ export async function postMessage(db: Db, conversationId: string, input: PostInp
 }
 
 /** Файл из общего хранилища (chat_media) — по его id (uuid, не угадать). */
+/**
+ * Файлы серии рассылки — в общее хранилище, по одному разу (сообщениям чата и письмам — один файл на всех).
+ * Сообщение без файла — undefined на его месте.
+ */
+export async function storeChatMedia(
+  db: Db,
+  list: { media?: { kind: "photo" | "video"; data: Buffer; name: string; type: string } | undefined }[],
+): Promise<(string | undefined)[]> {
+  const ids: (string | undefined)[] = [];
+  for (const m of list) {
+    if (!m.media) {
+      ids.push(undefined);
+      continue;
+    }
+    const [row] = await db
+      .insert(chatMedia)
+      .values({ kind: m.media.kind, mime: m.media.type, name: m.media.name, size: m.media.data.length, data: m.media.data })
+      .returning({ id: chatMedia.id });
+    ids.push(row!.id);
+  }
+  return ids;
+}
+
 export async function getChatMedia(db: Db, id: string) {
   const [f] = await db.select({ mime: chatMedia.mime, data: chatMedia.data }).from(chatMedia).where(eq(chatMedia.id, id));
   return f ?? null;

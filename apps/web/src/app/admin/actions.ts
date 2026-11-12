@@ -45,10 +45,17 @@ import {
   isAudience,
   isPersonalPage,
   mediaKind,
+  hasEmail,
+  hasEmailLead,
+  hasTelegram,
+  isChannels,
+  mailEnv,
   sendTestBroadcast,
+  sendTestEmail,
   startBroadcast,
   validateBroadcast,
 } from "@/lib/broadcasts";
+import { normalizeEmail } from "@/lib/lead-email";
 import { telegramConfig } from "@/lib/telegram";
 import type { TextKey } from "@/lib/texts";
 import type { ActionResult } from "./ActionForm";
@@ -182,10 +189,15 @@ export async function expertBroadcastAction(_prev: ActionResult, form: FormData)
   return done(`Рассылка началась: ${total} чатов. Обновите страницу, чтобы увидеть, сколько ушло.`);
 }
 
+/** Системная рассылка: в Telegram-бот и/или на почту (channels). */
 export async function broadcastAction(_prev: ActionResult, form: FormData): Promise<ActionResult> {
   await requireAdmin();
+  const ch = str(form, "channels");
+  const channels = isChannels(ch) ? ch : "telegram";
   const cfg = telegramConfig();
-  if (!cfg) return fail("Telegram-бот не подключён");
+  const mail = mailEnv();
+  if (hasTelegram(channels) && !cfg) return fail("Telegram-бот не подключён — выберите «Почта»");
+  if (hasEmail(channels) && !mail) return fail("Почта не настроена — выберите «Telegram»");
   const audience = str(form, "audience");
   // Кнопка: "" — нет, url — своя ссылка, иначе — личный раздел (PERSONAL_PAGES)
   const kind = str(form, "button_kind");
@@ -201,24 +213,44 @@ export async function broadcastAction(_prev: ActionResult, form: FormData): Prom
     buttonText: kind === "url" ? str(form, "button_label") : "",
     buttonUrl: kind === "url" ? str(form, "button_url") : "",
     gift: form.get("gift") === "on",
+    channels,
+    subject: str(form, "subject"),
+    emailSkipTelegram: form.get("email_skip_tg") === "on",
   };
   const error = validateBroadcast(input);
   if (error) return fail(error);
-  const testId = str(form, "test_id").trim();
-  if (testId) {
-    if (!/^\d{3,15}$/.test(testId)) return fail("Telegram ID — только цифры");
+  // Проба: только в те каналы, что выбраны и для которых вписан адрес
+  const testId = hasTelegram(channels) ? str(form, "test_id").trim() : "";
+  const rawEmail = hasEmail(channels) ? str(form, "test_email").trim() : "";
+  if (testId || rawEmail) {
     const db = await getDb();
-    if (input.personalPage && !(await hasLead(db, Number(testId)))) {
-      return fail("У этого Telegram нет заявки — личной кнопке некуда вести. Подключите Telegram к своей заявке на сайте или пробуйте без личной кнопки");
+    const sentTo: string[] = [];
+    if (testId) {
+      if (!/^\d{3,15}$/.test(testId)) return fail("Telegram ID — только цифры");
+      if (input.personalPage && !(await hasLead(db, Number(testId)))) {
+        return fail("У этого Telegram нет заявки — личной кнопке некуда вести. Подключите Telegram к своей заявке на сайте или пробуйте без личной кнопки");
+      }
+      if (!(await sendTestBroadcast(db, cfg!, Number(testId), input))) return fail("Не ушло в Telegram: этот человек ещё не открывал бота или заблокировал его");
+      sentTo.push("в Telegram");
     }
-    return (await sendTestBroadcast(db, cfg, Number(testId), input))
-      ? done("Пробное сообщение отправлено — посмотрите в Telegram. Чтобы разослать всем, сотрите ID.")
-      : fail("Не ушло: этот человек ещё не открывал бота или заблокировал его");
+    if (rawEmail) {
+      const email = normalizeEmail(rawEmail);
+      if (!email) return fail("Проверьте адрес почты для пробы");
+      if (input.personalPage && !(await hasEmailLead(db, email))) {
+        return fail("С этой почтой нет заявки — личной кнопке некуда вести. Укажите почту в своей заявке на сайте или пробуйте без личной кнопки");
+      }
+      if (!(await sendTestEmail(db, mail!, email, input))) {
+        return fail(`${sentTo.length ? "В Telegram ушло, а письмо" : "Письмо"} не ушло — подробности в журнале сайта`);
+      }
+      sentTo.push("на почту");
+    }
+    return done(`Проба отправлена ${sentTo.join(" и ")} — посмотрите. Чтобы разослать всем, очистите поля пробы.`);
   }
-  if (form.get("confirm") !== "on") return fail("Отметьте «Отправить» — или впишите свой Telegram ID для пробы");
-  const { total } = await startBroadcast(await getDb(), cfg, input);
+  if (form.get("confirm") !== "on") return fail("Отметьте «Отправить» — или впишите свой Telegram ID или почту для пробы");
+  const { total, emailTotal } = await startBroadcast(await getDb(), cfg, input, mail);
   refresh();
-  return done(`Рассылка началась: ${total} получателей. Обновите страницу, чтобы увидеть, сколько ушло.`);
+  const who = [hasTelegram(channels) && `${total} в Telegram`, hasEmail(channels) && `${emailTotal} на почту`].filter(Boolean).join(", ");
+  return done(`Рассылка началась: ${who}. Обновите страницу, чтобы увидеть, сколько ушло.`);
 }
 
 // --- Тексты сайта ---

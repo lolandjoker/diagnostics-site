@@ -231,7 +231,7 @@ export const leads = pgTable(
     /** Клиент заблокирован админом или оператором (lib/blocks.ts): не пишет в чаты, бот ему ничего не шлёт. */
     blockedAt: timestamp("blocked_at", { withTimezone: true }),
   },
-  (t) => [index("leads_telegram_user_idx").on(t.telegramUserId, t.createdAt)],
+  (t) => [index("leads_telegram_user_idx").on(t.telegramUserId, t.createdAt), index("leads_email_idx").on(t.email)],
 );
 
 /** Не используется: продукты, заказы и доп. блоки разбора убраны с сайта; таблица остаётся (правило схемы). */
@@ -526,7 +526,9 @@ export const clubQuizzes = pgTable(
   (t) => [index("club_quizzes_lead_idx").on(t.leadId, t.kind, t.createdAt)],
 );
 
-/** Рассылка в бот всем, кто его подключил (из админки). total — кому отправляем, sent и failed — итог. */
+/**
+ * Рассылка из админки. total, sent, failed — в Telegram (кому отправляем и итог); email_* — то же на почту.
+ */
 export const broadcasts = pgTable("broadcasts", {
   id: serial("id").primaryKey(),
   body: text("body").notNull(),
@@ -560,6 +562,15 @@ export const broadcasts = pgTable("broadcasts", {
   registeredHours: integer("registered_hours"),
   /** Условие к «Кому»: клиент не писал нам больше N часов; null — без условия. */
   silentHours: integer("silent_hours"),
+  /** Системная рассылка — куда (lib/broadcast-pages.ts, CHANNELS): telegram, email или both. */
+  channels: text("channels", { enum: ["telegram", "email", "both"] }).notNull().default("telegram"),
+  /** Тема письма; "" — рассылка без почты. */
+  subject: text("subject").notNull().default(""),
+  /** На почту — только тем, кто не подключил Telegram (при both: чтобы не писать дважды). */
+  emailSkipTelegram: boolean("email_skip_telegram").notNull().default(false),
+  emailTotal: integer("email_total").notNull().default(0),
+  emailSent: integer("email_sent").notNull().default(0),
+  emailFailed: integer("email_failed").notNull().default(0),
 });
 
 /**

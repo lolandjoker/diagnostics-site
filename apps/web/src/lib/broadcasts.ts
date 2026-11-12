@@ -9,15 +9,26 @@
  * Серия: до MAX_BROADCAST_MESSAGES сообщений подряд, к каждому — фото или видео. Файл грузится в Telegram один раз
  * (первому получателю), остальным уходит по file_id. Кнопка и «/stop» — под последним сообщением серии.
  * Сами файлы в базе не храним (в истории — только имя и размер): рассылка, прерванная перезапуском, не доотправится.
+ *
+ * Куда (CHANNELS): в Telegram, на почту или туда и туда. Почта — каждому адресу, который указали в заявке и не
+ * отписались (те же «Кому» и условия, по всем заявкам с этим адресом). Письмо — вся серия одним письмом
+ * (lib/broadcast-mail.ts) с темой, кнопками и «Отписаться»; файлы для письма кладём в chat_media. Можно слать на почту
+ * только тем, кто не подключал Telegram, — чтобы при «Telegram и почта» не писать человеку дважды. Письма — через
+ * UniSender Go (lib/mail.ts), не быстрее EMAIL_PER_SECOND; каждое письмо — из лимита тарифа.
  */
-import { desc, eq, inArray, sql } from "drizzle-orm";
+import { type SQL, desc, eq, inArray, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { broadcasts, conversations, leads } from "@/db/schema";
+import { type MailPart, broadcastMail } from "./broadcast-mail";
 import { em } from "./bot-emoji";
 import {
   AUDIENCES,
+  CHANNELS,
   type Audience,
+  type ChannelCount,
+  type Channels,
   MAX_BROADCAST_MESSAGES,
+  MAX_SUBJECT,
   MAX_CAPTION,
   MAX_FILTER_HOURS,
   MAX_MEDIA_BYTES,
@@ -25,14 +36,22 @@ import {
   PERSONAL_PAGES,
   type PersonalPage,
   SERIES_GAP_MS,
+  hasEmail,
+  hasTelegram,
   isAudience,
+  isChannels,
   isPersonalPage,
   mediaKind,
 } from "./broadcast-pages";
+import { storeChatMedia } from "./chat";
+import { optOutCode } from "./lead-email";
+import { type MailConfig, mailConfig, sendMail } from "./mail";
 import { type BotButton, type TelegramConfig, botCall, ensureBotEmoji, esc, keyboard, sendMessage, sentId } from "./telegram";
 
 export const MAX_BROADCAST_LENGTH = 3500;
 export const BROADCAST_PER_SECOND = 20;
+/** Писем в секунду: UniSender Go держит и больше, но спешить незачем. */
+export const EMAIL_PER_SECOND = 8;
 /** Чаще раза в сутки — предупреждаем: частые рассылки — частые блокировки бота. */
 export const BROADCAST_GAP_MS = 24 * 60 * 60 * 1000;
 
@@ -70,6 +89,7 @@ export interface BroadcastFilters {
 }
 
 export { AUDIENCES, type Audience, isAudience };
+export { CHANNELS, type ChannelCount, type Channels, hasEmail, hasTelegram, isChannels };
 
 // Личная кнопка: куда ведёт и надпись по умолчанию (chat — последний чат человека, нет чата — выбор эксперта)
 export { PERSONAL_PAGES, type PersonalPage, isPersonalPage };
@@ -89,6 +109,12 @@ export interface BroadcastInput {
   /** Серия сообщений; не задана — одно сообщение из body. */
   messages?: BroadcastMessage[];
   filters?: BroadcastFilters;
+  /** Куда; по умолчанию — только Telegram. */
+  channels?: Channels;
+  /** Тема письма — нужна, если среди каналов почта. */
+  subject?: string;
+  /** На почту — только тем, кто не подключал Telegram. */
+  emailSkipTelegram?: boolean;
 }
 
 /** Сообщения рассылки: серия или одно из body. */
@@ -113,6 +139,11 @@ export function validateBroadcast(input: BroadcastInput): string | null {
   for (const h of [input.filters?.registeredHours, input.filters?.silentHours]) {
     if (h !== undefined && (!Number.isInteger(h) || h < 1 || h > MAX_FILTER_HOURS)) return `Часы в условиях — от 1 до ${MAX_FILTER_HOURS}`;
   }
+  if (hasEmail(input.channels ?? "telegram")) {
+    const subject = (input.subject ?? "").trim();
+    if (!subject) return "Напишите тему письма";
+    if (subject.length > MAX_SUBJECT) return `Тема письма — до ${MAX_SUBJECT} символов`;
+  }
   const t = input.buttonText.trim();
   const u = input.buttonUrl.trim();
   if ((t === "") !== (u === "")) return "Для кнопки нужны и надпись, и адрес";
@@ -122,40 +153,66 @@ export function validateBroadcast(input: BroadcastInput): string | null {
   return null;
 }
 
-/** Последняя заявка и последний чат каждого человека Telegram — для личной кнопки. */
-async function personalTargets(db: Db, telegramUserIds: number[]): Promise<Map<number, { leadId: string; chatId: string | null }>> {
-  const out = new Map<number, { leadId: string; chatId: string | null }>();
-  for (let i = 0; i < telegramUserIds.length; i += 500) {
-    const part = telegramUserIds.slice(i, i + 500);
-    const rows = await db
-      .select({ tg: leads.telegramUserId, leadId: leads.id, createdAt: leads.createdAt })
-      .from(leads)
-      .where(inArray(leads.telegramUserId, part));
-    const latest = new Map<number, { leadId: string; at: number }>();
-    for (const r of rows) {
-      if (r.tg === null) continue;
-      const prev = latest.get(r.tg);
-      if (!prev || r.createdAt.getTime() > prev.at) latest.set(r.tg, { leadId: r.leadId, at: r.createdAt.getTime() });
-    }
-    const leadIds = [...latest.values()].map((v) => v.leadId);
-    const chats = leadIds.length
-      ? await db
-          .select({ leadId: conversations.leadId, id: conversations.id, at: conversations.lastMessageAt })
-          .from(conversations)
-          .where(inArray(conversations.leadId, leadIds))
-      : [];
-    const lastChat = new Map<string, { id: string; at: number }>();
+/** Самый свежий чат каждой заявки. */
+async function lastChats(db: Db, leadIds: string[]): Promise<Map<string, string>> {
+  const best = new Map<string, { id: string; at: number }>();
+  for (let i = 0; i < leadIds.length; i += 500) {
+    const part = leadIds.slice(i, i + 500);
+    const chats = await db
+      .select({ leadId: conversations.leadId, id: conversations.id, at: conversations.lastMessageAt })
+      .from(conversations)
+      .where(inArray(conversations.leadId, part));
     for (const c of chats) {
-      const prev = lastChat.get(c.leadId);
-      if (!prev || c.at.getTime() > prev.at) lastChat.set(c.leadId, { id: c.id, at: c.at.getTime() });
+      const prev = best.get(c.leadId);
+      if (!prev || c.at.getTime() > prev.at) best.set(c.leadId, { id: c.id, at: c.at.getTime() });
     }
-    for (const [tg, v] of latest) out.set(tg, { leadId: v.leadId, chatId: lastChat.get(v.leadId)?.id ?? null });
   }
-  return out;
+  return new Map([...best].map(([lead, c]) => [lead, c.id]));
+}
+
+/** Последняя заявка из строк (заявки одного человека). */
+function latestLeads<K>(rows: { key: K | null; leadId: string; createdAt: Date }[]): Map<K, string> {
+  const latest = new Map<K, { leadId: string; at: number }>();
+  for (const r of rows) {
+    if (r.key === null) continue;
+    const prev = latest.get(r.key);
+    if (!prev || r.createdAt.getTime() > prev.at) latest.set(r.key, { leadId: r.leadId, at: r.createdAt.getTime() });
+  }
+  return new Map([...latest].map(([k, v]) => [k, v.leadId]));
+}
+
+type Target = { leadId: string; chatId: string | null };
+
+/** Последняя заявка и последний чат каждого человека Telegram — для личной кнопки. */
+async function personalTargets(db: Db, telegramUserIds: number[]): Promise<Map<number, Target>> {
+  const latest = new Map<number, string>();
+  for (let i = 0; i < telegramUserIds.length; i += 500) {
+    const rows = await db
+      .select({ key: leads.telegramUserId, leadId: leads.id, createdAt: leads.createdAt })
+      .from(leads)
+      .where(inArray(leads.telegramUserId, telegramUserIds.slice(i, i + 500)));
+    for (const [k, v] of latestLeads(rows)) latest.set(k, v);
+  }
+  const chats = await lastChats(db, [...latest.values()]);
+  return new Map([...latest].map(([tg, leadId]) => [tg, { leadId, chatId: chats.get(leadId) ?? null }]));
+}
+
+/** Последняя заявка и её последний чат для каждого адреса почты — для личной кнопки и «Отписаться». */
+async function emailTargets(db: Db, emails: string[]): Promise<Map<string, Target>> {
+  const latest = new Map<string, string>();
+  for (let i = 0; i < emails.length; i += 500) {
+    const rows = await db
+      .select({ key: leads.email, leadId: leads.id, createdAt: leads.createdAt })
+      .from(leads)
+      .where(inArray(leads.email, emails.slice(i, i + 500)));
+    for (const [k, v] of latestLeads(rows)) latest.set(k, v);
+  }
+  const chats = await lastChats(db, [...latest.values()]);
+  return new Map([...latest].map(([email, leadId]) => [email, { leadId, chatId: chats.get(leadId) ?? null }]));
 }
 
 /** Адрес личной страницы человека. */
-export function personalUrl(siteUrl: string, page: PersonalPage, target: { leadId: string; chatId: string | null }): string {
+export function personalUrl(siteUrl: string, page: PersonalPage, target: Target): string {
   if (page === "chat") {
     return target.chatId ? `${siteUrl}/razbor/${target.leadId}/chat?c=${target.chatId}` : `${siteUrl}/razbor/${target.leadId}/eksperty`;
   }
@@ -212,7 +269,7 @@ async function sendSeries(
   chatId: number,
   slots: Slot[],
   input: BroadcastInput,
-  target?: { leadId: string; chatId: string | null },
+  target?: Target,
 ): Promise<boolean> {
   const kb = buttons(input, cfg.siteUrl, target);
   for (const [i, s] of slots.entries()) {
@@ -244,7 +301,7 @@ export const partsRecord = (input: BroadcastInput) =>
   }));
 
 /** Кнопки рассылки: личная (своя у каждого, открывается внутри Telegram) и обычная ссылка. */
-function buttons(input: BroadcastInput, siteUrl?: string, target?: { leadId: string; chatId: string | null }): BotButton[] {
+function buttons(input: BroadcastInput, siteUrl?: string, target?: Target): BotButton[] {
   const out: BotButton[] = [];
   if (input.personalPage && siteUrl && target) {
     const text = input.personalText?.trim() || PERSONAL_PAGES[input.personalPage].button;
@@ -277,50 +334,104 @@ const AUDIENCE_WHERE: Record<Audience, ReturnType<typeof sql>> = {
 /** Момент «N часов назад» для условия. */
 const hoursAgo = (now: Date, h: number) => new Date(now.getTime() - h * 3_600_000).toISOString();
 
+/** Канал отбора: человек Telegram или адрес почты. */
+type Channel = "telegram" | "email";
+
+/**
+ * Люди канала. Telegram: каждый аккаунт с привязанной заявкой (заблокированные заявки и аккаунты — нет).
+ * Почта: каждый адрес (адреса в базе уже строчными); не берём, если по любой заявке с ним отписались, заявка
+ * заблокирована или её Telegram в блоке. has_tg — подключал ли человек Telegram (для «почта — только без Telegram»).
+ */
+const PEOPLE: Record<Channel, SQL> = {
+  telegram: sql`select l.telegram_user_id as key, min(l.created_at) as first_at, true as has_tg from leads l
+      where l.telegram_user_id is not null and l.blocked_at is null
+        and not exists (select 1 from telegram_blocks b where b.telegram_user_id = l.telegram_user_id)
+      group by l.telegram_user_id`,
+  email: sql`select l.email as key, min(l.created_at) as first_at, bool_or(l.telegram_user_id is not null) as has_tg from leads l
+      where l.email is not null
+      group by l.email
+      having bool_and(l.email_opt_out_at is null) and bool_and(l.blocked_at is null)
+        and not exists (select 1 from leads x join telegram_blocks b on b.telegram_user_id = x.telegram_user_id where x.email = l.email)`,
+};
+/** Заявки человека канала. */
+const MATCH: Record<Channel, SQL> = { telegram: sql`l.telegram_user_id = p.key`, email: sql`l.email = p.key` };
+
+export interface AudienceOptions {
+  filters?: BroadcastFilters | undefined;
+  /** Почта: только тем, кто не подключал Telegram. */
+  skipTelegram?: boolean | undefined;
+  now?: Date;
+}
+
+/** Люди канала с признаками для «Кому» (s) и условия по часам — в where. */
+function audienceSql(channel: Channel, select: SQL, extra: SQL[], opts: AudienceOptions): SQL {
+  const now = opts.now ?? new Date();
+  const where = [...extra];
+  const f = opts.filters ?? {};
+  // Регистрация — первая заявка человека (из всех его заявок)
+  if (f.registeredHours) where.push(sql`first_at <= ${hoursAgo(now, f.registeredHours)}::timestamptz`);
+  // Молчит — его последнее сообщение в любом чате давнее, или он не писал вовсе
+  if (f.silentHours) where.push(sql`(last_client_at is null or last_client_at <= ${hoursAgo(now, f.silentHours)}::timestamptz)`);
+  if (opts.skipTelegram && channel === "email") where.push(sql`not has_tg`);
+  const m = MATCH[channel];
+  return sql`
+    with people as (${PEOPLE[channel]}),
+    stats as (
+      select p.key, p.first_at, p.has_tg,
+        (select max(m.created_at) from messages m join conversations c on c.id = m.conversation_id join leads l on l.id = c.lead_id
+         where ${m} and m.author = 'client') as last_client_at,
+        (select m.author from messages m join conversations c on c.id = m.conversation_id join leads l on l.id = c.lead_id
+         where ${m} order by m.created_at desc, m.id desc limit 1) as last_author,
+        exists (select 1 from club_quizzes q join leads l on l.id = q.lead_id where ${m} and q.kind = 'archetype') as did_archetype,
+        exists (select 1 from club_quizzes q join leads l on l.id = q.lead_id where ${m} and q.kind = 'compat') as did_compat,
+        exists (select 1 from club_quizzes q join leads l on l.id = q.lead_id where ${m} and q.kind = 'yesno') as did_yesno,
+        exists (select 1 from daily_cards d join leads l on l.id = d.lead_id where ${m}) as did_card
+      from people p
+    )
+    select ${select} from (select stats.*, last_client_at is not null as wrote from stats) s
+    ${where.length ? sql`where ${sql.join(where, sql` and `)}` : sql``}`;
+}
+
+const rowsOf = <T>(res: unknown): T[] => (Array.isArray(res) ? res : (res as { rows: T[] }).rows) as T[];
+
+async function recipientKeys(db: Db, channel: Channel, audience: Audience, opts: AudienceOptions): Promise<(string | number)[]> {
+  const res = await db.execute(audienceSql(channel, sql`key`, [AUDIENCE_WHERE[audience]], opts).append(sql` order by key`));
+  return rowsOf<{ key: string | number }>(res).map((r) => r.key);
+}
+
+/** Кому в Telegram: id аккаунтов. */
 export async function broadcastRecipients(
   db: Db,
   audience: Audience = "all",
   filters: BroadcastFilters = {},
   now: Date = new Date(),
 ): Promise<number[]> {
-  const where = [AUDIENCE_WHERE[audience]];
-  // Регистрация — первая заявка человека (из всех его заявок с этим Telegram)
-  if (filters.registeredHours) where.push(sql`first_at <= ${hoursAgo(now, filters.registeredHours)}::timestamptz`);
-  // Молчит — его последнее сообщение в любом чате давнее, или он не писал вовсе
-  if (filters.silentHours) {
-    where.push(sql`(last_client_at is null or last_client_at <= ${hoursAgo(now, filters.silentHours)}::timestamptz)`);
-  }
-  const res = await db.execute<{ tg: number | string }>(sql`
-    with people as (
-      select l.telegram_user_id as tg, min(l.created_at) as first_at from leads l
-      where l.telegram_user_id is not null and l.blocked_at is null
-        and not exists (select 1 from telegram_blocks b where b.telegram_user_id = l.telegram_user_id)
-      group by l.telegram_user_id
-    ),
-    stats as (
-      select p.tg, p.first_at,
-        (select max(m.created_at) from messages m join conversations c on c.id = m.conversation_id join leads l on l.id = c.lead_id
-         where l.telegram_user_id = p.tg and m.author = 'client') as last_client_at,
-        (select m.author from messages m join conversations c on c.id = m.conversation_id join leads l on l.id = c.lead_id
-         where l.telegram_user_id = p.tg order by m.created_at desc, m.id desc limit 1) as last_author,
-        exists (select 1 from club_quizzes q join leads l on l.id = q.lead_id where l.telegram_user_id = p.tg and q.kind = 'archetype') as did_archetype,
-        exists (select 1 from club_quizzes q join leads l on l.id = q.lead_id where l.telegram_user_id = p.tg and q.kind = 'compat') as did_compat,
-        exists (select 1 from club_quizzes q join leads l on l.id = q.lead_id where l.telegram_user_id = p.tg and q.kind = 'yesno') as did_yesno,
-        exists (select 1 from daily_cards d join leads l on l.id = d.lead_id where l.telegram_user_id = p.tg) as did_card
-      from people p
-    )
-    select tg from (select stats.*, last_client_at is not null as wrote from stats) s
-    where ${sql.join(where, sql` and `)}
-    order by tg`);
-  const rows = (Array.isArray(res) ? res : (res as { rows: { tg: number | string }[] }).rows) as { tg: number | string }[];
-  return rows.map((r) => Number(r.tg));
+  return (await recipientKeys(db, "telegram", audience, { filters, now })).map(Number);
 }
 
-/** Сколько получателей у каждого условия — для формы. */
-export async function audienceCounts(db: Db): Promise<Record<Audience, number>> {
+/** Кому на почту: адреса. */
+export async function emailRecipients(db: Db, audience: Audience = "all", opts: AudienceOptions = {}): Promise<string[]> {
+  return (await recipientKeys(db, "email", audience, opts)).map(String);
+}
+
+/** Сколько людей у каждого «Кому» в канале — одним запросом. */
+async function countsOf(db: Db, channel: Channel, opts: AudienceOptions): Promise<Record<Audience, number>> {
   const keys = Object.keys(AUDIENCES) as Audience[];
-  const lists = await Promise.all(keys.map((a) => broadcastRecipients(db, a)));
-  return Object.fromEntries(keys.map((a, i) => [a, lists[i]!.length])) as Record<Audience, number>;
+  const select = sql.join(
+    keys.map((a) => sql`(count(*) filter (where ${AUDIENCE_WHERE[a]}))::int as ${sql.identifier(a)}`),
+    sql`, `,
+  );
+  const [row] = rowsOf<Record<Audience, number | string>>(await db.execute(audienceSql(channel, select, [], opts)));
+  return Object.fromEntries(keys.map((a) => [a, Number(row?.[a] ?? 0)])) as Record<Audience, number>;
+}
+
+/** Сколько получателей у каждого «Кому» — в Telegram и на почту (для формы). */
+export async function audienceCounts(db: Db, opts: AudienceOptions = {}): Promise<Record<Audience, ChannelCount>> {
+  const [tg, mail] = await Promise.all([countsOf(db, "telegram", opts), countsOf(db, "email", opts)]);
+  return Object.fromEntries((Object.keys(AUDIENCES) as Audience[]).map((a) => [a, { telegram: tg[a], email: mail[a] }])) as Record<
+    Audience,
+    ChannelCount
+  >;
 }
 
 /** История: системные (bot) или от экспертов (chat). */
@@ -343,13 +454,111 @@ export async function hasLead(db: Db, telegramUserId: number): Promise<boolean> 
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** Всё для писем: настройки UniSender Go, адрес сайта (ссылки и картинки) и секрет ссылки «Отписаться». */
+export interface MailEnv {
+  cfg: MailConfig;
+  siteUrl: string;
+  secret: string;
+}
+
+export function mailEnv(env: Record<string, string | undefined> = process.env): MailEnv | null {
+  const cfg = mailConfig(env);
+  const domain = env.SITE_DOMAIN?.trim();
+  const secret = env.SESSION_SECRET;
+  return cfg && domain && secret ? { cfg, siteUrl: `https://${domain}`, secret } : null;
+}
+
+/** Письмо рассылки одному адресу. target — его последняя заявка (личная кнопка, «Отписаться»). */
+async function sendBroadcastEmail(
+  mail: MailEnv,
+  to: string,
+  input: BroadcastInput,
+  mediaIds: (string | undefined)[],
+  target: Target | undefined,
+): Promise<boolean> {
+  const parts: MailPart[] = messagesOf(input).map((m, i) => ({
+    body: m.body,
+    media: m.media && mediaIds[i] ? { kind: m.media.kind, url: `${mail.siteUrl}/api/chat/media/${mediaIds[i]}` } : undefined,
+  }));
+  const links: { text: string; url: string }[] = [];
+  if (input.personalPage && target) {
+    links.push({
+      text: input.personalText?.trim() || PERSONAL_PAGES[input.personalPage].button,
+      url: personalUrl(mail.siteUrl, input.personalPage, target),
+    });
+  }
+  if (input.buttonText.trim()) links.push({ text: input.buttonText.trim(), url: input.buttonUrl.trim() });
+  const letter = broadcastMail({
+    subject: input.subject ?? "",
+    parts,
+    gift: input.gift,
+    buttons: links,
+    optOutUrl: target ? `${mail.siteUrl}/pochta/otpiska?t=${optOutCode(mail.secret, target.leadId)}` : null,
+  });
+  return sendMail(mail.cfg, { to, ...letter });
+}
+
+/** Файлы для писем — в chat_media (один раз на рассылку); без файлов — ничего не пишем. */
+const mailMedia = async (db: Db, input: BroadcastInput) => {
+  const list = messagesOf(input);
+  return list.some((m) => m.media) ? storeChatMedia(db, list) : list.map(() => undefined);
+};
+
+/** Есть ли заявка с этой почтой — личной кнопке в пробе нужно куда вести. */
+export async function hasEmailLead(db: Db, email: string): Promise<boolean> {
+  return (await emailTargets(db, [email])).has(email);
+}
+
+/** Проба на одну почту (себе), без записи в историю. Отписка в пробе — по заявке с этим адресом, если она есть. */
+export async function sendTestEmail(db: Db, mail: MailEnv, email: string, input: BroadcastInput): Promise<boolean> {
+  const target = (await emailTargets(db, [email])).get(email);
+  return sendBroadcastEmail(mail, email, input, await mailMedia(db, input), target);
+}
+
+export async function runEmailBroadcast(
+  db: Db,
+  mail: MailEnv,
+  id: number,
+  emails: string[],
+  input: BroadcastInput,
+  mediaIds: (string | undefined)[],
+): Promise<void> {
+  const targets = await emailTargets(db, emails);
+  let sent = 0;
+  let failed = 0;
+  const save = () => db.update(broadcasts).set({ emailSent: sent, emailFailed: failed }).where(sql`${broadcasts.id} = ${id}`);
+  try {
+    for (let i = 0; i < emails.length; i++) {
+      const email = emails[i]!;
+      if (await sendBroadcastEmail(mail, email, input, mediaIds, targets.get(email))) sent++;
+      else failed++;
+      if ((i + 1) % 10 === 0) await save();
+      await sleep(1000 / EMAIL_PER_SECOND);
+    }
+  } catch (err) {
+    console.warn(`Рассылка ${id}, почта: ${err instanceof Error ? err.message : String(err)}`);
+  }
+  await save();
+}
+
 /**
- * Начать рассылку всем: запись в истории сразу, отправка — в фоне (страница не ждёт). Если сайт перезапустится
- * посреди рассылки, остаток не уйдёт — в истории она останется незаконченной.
+ * Начать рассылку всем: запись в истории сразу, отправка — в фоне (страница не ждёт), Telegram и почта —
+ * одновременно; «готово» — когда закончились оба. Если сайт перезапустится посреди рассылки, остаток не уйдёт —
+ * в истории она останется незаконченной. Нужного канала нет (бот или почта не настроены) — в него не шлём.
  */
-export async function startBroadcast(db: Db, cfg: TelegramConfig, input: BroadcastInput): Promise<{ id: number; total: number }> {
+export async function startBroadcast(
+  db: Db,
+  cfg: TelegramConfig | null,
+  input: BroadcastInput,
+  mail: MailEnv | null = null,
+): Promise<{ id: number; total: number; emailTotal: number }> {
   const audience = input.audience ?? "all";
-  const recipients = await broadcastRecipients(db, audience, input.filters);
+  const channels = input.channels ?? "telegram";
+  const tg = hasTelegram(channels) ? cfg : null;
+  const email = hasEmail(channels) ? mail : null;
+  const skipTelegram = Boolean(email && input.emailSkipTelegram && hasTelegram(channels));
+  const recipients = tg ? await broadcastRecipients(db, audience, input.filters) : [];
+  const emails = email ? await emailRecipients(db, audience, { filters: input.filters, skipTelegram }) : [];
   const list = messagesOf(input);
   const [row] = await db
     .insert(broadcasts)
@@ -363,14 +572,33 @@ export async function startBroadcast(db: Db, cfg: TelegramConfig, input: Broadca
       total: recipients.length,
       audience,
       personalPage: input.personalPage ?? "",
+      channels,
+      subject: email ? (input.subject ?? "").trim() : "",
+      emailSkipTelegram: skipTelegram,
+      emailTotal: emails.length,
     })
     .returning({ id: broadcasts.id });
   const id = row!.id;
-  void runBroadcast(db, cfg, id, recipients, input);
-  return { id, total: recipients.length };
+  const mediaIds = email && emails.length ? await mailMedia(db, input) : [];
+  void (async () => {
+    await Promise.all([
+      tg && recipients.length ? runBroadcast(db, tg, id, recipients, input, false) : null,
+      email && emails.length ? runEmailBroadcast(db, email, id, emails, input, mediaIds) : null,
+    ]);
+    await db.update(broadcasts).set({ finishedAt: new Date() }).where(sql`${broadcasts.id} = ${id}`);
+  })();
+  return { id, total: recipients.length, emailTotal: emails.length };
 }
 
-export async function runBroadcast(db: Db, cfg: TelegramConfig, id: number, recipients: number[], input: BroadcastInput): Promise<void> {
+/** Отправка в Telegram; finish — отметить рассылку законченной (false — её отметит startBroadcast после почты). */
+export async function runBroadcast(
+  db: Db,
+  cfg: TelegramConfig,
+  id: number,
+  recipients: number[],
+  input: BroadcastInput,
+  finish = true,
+): Promise<void> {
   await ensureBotEmoji(cfg);
   // Слоты общие на всю рассылку: файл грузится первому, дальше — по file_id
   const slots = slotsOf(input);
@@ -380,7 +608,7 @@ export async function runBroadcast(db: Db, cfg: TelegramConfig, id: number, reci
   const save = (finished: boolean) =>
     db
       .update(broadcasts)
-      .set({ sent, failed, ...(finished && { finishedAt: new Date() }) })
+      .set({ sent, failed, ...(finished && finish && { finishedAt: new Date() }) })
       .where(sql`${broadcasts.id} = ${id}`);
   try {
     for (let i = 0; i < recipients.length; i++) {

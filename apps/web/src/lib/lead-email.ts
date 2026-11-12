@@ -8,7 +8,7 @@
  * - Почта выключена (lib/mail.ts) — адрес сохраняем, письмо не уходит и не отмечается.
  */
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { and, asc, count, eq, isNull } from "drizzle-orm";
+import { and, asc, count, eq, isNull, or } from "drizzle-orm";
 import type { Db } from "@/db";
 import { conversations, experts, leads, messages } from "@/db/schema";
 import { type MailConfig, mailConfig, sendMail } from "./mail";
@@ -37,9 +37,15 @@ export function leadFromOptOutCode(secret: string, code: string): string | null 
   return expected.length === given.length && timingSafeEqual(expected, given) ? m[1]! : null;
 }
 
+/** Отписка: этот адрес больше не получает писем ни по одной заявке (рассылки идут по адресу, а не по заявке). */
 export async function optOutEmail(db: Db, leadId: string, now: Date): Promise<boolean> {
-  const rows = await db.update(leads).set({ emailOptOutAt: now }).where(eq(leads.id, leadId)).returning({ id: leads.id });
-  return rows.length > 0;
+  const [lead] = await db.select({ email: leads.email }).from(leads).where(eq(leads.id, leadId));
+  if (!lead) return false;
+  await db
+    .update(leads)
+    .set({ emailOptOutAt: now })
+    .where(lead.email ? or(eq(leads.id, leadId), eq(leads.email, lead.email)) : eq(leads.id, leadId));
+  return true;
 }
 
 export type ConnectResult = { ok: true; sentNow: boolean } | { ok: false; error: string; status: number };

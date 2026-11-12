@@ -15,7 +15,7 @@
  */
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { Db } from "@/db";
-import { broadcasts, chatMedia, conversations, experts, leads } from "@/db/schema";
+import { broadcasts, conversations, experts, leads } from "@/db/schema";
 import { notifyClient } from "./bot-delivery";
 import {
   type Audience,
@@ -26,7 +26,7 @@ import {
   broadcastRecipients,
   partsRecord,
 } from "./broadcasts";
-import { postMessage } from "./chat";
+import { postMessage, storeChatMedia } from "./chat";
 
 export interface ExpertBroadcastInput {
   audience: Audience;
@@ -87,23 +87,6 @@ export async function expertBroadcastTargets(db: Db, input: Omit<ExpertBroadcast
 /** {имя} в тексте — первое слово имени из заявки. */
 export const withName = (body: string, name: string) => body.replace(/\{имя\}/gi, name.trim().split(/\s+/)[0] ?? "");
 
-/** Файлы серии — в общее хранилище, по одному разу. */
-async function storeMedia(db: Db, list: BroadcastMessage[]): Promise<(string | undefined)[]> {
-  const ids: (string | undefined)[] = [];
-  for (const m of list) {
-    if (!m.media) {
-      ids.push(undefined);
-      continue;
-    }
-    const [row] = await db
-      .insert(chatMedia)
-      .values({ kind: m.media.kind, mime: m.media.type, name: m.media.name, size: m.media.data.length, data: m.media.data })
-      .returning({ id: chatMedia.id });
-    ids.push(row!.id);
-  }
-  return ids;
-}
-
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** Серия в один чат: сообщения от эксперта чата, каждое — в Telegram по очереди. Всё записалось — true. */
@@ -133,7 +116,7 @@ async function sendToChat(db: Db, t: ChatTarget, list: BroadcastMessage[], media
 export async function testExpertBroadcast(db: Db, telegramUserId: number, input: ExpertBroadcastInput): Promise<"ok" | "no-chat" | "failed"> {
   const [target] = await chatTargets(db, [telegramUserId], input.expertId);
   if (!target) return "no-chat";
-  return (await sendToChat(db, target, input.messages, await storeMedia(db, input.messages), null)) ? "ok" : "failed";
+  return (await sendToChat(db, target, input.messages, await storeChatMedia(db, input.messages), null)) ? "ok" : "failed";
 }
 
 /** Начать: запись в истории сразу, отправка — в фоне. */
@@ -154,7 +137,7 @@ export async function startExpertBroadcast(db: Db, input: ExpertBroadcastInput, 
     })
     .returning({ id: broadcasts.id });
   const id = row!.id;
-  const mediaIds = await storeMedia(db, input.messages);
+  const mediaIds = await storeChatMedia(db, input.messages);
   void runExpertBroadcast(db, id, targets, input.messages, mediaIds);
   return { id, total: targets.length };
 }
